@@ -51,7 +51,7 @@
   (call-next-method val hash key))
 
 (defmethod prop ((hash global-object) key)
-  (format t "looking for ~A~%" key)
+  #+js-debug (format t "looking for ~A~%" key)
   (call-next-method hash key))
 
 (defclass native-function (native-hash)
@@ -82,6 +82,9 @@
 (defmacro js!stat (form)
   `(progn ,form))
 
+(defmacro js!block (form)
+  `(progn ,form))
+
 (defmacro js!var (vars)
   (declare (ignore vars)) nil)
 
@@ -96,7 +99,7 @@
   (let ((ret (gensym)))
     `(let ((,ret (make-instance 'native-hash :prototype (prop ,func "prototype"))))
        (funcall (proc ,func) ,ret ,@args)
-       (setf (prop ,ret 'constructor) ,func)
+       (setf (prop ,ret "constructor") ,func)
        ,ret)))
 
 (defmacro js!return (ret)
@@ -134,17 +137,13 @@
 		      `,`(prop *global* #+nil this ,name)))
 		(js!assign (op exp val)
 		  (let ((name (find-name exp)))
-		    (cond 
-		      ((string-equal "this" name)
-		       `,`(setf ,exp ,val))
-		      ((funcall ,local-variable-p name)
-		       `(setf ,exp #+nil (->sym name) ,val)) ;todo: same as this?
-		      (t
-		       `,`(setf (prop *global* #+nil this ,exp) ,val)))))
+		    (if (funcall ,local-variable-p name)
+			`(setf ,exp ,val)
+			`,`(setf (prop *global* #+nil this ,exp) ,val))))
 		(js!return (ret) `,`(return-from ,',blockname ,ret)))
        (lambda (this &rest ,argument-list)
 	 (declare (dynamic-extent ,argument-list))
-	 (format t "this: ~A~%" this)
+	 #+js-debug (format t "this: ~A~%" this)
 	 (let ((arguments (coerce ,argument-list 'simple-vector))
 	       ,@(mapcar (lambda (var-desc)
 			   (list (->sym (car var-desc))
@@ -257,11 +256,25 @@ r2 = b.y;
      ,@(mapcar (lambda (op)
 		 (if (symbolp op)
 		     `(setf (symbol-function ',(js!intern op)) (function ,op))
-		     `(setf (symbol-function ',(js!intern (first op)) (function ,(second op))))))
+		     `(setf (symbol-function ',(js!intern (first op))) (function ,(second op)))))
 	     ops)))
 
-(js!binary-operators + - * /)
+(js!binary-operators
+ + * /
+ (== equalp) < > <= >= (!= /=))
+
+(defun js!- (ls rs)
+  (declare (fixnum ls rs))
+  (the fixnum (- ls rs)))
 
 (defmacro js!binary (op-sym ls rs)
   (let ((op (symbol-function op-sym)))
     `(funcall ,op ,ls ,rs)))
+
+(defmacro js!if (exp then else)
+  (let ((rexp (gensym)))
+    `(let ((,rexp ,exp))
+       (cond ((not ,rexp) ,else)
+	     ((and (numberp ,rexp) (zerop ,rexp))
+	      ,else)
+	     (t ,then)))))
