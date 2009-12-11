@@ -103,10 +103,13 @@
 
 ;;;
 (defmacro js!call (func args) ;;;todo: check if a caller isn't  cons
-  `(funcall (proc ,func)
-	    ,(case (car func)
-	       ((js!dot) (second func))
-	       (t this)) ,@args))
+  (let ((*proc (gensym)))
+  `(let ((,*proc (proc ,func)))
+     (declare (function ,*proc))
+     (funcall ,*proc
+	      ,(case (car func)
+		 ((js!dot) (second func))
+		 (t this)) ,@args))))
 
 (defmacro js!new (func args)
   (let ((ret (gensym)))
@@ -135,7 +138,7 @@
     (f tree)))
 
 (defmacro js!lambda (args body)
-  (let* ((argument-list (gensym))
+  (let* ((additional-args (gensym))
 	 (local-var-list (find-vars body))
 	 (local-variable-p
 	  (lambda (var)
@@ -153,15 +156,14 @@
 			`(setf ,exp ,val)
 			`,`(setf (prop *global* #+nil this ,exp) ,val))))
 		(js!return (ret) `,`(return-from ,',blockname ,ret)))
-       (lambda (this &rest ,argument-list)
-	 (declare (dynamic-extent ,argument-list))
+       (lambda (this &optional ,@args &rest ,additional-args)
+	 (declare (dynamic-extent ,additional-args))
 	 #+js-debug (format t "this: ~A~%" this)
-	 (let ((arguments (coerce ,argument-list 'simple-vector))
+	 (let (#+nil(arguments (coerce ,argument-list 'simple-vector))
 	       ,@(mapcar (lambda (var-desc)
 			   (list (car var-desc)
 				 (cdr var-desc))) local-var-list))
-	   (multiple-value-bind ,args (values-list ,argument-list)
-	     (block ,blockname ,@body)))))))
+	   (block ,blockname ,@body))))))
 
 (defmacro js!function (name args body)
   `(make-instance 'native-function
