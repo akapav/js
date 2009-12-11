@@ -163,34 +163,6 @@
 	   (multiple-value-bind ,args (values-list ,argument-list)
 	     (block ,blockname ,@body)))))))
 
-#+nil (defmacro js!lambda (args body)
-  (let* ((argument-list (gensym))
-	 (local-var-list (find-vars body))
-	 (local-variable-p
-	  (lambda (var)
-	    (or (member var (list 'this 'arguments))
-		(member var args)
-		(member var local-var-list :key #'car))))
-	 (blockname (gensym)))
-    `(macrolet ((js!name (name)
-		  (if (funcall ,local-variable-p name)
-		      name
-		      `,`(prop *global* #+nil this ',name)))
-		(js!assign (op exp val)
-		  (let ((name (find-name exp)))
-		    (if (funcall ,local-variable-p name)
-			`(setf ,exp ,val)
-			`,`(setf (prop *global* #+nil this ,exp) ,val))))
-		(js!return (ret) `,`(return-from ,',blockname ,ret)))
-       (lambda (this ,@args)
-	 #+nil (declare (dynamic-extent ,argument-list))
-	 #+js-debug (format t "this: ~A~%" this)
-	 (let (#+nil (arguments (coerce ,argument-list 'simple-vector))
-	       ,@(mapcar (lambda (var-desc)
-			   (list (car var-desc)
-				 (cdr var-desc))) local-var-list))
-	     (block ,blockname ,@body))))))
-
 (defmacro js!function (name args body)
   `(make-instance 'native-function
 		  :name ',name
@@ -313,18 +285,3 @@ r2 = b.y;
 
   (test r1 3)
   (test r2 4))
-
-
-#|
-(defun js!- (ls rs)
-  (declare (fixnum ls rs))
-  (the fixnum (- ls rs)))
-
-(defun js!+ (ls rs)
-  (declare (fixnum ls rs))
-  (the fixnum (+ ls rs)))
-
-(defun js!< (ls rs)
-  (declare (fixnum ls rs))
-  (the boolean (< ls rs)))
-|#
