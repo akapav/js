@@ -287,3 +287,18 @@ r2 = b.y;
 
   (test r1 3)
   (test r2 4))
+
+(defun test3 ()
+  (labels ((fib2 (n)
+	     (if (< n 2) 1
+		 (+ (fib2 (1- n)) (fib2 (- n 2))))))
+#{javascript}
+function fib(n)
+{
+  if(n < 2) return 1;
+  return fib(n - 1) + fib(n - 2);
+}
+.
+    (loop for i from 1 to 10 do
+      (test (fib i) (fib2 i))
+	  finally (return t))))
