@@ -115,7 +115,7 @@
   `(progn ,form))
 
 (defmacro js!block (form)
-  `(progn ,form))
+  `(progn ,@form))
 
 (defmacro js!var (vars)
   (declare (ignore vars)) nil)
@@ -210,21 +210,39 @@
 		     `(setf (symbol-function ',(js!intern (first op))) (function ,(second op)))))
 	     ops)))
 
+;;;;;;;;
+(defun plus (ls rs)
+  (declare (fixnum ls rs))
+  (the fixnum (+ ls rs)))
+
+(defun minus (ls rs)
+  (declare (fixnum ls rs))
+  (the fixnum (- ls rs)))
+
+(defun less (ls rs)
+  (declare (fixnum ls rs))
+  (the boolean (< ls rs)))
+;;;;;;;;
 (js!binary-operators
-  + - * /
- (== equalp) < > <= >= (!= /=))
+  (+ plus) (- minus) * /
+ (== equalp) (< less) > <= >= (!= /=))
 
 (defmacro js!binary (op-sym ls rs)
   (let ((op (symbol-function op-sym)))
     `(funcall ,op ,ls ,rs)))
 
-(defmacro js!if (exp then else)
+(defmacro js->boolean (exp)
   (let ((rexp (gensym)))
     `(let ((,rexp ,exp))
-       (cond ((not ,rexp) ,else)
-	     ((and (numberp ,rexp) (zerop ,rexp))
-	      ,else)
-	     (t ,then)))))
+       (not
+	(or (not ,exp)
+	    (and (numberp ,rexp) (zerop ,rexp)))))))
+
+(defmacro js!if (exp then else)
+  `(if (js->boolean ,exp) ,then ,else))
+
+(defmacro js!while (exp body)
+  `(loop while (js->boolean ,exp) do ,body))
 
 (defmacro js!eval (str)
   (intern-keywords (parse-js-string str)))
@@ -237,7 +255,6 @@
 (define-reader 'javascript #'js-reader)
 
 ;;;
-
 
 (defclass arguments (native-hash)
   ((len :initarg :len :reader len)
@@ -392,3 +409,19 @@ function afun(a)
 (test 101 r3)
 (test 200 r4)
 (test 1 from_inside))
+
+#{javascript}
+function ffib(n)
+{
+   var s1 = 1;
+   var s2 = 1;
+   var  res = 1;
+   while(n > 1) {
+     res = s1 + s2;
+     s1 = s2;
+     s2 = res;
+     n = n - 1;
+   }
+   return res;
+}
+.
