@@ -56,6 +56,21 @@
 (defmethod (setf prop) (val (hash native-hash) key)
   (setf (gethash key (dict hash)) val))
 
+;;; sub: similar to prop, but key is not necessary a symbol
+(defgeneric sub (hash key)
+  (:method (hash key) (declare (ignore hash key)) (error "no properties")))
+
+(defmethod sub ((hash native-hash) key)
+  (let ((key (or (and (stringp key) (->sym key)) key)))
+    (prop hash key)))
+
+(defgeneric (setf sub) (val hash key)
+  (:method (val hash key) (declare (ignore hash key)) (error "no properties")))
+
+(defmethod (setf sub) (val (hash native-hash) key)
+  (let ((key (or (and (stringp key) (->sym key)) key)))
+    (setf (prop hash key) val)))
+
 (defclass global-object (native-hash)
   ())
 
@@ -87,10 +102,14 @@
 (defmacro js!dot (obj attr)
   `(prop ,obj ',attr))
 
+(defmacro js!sub (obj attr)
+  `(sub ,obj ,attr))
+
 (defmacro js!assign (op place val)
   `(setf ,place ,val))
 
 (defmacro js!num (num) num)
+(defmacro js!string (str) str)
 
 (defmacro js!stat (form)
   `(progn ,form))
@@ -142,28 +161,33 @@
 	 (local-var-list (find-vars body))
 	 (local-variable-p
 	  (lambda (var)
-	    (or (member var (list 'this 'arguments))
+	    (or (eq var 'this)
 		(member var args)
 		(member var local-var-list :key #'car))))
 	 (blockname (gensym)))
     `(macrolet ((js!name (name)
-		  (if (funcall ,local-variable-p name)
-		      name
-		      `,`(prop *global* #+nil this ',name)))
+		  (cond ((eq name 'arguments)
+			 (format t "!!!!!!!~%")
+			 `(or arguments (setf arguments
+					      (make-args ,',args ,',additional-args))))
+			 ((funcall ,local-variable-p name) name)
+			 (t `,`(prop *global* #+nil this ',name))))
 		(js!assign (op exp val)
 		  (let ((name (find-name exp)))
-		    (if (funcall ,local-variable-p name)
-			`(setf ,exp ,val)
-			`,`(setf (prop *global* #+nil this ,exp) ,val))))
+		    (cond ((eq name 'arguments)
+			   `(setf ,exp ,val) #+nil(or arguments (setf arguments
+						(make-args ,',args ,',additional-args))))
+			  ((funcall ,local-variable-p name)
+			   `(setf ,exp ,val))
+			  (t `,`(setf  ,exp #+nil(prop *global* #+nil this ,exp) ,val)))))
 		(js!return (ret) `,`(return-from ,',blockname ,ret)))
        (lambda (this &optional ,@args &rest ,additional-args)
-	 (declare (dynamic-extent ,additional-args))
 	 #+js-debug (format t "this: ~A~%" this)
-	 (let (#+nil(arguments (coerce ,argument-list 'simple-vector))
-	       ,@(mapcar (lambda (var-desc)
-			   (list (car var-desc)
-				 (cdr var-desc))) local-var-list))
-	   (block ,blockname ,@body))))))
+	 (let (arguments)
+	   (let (,@(mapcar (lambda (var-desc)
+			     (list (car var-desc)
+				   (cdr var-desc))) local-var-list))
+	     (block ,blockname ,@body)))))))
 
 (defmacro js!function (name args body)
   `(make-instance 'native-function
@@ -211,6 +235,49 @@
   `(js!eval ,(read-line-stream stream)))
 
 (define-reader 'javascript #'js-reader)
+
+;;;
+
+
+(defclass arguments (native-hash)
+  ((len :initarg :len :reader len)
+   (get-arr :initarg :get-arr :reader get-arr)
+   (set-arr :initarg :set-arr :reader set-arr)))
+
+(defmethod sub ((args arguments) key)
+  (format t "sub ~A~%" key)
+  (if (and (integerp key) (>= key 0))
+      (if (< key (len args)) (funcall (aref (get-arr args) key) key)
+	  (funcall (aref (get-arr args) (len args)) key))
+      (progn (format t "sub c-n-m~A~%" key) (call-next-method args key))))
+
+(defmethod (setf sub) (val (args arguments) key)
+  (format t "setf syb~%")
+  (if (and (integerp key) (>= key 0))
+      (if (< key (len args)) (funcall (aref (set-arr args) key) key val)
+	  (funcall (aref (set-arr args) (len args)) key val))
+      (call-next-method val args key)))
+
+(defmacro make-args (vars oth)
+  (let ((get-arr (gensym))
+	(set-arr (gensym))
+	(len (length vars)))
+    `(let ((,get-arr (make-array ,(1+ len)
+				 :element-type 'function
+				 :initial-contents (list
+						    ,@(mapcar (lambda (var)
+								`(lambda (n) (declare (ignore n)) ,var))
+							      vars)
+						    (lambda (n) (nth (- n ,len) ,oth)))))
+	   (,set-arr (make-array ,(1+ len)
+				 :element-type 'function
+				 :initial-contents (list
+						    ,@(mapcar (lambda (var)
+								`(lambda (n val) (declare (ignore n)) (setf ,var val)))
+							      vars)
+						    (lambda (n val) (setf (nth (- n ,len) ,oth) val))))))
+       (format t "creating args~%")
+       (make-instance 'arguments :len ,len :get-arr ,get-arr :set-arr ,set-arr))))
 
 ;;;
 
@@ -264,6 +331,7 @@ r8 = a.f()
   (test r7 1)
   (test r8 3))
 
+
 (defun test2 ()
 
 #{javascript}
@@ -288,6 +356,7 @@ r2 = b.y;
   (test r1 3)
   (test r2 4))
 
+
 (defun test3 ()
   (labels ((fib2 (n)
 	     (if (< n 2) 1
@@ -302,3 +371,24 @@ function fib(n)
     (loop for i from 1 to 10 do
       (test (fib i) (fib2 i))
 	  finally (return t))))
+
+
+(defun test4 ()
+#{javascript}
+function afun(a)
+{
+  from_inside = 1;
+  arguments[0] = a + 1;
+  rt = a + 1;
+  r0 = a;
+  r1 = arguments[0];
+  r2 = arguments[1];
+}
+.
+#+nil (afun 1)
+#+nil (let ((arg 1))
+  (afun arg arg)
+  (test (1+ arg) r1)
+  (test r1 r2)
+  (test (1+ arg) r3)))
+
