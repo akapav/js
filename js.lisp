@@ -9,22 +9,35 @@
 
 (in-package :js)
 
-(defun intern-keywords (tree)
-  (cond ((null tree) nil)
-	((atom tree) (if (keywordp tree)
-			 (js!intern tree)
-			 tree))
-	(t (mapcar #'intern-keywords tree))))
-
 (defun ->sym (str)
   (intern (string-upcase str)))
+
+(defun intern-keywords (tree)
+  (cond ((null tree) nil)
+	((atom tree)
+	 (if (keywordp tree)
+	     (js!intern tree) tree))
+	(t
+	 (case (car tree)
+	   ((:var) (cons 'js!var
+			 (list (mapcar
+				(lambda (var-desc) (cons (->sym (car var-desc))
+							 (intern-keywords (cdr var-desc))))
+				(second tree)))))
+	   ((:name) (list 'js!name (->sym (second tree))))
+	   ((:dot) (list 'js!dot (intern-keywords (second tree)) (->sym (third tree))))
+	   ((:function :defun)
+	      (list (js!intern (first tree)) (->sym (second tree))
+		    (mapcar #'->sym (third tree))
+		    (intern-keywords (fourth tree))))
+	   (t (mapcar #'intern-keywords tree))))))
 
 (defun js!intern (sym)
   (intern (concatenate 'string "JS!" (symbol-name sym)))) ;;todo: use in intern-keywords
 ;;;
 
 (defclass native-hash ()
-  ((dict :accessor dict :initform (make-hash-table :test 'equal))
+  ((dict :accessor dict :initform (make-hash-table :test 'eq))
    (prototype :accessor prototype :initform nil :initarg :prototype)))
 
 (defgeneric prop (hash key)
@@ -47,7 +60,7 @@
   ())
 
 (defmethod (setf prop) (val (hash global-object) key)
-  (set (->sym key) val)
+  (set key val)
   (call-next-method val hash key))
 
 (defmethod prop ((hash global-object) key)
@@ -67,12 +80,12 @@
   `(progn ,@form))
 
 (defmacro js!name (attr)
-  (if (string= attr "this")
+  (if (eq attr 'this)
       'this
-      `(prop this ,attr)))
+      `(prop this ',attr)))
 
 (defmacro js!dot (obj attr)
-  `(prop ,obj ,attr))
+  `(prop ,obj ',attr))
 
 (defmacro js!assign (op place val)
   `(setf ,place ,val))
@@ -97,9 +110,9 @@
 
 (defmacro js!new (func args)
   (let ((ret (gensym)))
-    `(let ((,ret (make-instance 'native-hash :prototype (prop ,func "prototype"))))
+    `(let ((,ret (make-instance 'native-hash :prototype (prop ,func 'prototype))))
        (funcall (proc ,func) ,ret ,@args)
-       (setf (prop ,ret "constructor") ,func)
+       (setf (prop ,ret 'constructor) ,func)
        ,ret)))
 
 (defmacro js!return (ret)
@@ -126,15 +139,14 @@
 	 (local-var-list (find-vars body))
 	 (local-variable-p
 	  (lambda (var)
-	    (or (member var (list "this" "arguments") :test #'string-equal)
-		(member var args :test #'string-equal)
-		(member var local-var-list
-			:test #'string-equal :key #'car))))
+	    (or (member var (list 'this 'arguments))
+		(member var args)
+		(member var local-var-list :key #'car))))
 	 (blockname (gensym)))
     `(macrolet ((js!name (name)
 		  (if (funcall ,local-variable-p name)
-		      `,(->sym name)
-		      `,`(prop *global* #+nil this ,name)))
+		      name
+		      `,`(prop *global* #+nil this ',name)))
 		(js!assign (op exp val)
 		  (let ((name (find-name exp)))
 		    (if (funcall ,local-variable-p name)
@@ -146,10 +158,38 @@
 	 #+js-debug (format t "this: ~A~%" this)
 	 (let ((arguments (coerce ,argument-list 'simple-vector))
 	       ,@(mapcar (lambda (var-desc)
-			   (list (->sym (car var-desc))
+			   (list (car var-desc)
 				 (cdr var-desc))) local-var-list))
-	   (multiple-value-bind ,(mapcar #'->sym args) (values-list ,argument-list)
+	   (multiple-value-bind ,args (values-list ,argument-list)
 	     (block ,blockname ,@body)))))))
+
+#+nil (defmacro js!lambda (args body)
+  (let* ((argument-list (gensym))
+	 (local-var-list (find-vars body))
+	 (local-variable-p
+	  (lambda (var)
+	    (or (member var (list 'this 'arguments))
+		(member var args)
+		(member var local-var-list :key #'car))))
+	 (blockname (gensym)))
+    `(macrolet ((js!name (name)
+		  (if (funcall ,local-variable-p name)
+		      name
+		      `,`(prop *global* #+nil this ',name)))
+		(js!assign (op exp val)
+		  (let ((name (find-name exp)))
+		    (if (funcall ,local-variable-p name)
+			`(setf ,exp ,val)
+			`,`(setf (prop *global* #+nil this ,exp) ,val))))
+		(js!return (ret) `,`(return-from ,',blockname ,ret)))
+       (lambda (this ,@args)
+	 #+nil (declare (dynamic-extent ,argument-list))
+	 #+js-debug (format t "this: ~A~%" this)
+	 (let (#+nil (arguments (coerce ,argument-list 'simple-vector))
+	       ,@(mapcar (lambda (var-desc)
+			   (list (car var-desc)
+				 (cdr var-desc))) local-var-list))
+	     (block ,blockname ,@body))))))
 
 (defmacro js!function (name args body)
   `(make-instance 'native-function
@@ -160,9 +200,33 @@
   (let ((args2 (gensym))
 	(func (gensym)))
     `(let ((,func (js!function ,name ,args ,body)))
-       (setf (prop this ,name) ,func)
-       (defun ,(->sym name) (&rest ,args2)
+       (setf (prop this ',name) ,func)
+       (defun ,name (&rest ,args2)
 	 (apply (proc ,func) this ,args2)))))
+
+(defmacro js!binary-operators (&rest ops)
+  `(progn
+     ,@(mapcar (lambda (op)
+		 (if (symbolp op)
+		     `(setf (symbol-function ',(js!intern op)) (function ,op))
+		     `(setf (symbol-function ',(js!intern (first op))) (function ,(second op)))))
+	     ops)))
+
+(js!binary-operators
+  + - * /
+ (== equalp) < > <= >= (!= /=))
+
+(defmacro js!binary (op-sym ls rs)
+  (let ((op (symbol-function op-sym)))
+    `(funcall ,op ,ls ,rs)))
+
+(defmacro js!if (exp then else)
+  (let ((rexp (gensym)))
+    `(let ((,rexp ,exp))
+       (cond ((not ,rexp) ,else)
+	     ((and (numberp ,rexp) (zerop ,rexp))
+	      ,else)
+	     (t ,then)))))
 
 (defmacro js!eval (str)
   (intern-keywords (parse-js-string str)))
@@ -176,7 +240,8 @@
 
 ;;;
 
-(setf (prop this "Object") (js!function () () ()))
+(setf (prop this 'Object) (js!function () () ()))
+
 (defun test1 ()
   #+nil(setf (prop this "a") (make-instance 'native-hash))
 #{javascript}
@@ -248,33 +313,18 @@ r2 = b.y;
 
   (test r1 3)
   (test r2 4))
-;(setf (prop Object "prototype") a)
-;(setf (prop this "x") (js!eval "new Object;"))
 
-(defmacro js!binary-operators (&rest ops)
-  `(progn
-     ,@(mapcar (lambda (op)
-		 (if (symbolp op)
-		     `(setf (symbol-function ',(js!intern op)) (function ,op))
-		     `(setf (symbol-function ',(js!intern (first op))) (function ,(second op)))))
-	     ops)))
 
-(js!binary-operators
- + * /
- (== equalp) < > <= >= (!= /=))
-
+#|
 (defun js!- (ls rs)
   (declare (fixnum ls rs))
   (the fixnum (- ls rs)))
 
-(defmacro js!binary (op-sym ls rs)
-  (let ((op (symbol-function op-sym)))
-    `(funcall ,op ,ls ,rs)))
+(defun js!+ (ls rs)
+  (declare (fixnum ls rs))
+  (the fixnum (+ ls rs)))
 
-(defmacro js!if (exp then else)
-  (let ((rexp (gensym)))
-    `(let ((,rexp ,exp))
-       (cond ((not ,rexp) ,else)
-	     ((and (numberp ,rexp) (zerop ,rexp))
-	      ,else)
-	     (t ,then)))))
+(defun js!< (ls rs)
+  (declare (fixnum ls rs))
+  (the boolean (< ls rs)))
+|#
