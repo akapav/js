@@ -172,14 +172,14 @@
 					      (make-args ,',args ,',additional-args))))
 			 ((funcall ,local-variable-p name) name)
 			 (t `,`(prop *global* #+nil this ',name))))
-		(js!assign (op exp val)
+		#+nil (js!assign (op exp val)
 		  (let ((name (find-name exp)))
 		    (cond ((eq name 'arguments)
 			   `(setf ,exp ,val) #+nil(or arguments (setf arguments
 						(make-args ,',args ,',additional-args))))
 			  ((funcall ,local-variable-p name)
 			   `(setf ,exp ,val))
-			  (t `,`(setf  ,exp #+nil(prop *global* #+nil this ,exp) ,val)))))
+			  (t `(setf  ,exp #+nil(prop *global* #+nil this ,exp) ,val)))))
 		(js!return (ret) `,`(return-from ,',blockname ,ret)))
        (lambda (this &optional ,@args &rest ,additional-args)
 	 #+js-debug (format t "this: ~A~%" this)
@@ -379,16 +379,16 @@ function afun(a)
 {
   from_inside = 1;
   arguments[0] = a + 1;
-  rt = a + 1;
-  r0 = a;
-  r1 = arguments[0];
-  r2 = arguments[1];
+  r1 = a + 1;
+  r2 = a;
+  r3 = arguments[0];
+  r4 = arguments[1];
 }
 .
-#+nil (afun 1)
-#+nil (let ((arg 1))
-  (afun arg arg)
-  (test (1+ arg) r1)
-  (test r1 r2)
-  (test (1+ arg) r3)))
 
+(afun 100 200)
+(test 102 r1)
+(test 101 r2)
+(test 101 r3)
+(test 200 r4)
+(test 1 from_inside))
