@@ -111,6 +111,12 @@
 (defmacro js!num (num) num)
 (defmacro js!string (str) str)
 
+(defmacro js!object (props)
+  (let ((obj (gensym)))
+    `(let ((,obj (make-instance 'native-hash)))
+       ,@(mapcar (lambda (*prop) `(setf (sub ,obj ,(car *prop)) ,(cdr *prop))) props)
+       ,obj)))
+
 (defmacro js!stat (form)
   `(progn ,form))
 
