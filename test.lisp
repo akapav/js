@@ -149,9 +149,11 @@ return a(2);
 
 
 #{javascript}
-function f()
+function f4()
 {
-  return b;
+var b=12;
+return b;
   function b() {return 1;}
+
 }
 .

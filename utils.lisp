@@ -6,7 +6,7 @@
 (defun js!intern (sym)
   (intern (concatenate 'string "JS!" (symbol-name sym))))
 
-;; queue
+;; actually, we don't need an queue but set. important thing is that reference must be kept
 (defstruct queue
   list
   last)
@@ -16,9 +16,10 @@
     (make-queue :list head :last head)))
 
 (defun queue-enqueue (q el)
-  (let ((last (queue-last q)))
-    (setf (queue-last q)
-	  (setf (cdr last) (list el)))))
+  (unless (member el (queue-list q))
+    (let ((last (queue-last q)))
+      (setf (queue-last q)
+	    (setf (cdr last) (list el))))))
 
 (defun queue-top (q)
   (second (queue-list q)))

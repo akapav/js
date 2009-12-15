@@ -21,6 +21,11 @@
 	   ((:dot) (list (js!intern (car form)) (traverse-form (second form))
 					 (->sym (third form))))
 	   ((:function :defun)
+	      (when (and (eq (car form) :defun)
+			 (second form))
+		(let ((fun-name (->sym (second form))))
+		  (queue-enqueue env fun-name)
+		  (queue-enqueue locals fun-name)))
 	      (let ((placeholder (list (car form))))
 		(queue-enqueue lmbd-forms (list form env placeholder))
 		placeholder))
@@ -33,13 +38,12 @@
     (traverse-form form)))
 
 (defun lift-defuns (form)
-  (let ((defuns
-	(loop for el in form
-		  if (eq (car el) :defun) collect el)))
-	(format t ">>>>>>>>>>>defuns: ~A ~A~%" defuns form)
-	(append defuns 
-	(loop for el in form
-		  if (not (eq (car el) :defun)) collect el))))
+  (let (defuns oth)
+    (loop for el in form do
+      (if (eq (car el) :defun) (push el defuns)
+	  (push el oth)))
+    (format t ">>>>>>>>>>>defuns: ~A ~A~%" (reverse defuns) (reverse oth))
+    (append (reverse defuns) (reverse oth))))
 
 (defun shallow-process-function-form (form old-env)
   (let* ((env (queue-copy old-env))
