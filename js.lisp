@@ -125,8 +125,8 @@
 
 (defmacro js!named-lambda (name env args locals body)
   `(let (,name)
-	 (setf ,name (js!lambda ,env ,args ,locals ,body))
-	 ,name))
+	 (setf ,name (js!function ,env nil ,args ,locals ,body))
+	 (proc ,name)))
 
 (defmacro js!lambda (env args locals body)
   (let* ((additional-args (gensym))
@@ -145,7 +145,9 @@
 						((funcall ,local-variable-p name) name)
 						(t `,`(prop *global* #+nil this ',name))))
 				(js!return (ret) `,`(return-from ,',blockname ,ret)))
-       (lambda (this &optional ,@args &rest ,additional-args)
+       (lambda (this
+				&optional ,@(mapcar (lambda (arg) `(,arg :undefined)) args)
+				&rest ,additional-args)
 	 #+js-debug (format t "this: ~A~%" this)
 	 (let (arguments)
 	   (let (,@(mapcar (lambda (var)
@@ -201,8 +203,9 @@
   (let ((rexp (gensym)))
     `(let ((,rexp ,exp))
        (not
-	(or (not ,exp)
-	    (and (numberp ,rexp) (zerop ,rexp)))))))
+		(or (not ,exp)
+			(eq ,exp :undefined)
+			(and (numberp ,rexp) (zerop ,rexp)))))))
 
 (defmacro js!if (exp then else)
   `(if (js->boolean ,exp) ,then ,else))

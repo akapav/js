@@ -131,4 +131,18 @@ function adder(n)
 {
 return function(m) {return n+m;};
 }
+r1 = adder(1)(2);
+.
+
+#{javascript}
+function fbla(x)
+{
+var a = function f1(n) {return b(n);};
+var b = function f2(n, m)
+{
+  if(m) return n+n;
+  return f2(n + 1, 5);
+};
+return a(2);
+}
 .
