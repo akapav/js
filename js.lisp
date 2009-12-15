@@ -1,40 +1,4 @@
-(asdf:oos 'asdf:load-op :parse-js)
-(asdf:oos 'asdf:load-op :ptester)
-
-(load "reader.lisp")
-
-(defpackage :js
-  (:use :ptester :parse-js :cl
-	:net.svrg.reader-macro))
-
 (in-package :js)
-
-(defun ->sym (str)
-  (intern (string-upcase str)))
-
-(defun intern-keywords (tree)
-  (cond ((null tree) nil)
-	((atom tree)
-	 (if (keywordp tree)
-	     (js!intern tree) tree))
-	(t
-	 (case (car tree)
-	   ((:var) (cons 'js!var
-			 (list (mapcar
-				(lambda (var-desc) (cons (->sym (car var-desc))
-							 (intern-keywords (cdr var-desc))))
-				(second tree)))))
-	   ((:name) (list 'js!name (->sym (second tree))))
-	   ((:dot) (list 'js!dot (intern-keywords (second tree)) (->sym (third tree))))
-	   ((:function :defun)
-	      (list (js!intern (first tree)) (->sym (second tree))
-		    (mapcar #'->sym (third tree))
-		    (intern-keywords (fourth tree))))
-	   (t (mapcar #'intern-keywords tree))))))
-
-(defun js!intern (sym)
-  (intern (concatenate 'string "JS!" (symbol-name sym)))) ;;todo: use in intern-keywords
-;;;
 
 (defclass native-hash ()
   ((dict :accessor dict :initform (make-hash-table :test 'eq))
@@ -84,7 +48,8 @@
 
 (defclass native-function (native-hash)
   ((name :accessor name :initarg :name)
-   (proc :accessor proc :initarg :proc)))
+   (proc :accessor proc :initarg :proc)
+   (env :accessor env :initarg :env)))
 
 (defparameter *global* (make-instance 'global-object))
 
@@ -124,7 +89,10 @@
   `(progn ,@form))
 
 (defmacro js!var (vars)
-  (declare (ignore vars)) nil)
+  `(progn ,@(mapcar (lambda (var)
+					  (when (cdr var)
+						`(js!assign t (js!name ,(car var)) ,(cdr var))))
+					vars)))
 
 ;;;
 (defmacro js!call (func args) ;;;todo: check if a caller isn't  cons
@@ -147,14 +115,7 @@
   (declare (ignore ret))
   (error "return not in function"))
 
-(defun find-vars (tree) ;;todo: nested functions are included. should be ignored
-  (cond
-    ((atom tree) nil)
-;;; todo: ignore nested functions
-    ((eq (first tree) 'js!var) (cadr tree))
-    (t (apply #'append (mapcar #'find-vars tree)))))
-
-(defun find-name (tree)
+#+nil (defun find-name (tree)
   (labels ((f (tree)
 	     (cond
 	       ((atom tree) nil)
@@ -162,51 +123,50 @@
 	       (t (mapcar #'f tree)))))
     (f tree)))
 
-(defmacro js!lambda (args body)
+(defmacro js!named-lambda (name env args locals body)
+  `(let (,name)
+	 (setf ,name (js!lambda ,env ,args ,locals ,body))
+	 ,name))
+
+(defmacro js!lambda (env args locals body)
   (let* ((additional-args (gensym))
-	 (local-var-list (find-vars body))
-	 (local-variable-p
-	  (lambda (var)
-	    (or (eq var 'this)
-		(member var args)
-		(member var local-var-list :key #'car))))
-	 (blockname (gensym)))
+		 (local-variable-p
+		  (lambda (var)
+			(or (eq var 'this)
+				(member var env)
+				(member var args)
+				(member var locals))))
+		 (blockname (gensym)))
     `(macrolet ((js!name (name)
-		  (cond ((eq name 'arguments)
-			 (format t "!!!!!!!~%")
-			 `(or arguments (setf arguments
-					      (make-args ,',args ,',additional-args))))
-			 ((funcall ,local-variable-p name) name)
-			 (t `,`(prop *global* #+nil this ',name))))
-		#+nil (js!assign (op exp val)
-		  (let ((name (find-name exp)))
-		    (cond ((eq name 'arguments)
-			   `(setf ,exp ,val) #+nil(or arguments (setf arguments
-						(make-args ,',args ,',additional-args))))
-			  ((funcall ,local-variable-p name)
-			   `(setf ,exp ,val))
-			  (t `(setf  ,exp #+nil(prop *global* #+nil this ,exp) ,val)))))
-		(js!return (ret) `,`(return-from ,',blockname ,ret)))
+				  (cond ((eq name 'arguments)
+						 (format t "!!!!!!!~%")
+						 `(or arguments (setf arguments
+											  (make-args ,',args ,',additional-args))))
+						((funcall ,local-variable-p name) name)
+						(t `,`(prop *global* #+nil this ',name))))
+				(js!return (ret) `,`(return-from ,',blockname ,ret)))
        (lambda (this &optional ,@args &rest ,additional-args)
 	 #+js-debug (format t "this: ~A~%" this)
 	 (let (arguments)
-	   (let (,@(mapcar (lambda (var-desc)
-			     (list (car var-desc)
-				   (cdr var-desc))) local-var-list))
+	   (let (,@(mapcar (lambda (var)
+						 (list var :undefined)) locals))
 	     (block ,blockname ,@body)))))))
 
-(defmacro js!function (name args body)
+(defmacro js!function (env name args locals body)
   `(make-instance 'native-function
 		  :name ',name
-		  :proc (js!lambda ,args ,body)))
+		  :proc ,(if name
+					 `(js!named-lambda ,name ,env ,args ,locals ,body)
+					 `(js!lambda ,env ,args ,locals ,body))
+		  :env ',env))
 
-(defmacro js!defun (name args body)
+(defmacro js!defun (env name args locals body)
   (let ((args2 (gensym))
 	(func (gensym)))
-    `(let ((,func (js!function ,name ,args ,body)))
+    `(let ((,func (js!function ,env ,name ,args ,locals ,body)))
        (setf (prop this ',name) ,func)
        (defun ,name (&rest ,args2)
-	 (apply (proc ,func) this ,args2)))))
+		 (apply (proc ,func) this ,args2)))))
 
 (defmacro js!binary-operators (&rest ops)
   `(progn
@@ -251,7 +211,7 @@
   `(loop while (js->boolean ,exp) do ,body))
 
 (defmacro js!eval (str)
-  (intern-keywords (parse-js-string str)))
+  (process-ast (parse-js-string str)))
 
 ;;;
 
@@ -304,130 +264,4 @@
 
 ;;;
 
-(setf (prop this 'Object) (js!function () () ()))
-
-(defun test1 ()
-  #+nil(setf (prop this "a") (make-instance 'native-hash))
-#{javascript}
-
-a = new Object;
-f = function (o) {
-  return o.a;
-}
-
-a.a = 1;
-
-r1 = f(this);
-r2 = f(a);
-
-f2 = function f2() {
-  return this.a;
-}
-
-r3 = f2();
-
-a.f3 = f2;
-r4 = a.f3();
-
-f4 = function f4() {
- return f(this);
-};
-
-r5 = f4();
-r6 = this.f4();
-a.f5 = f4;
-r7 = a.f5();
-
-fifi = 3;
-a.fifi = 4;
-a.f = function () {return fifi;}
-r8 = a.f()
-
-.
-
-  (test r1 a)
-  (test r2 1)
-  (test r3 a)
-  (test r4 1)
-  (test r5 a)
-  (test r6 a)
-  (test r7 1)
-  (test r8 3))
-
-
-(defun test2 ()
-
-#{javascript}
-a = new Object
-a.x = 3;
-
-function f33()
-{
-  var v = new Object;
-  v.v1 = new Object;
-  v.v1.v2 = 4;
-  this.y = v.v1.v2;
-}
-
-f33.prototype = a;
-
-b = new f33();
-r1 = b.x;
-r2 = b.y;
-.
-
-  (test r1 3)
-  (test r2 4))
-
-
-(defun test3 ()
-  (labels ((fib2 (n)
-	     (if (< n 2) 1
-		 (+ (fib2 (1- n)) (fib2 (- n 2))))))
-#{javascript}
-function fib(n)
-{
-  if(n < 2) return 1;
-  return fib(n - 1) + fib(n - 2);
-}
-.
-    (loop for i from 1 to 10 do
-      (test (fib i) (fib2 i))
-	  finally (return t))))
-
-
-(defun test4 ()
-#{javascript}
-function afun(a)
-{
-  from_inside = 1;
-  arguments[0] = a + 1;
-  r1 = a + 1;
-  r2 = a;
-  r3 = arguments[0];
-  r4 = arguments[1];
-}
-.
-
-(afun 100 200)
-(test 102 r1)
-(test 101 r2)
-(test 101 r3)
-(test 200 r4)
-(test 1 from_inside))
-
-#{javascript}
-function ffib(n)
-{
-   var s1 = 1;
-   var s2 = 1;
-   var  res = 1;
-   while(n > 1) {
-     res = s1 + s2;
-     s1 = s2;
-     s2 = res;
-     n = n - 1;
-   }
-   return res;
-}
-.
+(setf (prop this 'Object) (js!function () () () () ()))

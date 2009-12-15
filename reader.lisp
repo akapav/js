@@ -1,9 +1,6 @@
-(defpackage :net.svrg.reader-macro
-    (:use :cl)
-  (:export :define-reader :find-reader :remove-reader
-	   :read-line-stream))
-
 (in-package :net.svrg.reader-macro)
+
+(eval-when (:compile-toplevel :load-toplevel :execute)
 
 (defun scan-for-reader (s)
   (with-input-from-string
@@ -35,7 +32,6 @@
 	 (loop for line = (read-line stream nil)
 	       until (or (not line) (string-equal line "."))
 	       collecting (concatenate 'string line (string #\newline)))))
-
 ;; example
 (defun rassoc-infix (list)
   (cond ((atom list) list)
@@ -43,9 +39,9 @@
 	(t (list (second list) (first list)
 		 (rassoc-infix (cddr list))))))
 
-(defun infix-reader (stream)
-  (rassoc-infix (read stream)))
+  (defun infix-reader (stream)
+	(rassoc-infix (read stream)))
 
-(define-reader 'infix #'infix-reader)
+  (define-reader 'infix #'infix-reader))
 
 #{infix} (1 - 2 + 3)
