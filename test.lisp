@@ -146,3 +146,12 @@ var b = function f2(n, m)
 return a(2);
 }
 .
+
+
+#{javascript}
+function f()
+{
+  return b;
+  function b() {return 1;}
+}
+.

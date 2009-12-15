@@ -144,6 +144,8 @@
 											  (make-args ,',args ,',additional-args))))
 						((funcall ,local-variable-p name) name)
 						(t `,`(prop *global* #+nil this ',name))))
+				(js!defun (env name args locals body)
+				  `(setf ,name (js!function ,env ,name ,args ,locals ,body)))
 				(js!return (ret) `,`(return-from ,',blockname ,ret)))
        (lambda (this
 				&optional ,@(mapcar (lambda (arg) `(,arg :undefined)) args)
