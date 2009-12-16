@@ -3,8 +3,8 @@
 (defun ->sym (str)
   (intern (string-upcase str)))
 
-(defun js!intern (sym)
-  (intern (concatenate 'string "JS!" (symbol-name sym))))
+(defun js-intern (sym)
+  (intern (concatenate 'string "!" (symbol-name sym)) :js))
 
 ;; actually, we don't need an queue but set. important thing is that reference must be kept
 (defstruct queue

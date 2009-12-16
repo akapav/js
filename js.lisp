@@ -56,62 +56,62 @@
 (defparameter this *global*)
 
 ;;;
-(defmacro js!toplevel (form)
+(defmacro !toplevel (form)
   `(progn ,@form))
 
-(defmacro js!name (attr)
+(defmacro !name (attr)
   (if (eq attr 'this)
       'this
       `(prop this ',attr)))
 
-(defmacro js!dot (obj attr)
+(defmacro !dot (obj attr)
   `(prop ,obj ',attr))
 
-(defmacro js!sub (obj attr)
+(defmacro !sub (obj attr)
   `(sub ,obj ,attr))
 
-(defmacro js!assign (op place val)
+(defmacro !assign (op place val)
   `(setf ,place ,val))
 
-(defmacro js!num (num) num)
-(defmacro js!string (str) str)
+(defmacro !num (num) num)
+(defmacro !string (str) str)
 
-(defmacro js!object (props)
+(defmacro !object (props)
   (let ((obj (gensym)))
     `(let ((,obj (make-instance 'native-hash)))
        ,@(mapcar (lambda (*prop) `(setf (sub ,obj ,(car *prop)) ,(cdr *prop))) props)
        ,obj)))
 
-(defmacro js!stat (form)
+(defmacro !stat (form)
   `(progn ,form))
 
-(defmacro js!block (form)
+(defmacro !block (form)
   `(progn ,@form))
 
-(defmacro js!var (vars)
+(defmacro !var (vars)
   `(progn ,@(mapcar (lambda (var)
 					  (when (cdr var)
-						`(js!assign t (js!name ,(car var)) ,(cdr var))))
+						`(!assign t (!name ,(car var)) ,(cdr var))))
 					vars)))
 
 ;;;
-(defmacro js!call (func args) ;;;todo: check if a caller isn't  cons
+(defmacro !call (func args) ;;;todo: check if a caller isn't  cons
   (let ((*proc (gensym)))
   `(let ((,*proc (proc ,func)))
      (declare (function ,*proc))
      (funcall ,*proc
 	      ,(case (car func)
-		 ((js!dot) (second func))
+		 ((!dot) (second func))
 		 (t this)) ,@args))))
 
-(defmacro js!new (func args)
+(defmacro !new (func args)
   (let ((ret (gensym)))
     `(let ((,ret (make-instance 'native-hash :prototype (prop ,func 'prototype))))
        (funcall (proc ,func) ,ret ,@args)
        (setf (prop ,ret 'constructor) ,func)
        ,ret)))
 
-(defmacro js!return (ret)
+(defmacro !return (ret)
   (declare (ignore ret))
   (error "return not in function"))
 
@@ -119,16 +119,16 @@
   (labels ((f (tree)
 	     (cond
 	       ((atom tree) nil)
-	       ((eq (first tree) 'js!name) (return-from find-name (second tree)))
+	       ((eq (first tree) '!name) (return-from find-name (second tree)))
 	       (t (mapcar #'f tree)))))
     (f tree)))
 
-(defmacro js!named-lambda (name env args locals body)
+(defmacro !named-lambda (name env args locals body)
   `(let (,name)
-	 (setf ,name (js!function ,env nil ,args ,locals ,body))
+	 (setf ,name (!function ,env nil ,args ,locals ,body))
 	 (proc ,name)))
 
-(defmacro js!lambda (env args locals body)
+(defmacro !lambda (env args locals body)
   (let* ((additional-args (gensym))
 		 (local-variable-p
 		  (lambda (var)
@@ -137,16 +137,16 @@
 				(member var args)
 				(member var locals))))
 		 (blockname (gensym)))
-    `(macrolet ((js!name (name)
+    `(macrolet ((!name (name)
 				  (cond ((eq name 'arguments)
 						 (format t "!!!!!!!~%")
 						 `(or arguments (setf arguments
 											  (make-args ,',args ,',additional-args))))
 						((funcall ,local-variable-p name) name)
 						(t `,`(prop *global* #+nil this ',name))))
-				(js!defun (env name args locals body)
-				  `(setf ,name (js!function ,env ,name ,args ,locals ,body)))
-				(js!return (ret) `,`(return-from ,',blockname ,ret)))
+				(!defun (env name args locals body)
+				  `(setf ,name (!function ,env ,name ,args ,locals ,body)))
+				(!return (ret) `,`(return-from ,',blockname ,ret)))
        (lambda (this
 				&optional ,@(mapcar (lambda (arg) `(,arg :undefined)) args)
 				&rest ,additional-args)
@@ -156,28 +156,28 @@
 						 (list var :undefined)) locals))
 	     (block ,blockname ,@body)))))))
 
-(defmacro js!function (env name args locals body)
+(defmacro !function (env name args locals body)
   `(make-instance 'native-function
 		  :name ',name
 		  :proc ,(if name
-					 `(js!named-lambda ,name ,env ,args ,locals ,body)
-					 `(js!lambda ,env ,args ,locals ,body))
+					 `(!named-lambda ,name ,env ,args ,locals ,body)
+					 `(!lambda ,env ,args ,locals ,body))
 		  :env ',env))
 
-(defmacro js!defun (env name args locals body)
+(defmacro !defun (env name args locals body)
   (let ((args2 (gensym))
 	(func (gensym)))
-    `(let ((,func (js!function ,env ,name ,args ,locals ,body)))
+    `(let ((,func (!function ,env ,name ,args ,locals ,body)))
        (setf (prop this ',name) ,func)
        (defun ,name (&rest ,args2)
 		 (apply (proc ,func) this ,args2)))))
 
-(defmacro js!binary-operators (&rest ops)
+(defmacro js-binary-operators (&rest ops)
   `(progn
      ,@(mapcar (lambda (op)
 		 (if (symbolp op)
-		     `(setf (symbol-function ',(js!intern op)) (function ,op))
-		     `(setf (symbol-function ',(js!intern (first op))) (function ,(second op)))))
+		     `(setf (symbol-function ',(js-intern op)) (function ,op))
+		     `(setf (symbol-function ',(js-intern (first op))) (function ,(second op)))))
 	     ops)))
 
 ;;;;;;;;
@@ -193,11 +193,11 @@
   (declare (fixnum ls rs))
   (the boolean (< ls rs)))
 ;;;;;;;;
-(js!binary-operators
+(js-binary-operators
   (+ plus) (- minus) * /
  (== equalp) (< less) > <= >= (!= /=))
 
-(defmacro js!binary (op-sym ls rs)
+(defmacro !binary (op-sym ls rs)
   (let ((op (symbol-function op-sym)))
     `(funcall ,op ,ls ,rs)))
 
@@ -209,19 +209,19 @@
 			(eq ,exp :undefined)
 			(and (numberp ,rexp) (zerop ,rexp)))))))
 
-(defmacro js!if (exp then else)
+(defmacro !if (exp then else)
   `(if (js->boolean ,exp) ,then ,else))
 
-(defmacro js!while (exp body)
+(defmacro !while (exp body)
   `(loop while (js->boolean ,exp) do ,body))
 
-(defmacro js!eval (str)
+(defmacro !eval (str)
   (process-ast (parse-js-string str)))
 
 ;;;
 
 (defun js-reader (stream)
-  `(js!eval ,(read-line-stream stream)))
+  `(!eval ,(read-line-stream stream)))
 
 (define-reader 'javascript #'js-reader)
 
@@ -269,4 +269,4 @@
 
 ;;;
 
-(setf (prop this 'Object) (js!function () () () () ()))
+(setf (prop this 'Object) (!function () () () () ()))
