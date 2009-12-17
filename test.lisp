@@ -78,16 +78,34 @@ r2 = b.y;
   (labels ((fib2 (n)
 	     (if (< n 2) 1
 		 (+ (fib2 (1- n)) (fib2 (- n 2))))))
+
 #{javascript}
 function fib(n)
 {
   if(n < 2) return 1;
   return fib(n - 1) + fib(n - 2);
 }
+
+function ffib(n)
+{
+   var s1 = 1;
+   var s2 = 1;
+   var  res = 1;
+   while(n > 1) {
+     res = s1 + s2;
+     s1 = s2;
+     s2 = res;
+     n = n - 1;
+   }
+   return res;
+}
 .
     (loop for i from 1 to 10 do
-      (test (fib i) (fib2 i))
-	  finally (return t))))
+      (test (fib i) (fib2 i)))
+
+    (loop for i from 1 to 10 do
+      (test (ffib i) (fib2 i)))
+	t))
 
 
 (defun test4 ()
@@ -110,22 +128,7 @@ function afun(a)
 (test 200 r4)
 (test 1 from_inside))
 
-#{javascript}
-function ffib(n)
-{
-   var s1 = 1;
-   var s2 = 1;
-   var  res = 1;
-   while(n > 1) {
-     res = s1 + s2;
-     s1 = s2;
-     s2 = res;
-     n = n - 1;
-   }
-   return res;
-}
-.
-
+(defun test5 ()
 #{javascript}
 function adder(n)
 {
@@ -133,7 +136,9 @@ return function(m) {return n+m;};
 }
 r1 = adder(1)(2);
 .
+  (test r1 3))
 
+(defun test6 ()
 #{javascript}
 function fbla(x)
 {
@@ -147,6 +152,7 @@ return a(2);
 }
 .
 
+  (test (fbla 2) 6))
 
 #{javascript}
 function f4()
