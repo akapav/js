@@ -53,9 +53,9 @@
 		 (name (and (second form) (->sym (second form)))))
     (declare (special env locals))
     (mapc (lambda (arg) (set-add env arg)) arglist)
-    (list (js-intern (first form))
-		  (if name (cons name (set-elems old-env))
-			  (set-elems old-env))
+    (list (js-intern (first form)) ;;defun or function
+		  (set-elems (set-add old-env name)) ;;inject function name (if any)
+		                                     ;;into local lexical environment
 		  name arglist (set-elems locals) (lift-defuns new-form))))
 
 (defun process-ast (ast)

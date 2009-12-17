@@ -43,7 +43,8 @@
   (apply #'make-hash-table args))
 
 (defun set-add (set elem)
-  (setf (gethash elem set) t)
+  (when elem
+	(setf (gethash elem set) t))
   set)
 
 (defun set-remove (set elem)
