@@ -6,7 +6,7 @@
 (defun js-intern (sym)
   (intern (concatenate 'string "!" (symbol-name sym)) :js))
 
-;; actually, we don't need an queue but set. important thing is that reference must be kept
+;;queue
 (defstruct queue
   list
   last)
@@ -16,10 +16,9 @@
     (make-queue :list head :last head)))
 
 (defun queue-enqueue (q el)
-  (unless (member el (queue-list q))
-    (let ((last (queue-last q)))
-      (setf (queue-last q)
-	    (setf (cdr last) (list el))))))
+  (let ((last (queue-last q)))
+	(setf (queue-last q)
+		  (setf (cdr last) (list el)))))
 
 (defun queue-top (q)
   (second (queue-list q)))
@@ -37,3 +36,29 @@
 (defun queue-copy (q)
   (let ((list (copy-list (queue-list q))))
   (make-queue :list list :last (last list))))
+
+
+;;set
+(defun set-make (&rest args)
+  (apply #'make-hash-table args))
+
+(defun set-add (set elem)
+  (setf (gethash elem set) t)
+  set)
+
+(defun set-remove (set elem)
+  (remhash elem set)
+  set)
+
+(defun set-elems (set)
+  (let (elems)
+	(maphash (lambda (k v)
+			   (declare (ignore v))
+			   (push k elems)) set)
+	elems))
+
+(defun set-copy (set)
+  (let ((new-set (set-make :test (hash-table-test set))))
+	(mapc (lambda (el) (set-add new-set el)) (set-elems set))
+	new-set))
+
