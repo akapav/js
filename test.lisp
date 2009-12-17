@@ -163,3 +163,18 @@ return b;
 
 }
 .
+
+
+;;;;;
+
+(defun js-ast (stream)
+  `'(,(process-ast
+	   (parse-js-string (read-line-stream stream)))))
+
+(define-reader 'js-ast #'js-ast)
+
+#{js-ast}
+x=function a(b)
+{
+};
+.
