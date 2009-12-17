@@ -16,4 +16,4 @@
 (defpackage :net.svrg.js-user
 	(:nicknames :js-user)
   (:use :cl :js :net.svrg.reader-macro :parse-js
-		:ptester)
+		:ptester))
