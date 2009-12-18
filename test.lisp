@@ -217,6 +217,7 @@ r6 = a;
 (test r4 0)
 (test r5 0)
 (test r6 -1))
+
 ;;;;;
 
 (defun js-ast (stream)
@@ -236,5 +237,5 @@ x=function a(b)
 			   `(list ,@(mapcar (lambda (s) `(function ,s)) syms))))
 	(every #'identity
 		   (mapcar #'funcall
-				   (flist test1 test2 test3 test4 test5 test6)))))
+				   (flist test1 test2 test3 test4 test5 test6 test7)))))
 

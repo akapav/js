@@ -225,7 +225,8 @@
 
 (defmacro !for (init cond step body)
   (let ((lbl (gensym))
-		(execute-step (gensym)))
+		(execute-step (gensym))
+		(cond (or cond t))) ;;when for(init;;step) ...
 	`(macrolet ((!break (named-lbl)
 				  `,`(return-from ,(or named-lbl ',lbl)))
 				(!continue (named-lbl) `,`(go ,',lbl)))
