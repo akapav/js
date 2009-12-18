@@ -212,8 +212,35 @@
 (defmacro !if (exp then else)
   `(if (js->boolean ,exp) ,then ,else))
 
-(defmacro !while (exp body)
-  `(loop while (js->boolean ,exp) do ,body))
+(defmacro !do (cond body)
+  (let ((lbl (gensym)))
+	`(macrolet ((!break (named-lbl)
+				  `,`(return-from ,(or named-lbl ',lbl)))
+				(!continue (named-lbl) `,`(go ,',lbl)))
+	   (block ,lbl
+		 (tagbody ,lbl
+			(progn ,body
+			 (when (js->boolean ,cond)
+			   (go ,lbl))))))))
+
+(defmacro !for (init cond step body)
+  (let ((lbl (gensym))
+		(execute-step (gensym)))
+	`(macrolet ((!break (named-lbl)
+				  `,`(return-from ,(or named-lbl ',lbl)))
+				(!continue (named-lbl) `,`(go ,',lbl)))
+	   (block ,lbl
+		 (let (,execute-step)
+		   ,init
+		   (tagbody ,lbl
+			  (when ,execute-step ,step)
+			  (setf ,execute-step t)
+			  (when (js->boolean ,cond)
+				,body
+				(go ,lbl))))))))
+
+(defmacro !while (cond body)
+  `(!for nil ,cond nil ,body))
 
 (defmacro !eval (str)
   (process-ast (parse-js-string str)))
