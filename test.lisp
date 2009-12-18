@@ -178,3 +178,11 @@ x=function a(b)
 {
 };
 .
+
+(defun fast-test ()
+  (macrolet ((flist (&rest syms)
+			   `(list ,@(mapcar (lambda (s) `(function ,s)) syms))))
+	(every #'identity
+		   (mapcar #'funcall
+				   (flist test1 test2 test3 test4 test5 test6)))))
+
