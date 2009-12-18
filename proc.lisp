@@ -17,6 +17,7 @@
 						   (cons (->sym (car var-desc))
 								 (traverse-form (cdr var-desc)))))
 					   (second form)))))
+;;;todo: think about removing interning from :dot and :name to macro expander (see :label)
 	   ((:name) (list (js-intern (car form)) (->sym (second form))))
 	   ((:dot) (list (js-intern (car form)) (traverse-form (second form))
 					 (->sym (third form))))
