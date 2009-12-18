@@ -194,7 +194,7 @@
   (the boolean (< ls rs)))
 ;;;;;;;;
 (js-binary-operators
-  (+ plus) (- minus) * /
+  (+ plus) (- minus) * / (% mod)
  (== equalp) (< less) > <= >= (!= /=))
 
 (defmacro !binary (op-sym ls rs)
