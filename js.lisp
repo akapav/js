@@ -209,14 +209,18 @@
 			(eq ,exp :undefined)
 			(and (numberp ,rexp) (zerop ,rexp)))))))
 
+(defmacro !label (name body)
+  `(block ,(->sym name)
+	 (tagbody ,(->sym name) ,body)))
+
 (defmacro !if (exp then else)
   `(if (js->boolean ,exp) ,then ,else))
 
 (defmacro !do (cond body)
   (let ((lbl (gensym)))
 	`(macrolet ((!break (named-lbl)
-				  `,`(return-from ,(or named-lbl ',lbl)))
-				(!continue (named-lbl) `,`(go ,',lbl)))
+				  `,`(return-from ,(or (->sym named-lbl) ',lbl)))
+				(!continue (named-lbl) `,`(go ,(or (->sym named-lbl) ',lbl))))
 	   (block ,lbl
 		 (tagbody ,lbl
 			(progn ,body
@@ -228,8 +232,8 @@
 		(execute-step (gensym))
 		(cond (or cond t))) ;;when for(init;;step) ...
 	`(macrolet ((!break (named-lbl)
-				  `,`(return-from ,(or named-lbl ',lbl)))
-				(!continue (named-lbl) `,`(go ,',lbl)))
+				  `,`(return-from ,(or (->sym named-lbl) ',lbl)))
+				(!continue (named-lbl) `,`(go ,(or (->sym named-lbl) ',lbl))))
 	   (block ,lbl
 		 (let (,execute-step)
 		   ,init
