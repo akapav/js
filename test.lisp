@@ -164,7 +164,59 @@ return b;
 }
 .
 
+(defun test7 ()
 
+#{javascript}
+s = 0;
+for(i = 0; i < 10; i = i + 1)
+	s = s + 1;
+
+r1 = s;
+
+s = 0;
+for(i  = 0;; i = i + 1) {
+	s = s + i;
+	if(s > 100) break;
+}
+
+r2 = i;
+
+s = 0;
+for(i = 0; i < 10; i = i +1 ) {
+	if(i%2) continue; //oddp
+	s = s + i;
+}
+
+r3 = s;
+
+
+a = 100;
+while(a)
+{
+	a = a - 1;
+}
+
+r4 = a;
+
+a = 100;
+do {
+	a = a - 1;
+} while(a > 0);
+
+r5 = a;
+
+do a = a - 1;
+while(a > 0);
+
+r6 = a;
+.
+
+(test r1 10)
+(test r2 14)
+(test r3 20)
+(test r4 0)
+(test r5 0)
+(test r6 -1))
 ;;;;;
 
 (defun js-ast (stream)
