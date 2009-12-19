@@ -24,15 +24,20 @@
 (defgeneric sub (hash key)
   (:method (hash key) (declare (ignore hash key)) (error "no properties")))
 
+(defun normalize-key (key)
+  (or (and (numberp key) (->sym (format nil "~A" key)))
+      (and (stringp key) (->sym key))
+      key))
+
 (defmethod sub ((hash native-hash) key)
-  (let ((key (or (and (stringp key) (->sym key)) key)))
+  (let ((key (normalize-key key)))
     (prop hash key)))
 
 (defgeneric (setf sub) (val hash key)
   (:method (val hash key) (declare (ignore hash key)) (error "no properties")))
 
 (defmethod (setf sub) (val (hash native-hash) key)
-  (let ((key (or (and (stringp key) (->sym key)) key)))
+  (let ((key (normalize-key key)))
     (setf (prop hash key) val)))
 
 (defclass global-object (native-hash)
