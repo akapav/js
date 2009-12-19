@@ -1,5 +1,7 @@
 (in-package :js)
 
+(defparameter *label-name* nil)
+
 (defun traverse-form (form)
   (cond ((null form) nil)
 	((atom form)
@@ -17,6 +19,28 @@
 			       (cons (->sym (car var-desc))
 				     (traverse-form (cdr var-desc)))))
 			   (second form)))))
+	   ((:label)
+	      (let ((*label-name* (->sym (second form))))
+		(format t "label: ~A~%" *label-name*)
+		(traverse-form (third form))))
+	   ((:for)
+	      (format t "for: ~A~%" *label-name*)
+	      (list (js-intern (car form)) ;for
+			 (traverse-form (second form)) ;init
+			 (traverse-form (third form))  ;cond
+			 (traverse-form (fourth form)) ;step
+			 (traverse-form (fifth form)) ;body
+			 *label-name*))
+	   ((:while) (traverse-form
+		      (list (js-intern :for)
+			    nil (second form)
+			    nil (third form) *label-name*)))
+	   ((:do)
+	      (format t "do: ~A~%" *label-name*)
+	      (list (js-intern (car form))
+			(traverse-form (second form))
+			(traverse-form (third form))
+			*label-name*))
 ;;;todo: think about removing interning from :dot and :name to macro expander (see :label)
 	   ((:name) (list (js-intern (car form)) (->sym (second form))))
 	   ((:dot) (list (js-intern (car form)) (traverse-form (second form))
@@ -57,7 +81,7 @@
     (mapc (lambda (arg) (set-add env arg)) arglist)
     (list (js-intern (first form)) ;;defun or function
 	  (set-elems (set-add env name)) ;;inject function name (if any)
-	                                     ;;into local lexical environment
+                                         ;;into local lexical environment
 	  name arglist (set-elems locals) (lift-defuns new-form))))
 
 (defun process-ast (ast)

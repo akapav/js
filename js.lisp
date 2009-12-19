@@ -90,19 +90,19 @@
 
 (defmacro !var (vars)
   `(progn ,@(mapcar (lambda (var)
-					  (when (cdr var)
-						`(!assign t (!name ,(car var)) ,(cdr var))))
-					vars)))
+		      (when (cdr var)
+			`(!assign t (!name ,(car var)) ,(cdr var))))
+		    vars)))
 
 ;;;
 (defmacro !call (func args) ;;;todo: check if a caller isn't  cons
   (let ((*proc (gensym)))
-  `(let ((,*proc (proc ,func)))
-     (declare (function ,*proc))
-     (funcall ,*proc
-	      ,(case (car func)
-		 ((!dot) (second func))
-		 (t this)) ,@args))))
+    `(let ((,*proc (proc ,func)))
+       (declare (function ,*proc))
+       (funcall ,*proc
+		,(case (car func)
+		   ((!dot) (second func))
+		   (t this)) ,@args))))
 
 (defmacro !new (func args)
   (let ((ret (gensym)))
@@ -116,52 +116,52 @@
   (error "return not in function"))
 
 #+nil (defun find-name (tree)
-  (labels ((f (tree)
-	     (cond
-	       ((atom tree) nil)
-	       ((eq (first tree) '!name) (return-from find-name (second tree)))
-	       (t (mapcar #'f tree)))))
-    (f tree)))
+	(labels ((f (tree)
+		   (cond
+		     ((atom tree) nil)
+		     ((eq (first tree) '!name) (return-from find-name (second tree)))
+		     (t (mapcar #'f tree)))))
+	  (f tree)))
 
 (defmacro !named-lambda (name env args locals body)
   `(let (,name)
-	 (setf ,name (!function ,env nil ,args ,locals ,body))
-	 (proc ,name)))
+     (setf ,name (!function ,env nil ,args ,locals ,body))
+     (proc ,name)))
 
 (defmacro !lambda (env args locals body)
   (let* ((additional-args (gensym))
-		 (local-variable-p
-		  (lambda (var)
-			(or (eq var 'this)
-				(member var env)
-				(member var args)
-				(member var locals))))
-		 (blockname (gensym)))
+	 (local-variable-p
+	  (lambda (var)
+	    (or (eq var 'this)
+		(member var env)
+		(member var args)
+		(member var locals))))
+	 (blockname (gensym)))
     `(macrolet ((!name (name)
-				  (cond ((eq name 'arguments)
-						 (format t "!!!!!!!~%")
-						 `(or arguments (setf arguments
-											  (make-args ,',args ,',additional-args))))
-						((funcall ,local-variable-p name) name)
-						(t `,`(prop *global* #+nil this ',name))))
-				(!defun (env name args locals body)
-				  `(setf ,name (!function ,env ,name ,args ,locals ,body)))
-				(!return (ret) `,`(return-from ,',blockname ,(or ret :undefined))))
+		  (cond ((eq name 'arguments)
+			 (format t "!!!!!!!~%")
+			 `(or arguments (setf arguments
+					      (make-args ,',args ,',additional-args))))
+			((funcall ,local-variable-p name) name)
+			(t `,`(prop *global* #+nil this ',name))))
+		(!defun (env name args locals body)
+		  `(setf ,name (!function ,env ,name ,args ,locals ,body)))
+		(!return (ret) `,`(return-from ,',blockname ,(or ret :undefined))))
        (lambda (this
-				&optional ,@(mapcar (lambda (arg) `(,arg :undefined)) args)
-				&rest ,additional-args)
+		&optional ,@(mapcar (lambda (arg) `(,arg :undefined)) args)
+		&rest ,additional-args)
 	 #+js-debug (format t "this: ~A~%" this)
 	 (let (arguments)
 	   (let (,@(mapcar (lambda (var)
-						 (list var :undefined)) locals))
+			     (list var :undefined)) locals))
 	     (block ,blockname ,@body :undefined)))))))
 
 (defmacro !function (env name args locals body)
   `(make-instance 'native-function
 		  :name ',name
 		  :proc ,(if name
-					 `(!named-lambda ,name ,env ,args ,locals ,body)
-					 `(!lambda ,env ,args ,locals ,body))
+			     `(!named-lambda ,name ,env ,args ,locals ,body)
+			     `(!lambda ,env ,args ,locals ,body))
 		  :env ',env))
 
 (defmacro !defun (env name args locals body)
@@ -170,7 +170,7 @@
     `(let ((,func (!function ,env ,name ,args ,locals ,body)))
        (setf (prop this ',name) ,func)
        (defun ,name (&rest ,args2)
-		 (apply (proc ,func) this ,args2)))))
+	 (apply (proc ,func) this ,args2)))))
 
 (defmacro js-binary-operators (&rest ops)
   `(progn
@@ -178,7 +178,7 @@
 		 (if (symbolp op)
 		     `(setf (symbol-function ',(js-intern op)) (function ,op))
 		     `(setf (symbol-function ',(js-intern (first op))) (function ,(second op)))))
-	     ops)))
+	       ops)))
 
 ;;;;;;;;
 (defun plus (ls rs)
@@ -194,7 +194,7 @@
   (the boolean (< ls rs)))
 ;;;;;;;;
 (js-binary-operators
-  (+ plus) (- minus) * / (% mod)
+ (+ plus) (- minus) * / (% mod)
  (== equalp) (< less) > <= >= (!= /=))
 
 (defmacro !binary (op-sym ls rs)
@@ -205,46 +205,47 @@
   (let ((rexp (gensym)))
     `(let ((,rexp ,exp))
        (not
-		(or (not ,exp)
-			(eq ,exp :undefined)
-			(and (numberp ,rexp) (zerop ,rexp)))))))
+	(or (not ,exp)
+	    (eq ,exp :undefined)
+	    (and (numberp ,rexp) (zerop ,rexp)))))))
 
-(defmacro !label (name body)
-  `(block ,(->sym name)
-	 (tagbody ,(->sym name) ,body)))
+#+nil (defmacro !label (name body)
+     (tagbody ,(->sym name) ,body))
 
 (defmacro !if (exp then else)
   `(if (js->boolean ,exp) ,then ,else))
 
-(defmacro !do (cond body)
-  (let ((lbl (gensym)))
-	`(macrolet ((!break (named-lbl)
-				  `,`(return-from ,(or (->sym named-lbl) ',lbl)))
-				(!continue (named-lbl) `,`(go ,(or (->sym named-lbl) ',lbl))))
-	   (block ,lbl
-		 (tagbody ,lbl
-			(progn ,body
-			 (when (js->boolean ,cond)
-			   (go ,lbl))))))))
+(defmacro !do (cond body label)
+  (let ((lbl (or label (gensym))))
+    `(macrolet ((!break (named-lbl)
+		  `,`(return-from ,(or (->sym named-lbl) ',lbl)))
+		(!continue (named-lbl)
+		  `,`(go ,(or (->sym named-lbl) ',lbl))))
+       (block ,lbl
+	 (tagbody ,lbl
+	    (progn ,body
+		   (when (js->boolean ,cond)
+		     (go ,lbl))))))))
 
-(defmacro !for (init cond step body)
-  (let ((lbl (gensym))
-		(execute-step (gensym))
-		(cond (or cond t))) ;;when for(init;;step) ...
-	`(macrolet ((!break (named-lbl)
-				  `,`(return-from ,(or (->sym named-lbl) ',lbl)))
-				(!continue (named-lbl) `,`(go ,(or (->sym named-lbl) ',lbl))))
-	   (block ,lbl
-		 (let (,execute-step)
-		   ,init
-		   (tagbody ,lbl
-			  (when ,execute-step ,step)
-			  (setf ,execute-step t)
-			  (when (js->boolean ,cond)
-				,body
-				(go ,lbl))))))))
+(defmacro !for (init cond step body label)
+  (let ((lbl (or label (gensym)))
+	(execute-step (gensym))
+	(cond (or cond t))) ;;when for(init;;step) ...
+    `(macrolet ((!break (named-lbl)
+		  `,`(return-from ,(or (->sym named-lbl) ',lbl)))
+		(!continue (named-lbl)
+		  `,`(go ,(or (->sym named-lbl) ',lbl))))
+       (block ,lbl
+	 (let (,execute-step)
+	   ,init
+	   (tagbody ,lbl
+	      (when ,execute-step ,step)
+	      (setf ,execute-step t)
+	      (when (js->boolean ,cond)
+		,body
+		(go ,lbl))))))))
 
-(defmacro !while (cond body)
+#+nil (defmacro !while (cond body)
   `(!for nil ,cond nil ,body))
 
 (defmacro !eval (str)
