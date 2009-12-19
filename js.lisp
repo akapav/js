@@ -327,3 +327,10 @@
 ;;;
 
 (setf (prop this 'Object) (!function () () () () ()))
+(setf (prop this 'print)
+      (!function nil nil (arg) nil
+		 ((format t "~A~%" arg))))
+
+(setf (prop this 'eval)
+      (!function nil nil (arg) nil
+		 ((eval (process-ast (parse-js-string arg))))))
