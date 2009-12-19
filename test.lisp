@@ -218,6 +218,26 @@ r6 = a;
 (test r5 0)
 (test r6 -1))
 
+
+(defun test8 ()
+#{javascript}
+function O (){}
+O.prototype.f = function () {return this.n + 1;}
+obj = new O;
+obj.n = 20;
+r1 = obj.f();
+.
+
+  (test 21 r1))
+
+(defun test9 ()
+#{javascript}
+a: for(;;) {for(;;) break a;}  
+b: for(i = 0; i< 10 ; i = i + 1) {for(;;) continue b;}
+.
+  (format t "test9 passed~%")
+  t)
+
 ;;;;;
 
 (defun js-ast (stream)
@@ -234,8 +254,9 @@ x=function a(b)
 
 (defun fast-test ()
   (macrolet ((flist (&rest syms)
-			   `(list ,@(mapcar (lambda (s) `(function ,s)) syms))))
-	(every #'identity
-		   (mapcar #'funcall
-				   (flist test1 test2 test3 test4 test5 test6 test7)))))
-
+	       `(list ,@(mapcar (lambda (s) `(function ,s)) syms))))
+    (every #'identity
+	   (mapcar #'funcall
+		   (flist test1 test2 test3 test4
+			  test5 test6 test7 test8
+			  test9)))))
