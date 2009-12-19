@@ -8,19 +8,19 @@
 	(t
 	 (case (car form)
 	   ((:var)
-		  (cons (js-intern (car form))
-				(list (mapcar
-					   (lambda (var-desc)
-						 (let ((var-sym (->sym (car var-desc))))
-						   (set-add env var-sym)
-						   (set-add locals var-sym)
-						   (cons (->sym (car var-desc))
-								 (traverse-form (cdr var-desc)))))
-					   (second form)))))
+	      (cons (js-intern (car form))
+		    (list (mapcar
+			   (lambda (var-desc)
+			     (let ((var-sym (->sym (car var-desc))))
+			       (set-add env var-sym)
+			       (set-add locals var-sym)
+			       (cons (->sym (car var-desc))
+				     (traverse-form (cdr var-desc)))))
+			   (second form)))))
 ;;;todo: think about removing interning from :dot and :name to macro expander (see :label)
 	   ((:name) (list (js-intern (car form)) (->sym (second form))))
 	   ((:dot) (list (js-intern (car form)) (traverse-form (second form))
-					 (->sym (third form))))
+			 (->sym (third form))))
 	   ((:function :defun)
 	      (when (and (eq (car form) :defun)
 			 (second form))
@@ -34,7 +34,7 @@
 
 (defun shallow-process-toplevel-form (form)
   (let ((env (set-make))
-		(locals (set-make)))
+	(locals (set-make)))
     (declare (special env locals))
     (traverse-form form)))
 
@@ -43,21 +43,22 @@
     (loop for el in form do
       (if (eq (car el) :defun) (push el defuns)
 	  (push el oth)))
-    (format t ">>>>>>>>>>>defuns: ~A ~A~%" (reverse defuns) (reverse oth))
+    ;(format t ">>>>>>>>>>>defuns: ~A ~A~%" (reverse defuns) (reverse oth))
     (append (reverse defuns) (reverse oth))))
 
 (defun shallow-process-function-form (form old-env)
   (let* ((env (set-copy old-env))
-		 (locals (set-make))
-		 (arglist (mapcar #'->sym (third form)))
-		 (new-form (traverse-form (fourth form)))
-		 (name (and (second form) (->sym (second form)))))
+	 (locals (set-make))
+	 (arglist (mapcar #'->sym (third form)))
+	 (new-form (traverse-form (fourth form)))
+	 (name (and (second form) (->sym (second form)))))
     (declare (special env locals))
+    (format t "envs fo ~A: old: ~A new: ~A~%" name (set-elems old-env) (set-elems env))
     (mapc (lambda (arg) (set-add env arg)) arglist)
     (list (js-intern (first form)) ;;defun or function
-		  (set-elems (set-add old-env name)) ;;inject function name (if any)
-		                                     ;;into local lexical environment
-		  name arglist (set-elems locals) (lift-defuns new-form))))
+	  (set-elems (set-add env name)) ;;inject function name (if any)
+	                                     ;;into local lexical environment
+	  name arglist (set-elems locals) (lift-defuns new-form))))
 
 (defun process-ast (ast)
   (assert (eq :toplevel (car ast)))

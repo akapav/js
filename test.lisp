@@ -148,7 +148,7 @@ var b = function f2(n, m)
   if(m) return n+n;
   return f2(n + 1, 5);
 };
-return a(2);
+return a(x);
 }
 .
 
@@ -157,7 +157,7 @@ return a(2);
 #{javascript}
 function f4()
 {
-var b=12;
+//var b; //=12;
 return b;
   function b() {return 1;}
 
