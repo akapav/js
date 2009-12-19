@@ -150,14 +150,16 @@
 		(!defun (env name args locals body)
 		  `(setf ,name (!function ,env ,name ,args ,locals ,body)))
 		(!return (ret) `,`(return-from ,',blockname ,(or ret :undefined))))
-       (lambda (this
-		&optional ,@(mapcar (lambda (arg) `(,arg :undefined)) args)
-		&rest ,additional-args)
-	 #+js-debug (format t "this: ~A~%" this)
-	 (let (arguments)
-	   (let (,@(mapcar (lambda (var)
-			     (list var :undefined)) locals))
-	     (block ,blockname ,@body :undefined)))))))
+       (locally #+sbcl (declare (sb-ext:muffle-conditions style-warning))
+		#-sbcl ()
+		(lambda (this
+			 &optional ,@(mapcar (lambda (arg) `(,arg :undefined)) args)
+			 &rest ,additional-args)
+		  #+js-debug (format t "this: ~A~%" this)
+		  (let (arguments)
+		    (let (,@(mapcar (lambda (var)
+				      (list var :undefined)) locals))
+		      (block ,blockname ,@body :undefined))))))))
 
 (defmacro !function (env name args locals body)
   `(make-instance 'native-function
