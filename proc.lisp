@@ -25,22 +25,26 @@
 		(traverse-form (third form))))
 	   ((:for)
 	      (format t "for: ~A~%" *label-name*)
-	      (list (js-intern (car form)) ;for
-			 (traverse-form (second form)) ;init
-			 (traverse-form (third form))  ;cond
-			 (traverse-form (fourth form)) ;step
-			 (traverse-form (fifth form)) ;body
-			 *label-name*))
+	      (let* ((label *label-name*)
+		     (*label-name* nil))
+		(list (js-intern (car form)) ;for
+		      (traverse-form (second form)) ;init
+		      (traverse-form (third form))  ;cond
+		      (traverse-form (fourth form)) ;step
+		      (traverse-form (fifth form)) ;body
+		      label)))
 	   ((:while) (traverse-form
 		      (list (js-intern :for)
 			    nil (second form)
 			    nil (third form) *label-name*)))
 	   ((:do)
 	      (format t "do: ~A~%" *label-name*)
-	      (list (js-intern (car form))
-			(traverse-form (second form))
-			(traverse-form (third form))
-			*label-name*))
+	      (let* ((label *label-name*)
+		     (*label-name* nil))
+		(list (js-intern (car form))
+		      (traverse-form (second form))
+		      (traverse-form (third form))
+		      label)))
 ;;;todo: think about removing interning from :dot and :name to macro expander (see :label)
 	   ((:name) (list (js-intern (car form)) (->sym (second form))))
 	   ((:dot) (list (js-intern (car form)) (traverse-form (second form))
