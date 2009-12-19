@@ -74,7 +74,18 @@
   `(sub ,obj ,attr))
 
 (defmacro !assign (op place val)
-  `(setf ,place ,val))
+  (if (eq op t)
+      `(setf ,place ,val)
+      `(setf ,place (!binary ,op ,place ,val))))
+
+(defmacro !unary-prefix (op place)
+  `(setf ,place (,op ,place)))
+
+(defmacro !unary-postfix (op place)
+  (let ((ret (gensym)))
+  `(let ((,ret ,place))
+     (setf ,place (,op ,place))
+     ,ret)))
 
 (defmacro !num (num) num)
 (defmacro !string (str) str)
@@ -177,7 +188,7 @@
        (defun ,name (&rest ,args2)
 	 (apply (proc ,func) this ,args2)))))
 
-(defmacro js-binary-operators (&rest ops)
+(defmacro js-operators (&rest ops)
   `(progn
      ,@(mapcar (lambda (op)
 		 (if (symbolp op)
@@ -198,9 +209,12 @@
   (declare (fixnum ls rs))
   (the boolean (< ls rs)))
 ;;;;;;;;
-(js-binary-operators
+(js-operators
+;;binary
  (+ plus) (- minus) * / (% mod)
- (== equalp) (< less) > <= >= (!= /=))
+ (== equalp) (< less) > <= >= (!= /=)
+;;unary
+ (++ 1+) (-- 1-))
 
 (defmacro !binary (op-sym ls rs)
   (let ((op (symbol-function op-sym)))
