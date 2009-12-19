@@ -51,6 +51,9 @@
    (proc :accessor proc :initarg :proc)
    (env :accessor env :initarg :env)))
 
+(defmethod initialize-instance :after ((f native-function) &rest args)
+  (setf (prop f 'prototype) (make-instance 'native-hash)))
+
 (defparameter *global* (make-instance 'global-object))
 
 (defparameter this *global*)
