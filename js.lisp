@@ -204,7 +204,7 @@
 ;;;;;;;;
 (defun plus (ls rs)
   (declare (fixnum ls rs))
-  (the fixnum (+ ls rs)))
+  (+ ls rs))
 
 (defun minus (ls rs)
   (declare (fixnum ls rs))
@@ -326,11 +326,12 @@
 
 ;;;
 
-(setf (prop this 'Object) (!function () () () () ()))
-(setf (prop this 'print)
-      (!function nil nil (arg) nil
-		 ((format t "~A~%" arg))))
+(defmacro define-js-function (name args &body body)
+  `(setf (prop this ',name)
+	 (!function nil nil ,args nil
+		    ((!return (or (progn ,@body) :undefined))))))
 
-(setf (prop this 'eval)
-      (!function nil nil (arg) nil
-		 ((eval (process-ast (parse-js-string arg))))))
+(define-js-function Object ())
+
+(define-js-function print (arg)
+  (format t "~A~%" arg))
