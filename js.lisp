@@ -7,18 +7,25 @@
 (defgeneric prop (hash key)
   (:method (hash key) (declare (ignore hash key)) (error "no properties")))
 
-(defmethod prop ((hash native-hash) key)
+(defun find-property (hash key &optional default)
   (multiple-value-bind (val exists)
       (gethash key (dict hash))
     (if exists val
-	(and (prototype hash)
-	     (prop (prototype hash) key)))))
+	(or (and (prototype hash)
+		 (find-property (prototype hash) key default))
+	    default))))
+
+(defmethod prop ((hash native-hash) key)
+  (find-property hash key :undefined))
 
 (defgeneric (setf prop) (val hash key)
   (:method (val hash key) (declare (ignore hash key)) (error "no properties")))
 
-(defmethod (setf prop) (val (hash native-hash) key)
+(defun set-property (hash key val)
   (setf (gethash key (dict hash)) val))
+
+(defmethod (setf prop) (val (hash native-hash) key)
+  (set-property hash key val))
 
 ;;; sub: similar to prop, but key is not necessary a symbol
 (defgeneric sub (hash key)
@@ -62,15 +69,66 @@
 
 (defparameter *global* (make-instance 'global-object))
 (defparameter this *global*)
+(defparameter *object-env-stack* nil)
 
 ;;;
-(defmacro !toplevel (form)
-  `(progn ,@form))
 
-(defmacro !name (attr)
-  (if (eq attr 'this)
-      'this
-      `(prop this ',attr)))
+(defmacro lookup-in-lexchain (name lexchain)
+  (let ((obj (gensym))
+	(prop (gensym)))
+    (labels ((count-lookups (chain cnt) ;;todo: move count-lookups to 
+	       (cond ((not chain) (values cnt nil)) ;;common labels around both macros
+		     ((eq (car chain) :obj)
+		      (count-lookups (cdr chain) (1+ cnt)))
+		     ((member name (car chain)) (values cnt t))
+		     (t (count-lookups (cdr chain) cnt))))
+	     (build-tree (n found)
+	       (if (zerop n)
+		   (if found `,name '(error "no prop"))
+		   `(let* ((,obj (car -object-env-stack-))
+			   (,prop (find-property ,obj ',name)))
+		      (or ,prop (let ((-object-env-stack- (cdr -object-env-stack-)))
+				  ,(build-tree (1- n) found)))))))
+      (case name
+	((this) 'this) ;this is always bound
+	((arguments) '(!arguments)) ;todo: arguments support should be put in macrolet
+	(t (multiple-value-bind (n found) (count-lookups lexchain 0)
+	     `(,@(build-tree n found))))))))
+
+(defmacro set-in-lexchain (name val-exp lexchain)
+  (let ((obj (gensym))
+	(prop (gensym))
+	(val (gensym)))
+    (labels ((count-lookups (chain cnt) ;;todo: ... look above ...
+	       (cond ((not chain) (values cnt nil))
+		     ((eq (car chain) :obj)
+		      (count-lookups (cdr chain) (1+ cnt)))
+		     ((member name (car chain)) (values cnt t))
+		     (t (count-lookups (cdr chain) cnt))))
+	     (build-tree (n found)
+	       (if (zerop n)
+		   (if found
+		       `(setf ,name ,val)
+		       `(setf (prop *global* ',name) ,val))
+		   `(let* ((,obj (car -object-env-stack-))
+			   (,prop (find-property ,obj ',name)))
+		      (if ,prop (setf (prop ,obj ',name) ,val)
+			  (let ((-object-env-stack- (cdr -object-env-stack-)))
+			    ,(build-tree (1- n) found)))))))
+      (case name
+	((this) '(error "invalid assignment left hand side")) ;this is always bound
+	#+nil ((arguments) ...) ;todo: arguments support should be put in macrolet
+	(t (multiple-value-bind (n found) (count-lookups lexchain 0)
+	     `(let ((,val ,val-exp)) ,(build-tree n found))))))))
+
+;;;
+
+(defmacro !toplevel (lex-chain form)
+  `(macrolet ((!name (name) (macroexpand `(lookup-in-lexchain ,name ,',lex-chain)))
+	      (!setf-name (name val) (macroexpand `(set-in-lexchain ,name ,val ,',lex-chain))))
+     (let* ((*object-env-stack* (cons *global* *object-env-stack*))
+	    (-object-env-stack- *object-env-stack*))
+       (progn ,@form))))
 
 (defmacro !dot (obj attr)
   `(prop ,obj ',attr))
@@ -78,18 +136,23 @@
 (defmacro !sub (obj attr)
   `(sub ,obj ,attr))
 
+(defmacro !setf (place val)
+  (if (eq (car place) '!name)
+      `(!setf-name ,(second place) ,val)
+      `(setf ,place ,val)))
+
 (defmacro !assign (op place val)
   (if (eq op t)
-      `(setf ,place ,val)
-      `(setf ,place (!binary ,op ,place ,val))))
+      `(!setf ,place ,val)
+      `(!setf ,place (!binary ,op ,place ,val))))
 
 (defmacro !unary-prefix (op place)
-  `(setf ,place (,op ,place)))
+  `(!setf ,place (,op ,place)))
 
 (defmacro !unary-postfix (op place)
   (let ((ret (gensym)))
   `(let ((,ret ,place))
-     (setf ,place (,op ,place))
+     (!setf ,place (,op ,place))
      ,ret)))
 
 (defmacro !num (num) num)
@@ -134,20 +197,16 @@
   (declare (ignore ret))
   (error "return not in function"))
 
-#+nil (defun find-name (tree)
-	(labels ((f (tree)
-		   (cond
-		     ((atom tree) nil)
-		     ((eq (first tree) '!name) (return-from find-name (second tree)))
-		     (t (mapcar #'f tree)))))
-	  (f tree)))
-
-(defmacro !named-lambda (name env args locals body)
+(defmacro !named-lambda (name env lex-chain args locals body)
   `(let (,name)
-     (setf ,name (!function ,env nil ,args ,locals ,body))
+     (setf ,name (!function ,env ,lex-chain nil ,args ,locals ,body))
      (proc ,name)))
 
-(defmacro !lambda (env args locals body)
+(defmacro m2 (x)
+  `(macrolet ((m3 (y) `(macroexpand (m1 ,',x y))))
+     (m3 abc)))
+
+(defmacro !lambda (env lex-chain args locals body)
   (let* ((additional-args (gensym))
 	 (local-variable-p
 	  (lambda (var)
@@ -156,42 +215,46 @@
 		(member var args)
 		(member var locals))))
 	 (blockname (gensym)))
-    `(macrolet ((!name (name)
-		  (cond ((eq name 'arguments)
-			 (format t "!!!!!!!~%")
-			 `(or arguments (setf arguments
-					      (make-args ,',args ,',additional-args))))
-			((funcall ,local-variable-p name) name)
-			(t `,`(prop *global* #+nil this ',name))))
+    `(macrolet ((!arguments () `(or arguments (setf arguments (make-args ,',args ,',additional-args))))
+		(!name (name) (macroexpand `(lookup-in-lexchain ,name ,',lex-chain)))
+		(!setf-name (name val) (macroexpand `(set-in-lexchain ,name ,val ,',lex-chain)))
 		(!defun (env name args locals body)
 		  `(setf ,name (!function ,env ,name ,args ,locals ,body)))
 		(!return (ret) `,`(return-from ,',blockname ,(or ret :undefined))))
        (locally #+sbcl (declare (sb-ext:muffle-conditions style-warning))
 		#-sbcl ()
-		(lambda (this
-			 &optional ,@(mapcar (lambda (arg) `(,arg :undefined)) args)
-			 &rest ,additional-args)
-		  #+js-debug (format t "this: ~A~%" this)
-		  (let (arguments)
-		    (let (,@(mapcar (lambda (var)
-				      (list var :undefined)) locals))
-		      (block ,blockname ,@body :undefined))))))))
-
-(defmacro !function (env name args locals body)
+		(let ((-object-env-stack- *object-env-stack*))
+		  (lambda (this
+			   &optional ,@(mapcar (lambda (arg) `(,arg :undefined)) args)
+			   &rest ,additional-args)
+		    (let (arguments)
+		      (let (,@(mapcar (lambda (var)
+					(list var :undefined)) locals))
+			(block ,blockname ,@body :undefined)))))))))
+  
+(defmacro !function (env lex-chain name args locals body)
+  (format t "~A~%" lex-chain)
   `(make-instance 'native-function
 		  :name ',name
 		  :proc ,(if name
-			     `(!named-lambda ,name ,env ,args ,locals ,body)
-			     `(!lambda ,env ,args ,locals ,body))
+			     `(!named-lambda ,name ,env ,lex-chain ,args ,locals ,body)
+			     `(!lambda ,env ,lex-chain ,args ,locals ,body))
 		  :env ',env))
 
-(defmacro !defun (env name args locals body)
+(defmacro !defun (env lex-chain name args locals body)
   (let ((args2 (gensym))
 	(func (gensym)))
-    `(let ((,func (!function ,env ,name ,args ,locals ,body)))
+    `(let ((,func (!function ,env ,lex-chain ,name ,args ,locals ,body)))
        (setf (prop this ',name) ,func)
        (defun ,name (&rest ,args2)
 	 (apply (proc ,func) this ,args2)))))
+
+(defmacro !with (lex-chain obj body)
+  `(macrolet ((!name (name) (macroexpand `(lookup-in-lexchain ,name ,',lex-chain)))
+	      (!setf-name (name val) (macroexpand `(set-in-lexchain ,name ,val ,',lex-chain))))
+     (let* ((*object-env-stack* (cons ,obj *object-env-stack*))
+	    (-object-env-stack- *object-env-stack*))
+       ,body)))
 
 (defmacro js-operators (&rest ops)
   `(progn
@@ -328,7 +391,7 @@
 
 (defmacro define-js-function (name args &body body)
   `(setf (prop this ',name)
-	 (!function nil nil ,args nil
+	 (!function nil nil nil ,args nil
 		    ((!return (or (progn ,@body) :undefined))))))
 
 (define-js-function Object ())

@@ -2,6 +2,8 @@
 
 (defparameter *label-name* nil)
 
+(defparameter *lexenv-chain* nil)
+
 (defun traverse-form (form)
   (cond ((null form) nil)
 	((atom form)
@@ -49,6 +51,14 @@
 	   ((:name) (list (js-intern (car form)) (->sym (second form))))
 	   ((:dot) (list (js-intern (car form)) (traverse-form (second form))
 			 (->sym (third form))))
+	   ((:with)
+	      (let* ((*lexenv-chain* (cons :obj *lexenv-chain*))
+		     (placeholder (copy-list *lexenv-chain*))) ;;todo: copy env
+		(push placeholder obj-envs)
+		(list (js-intern (car form))
+		      placeholder
+		      (traverse-form (second form))
+		      (traverse-form (third form)))))
 	   ((:function :defun)
 	      (when (and (eq (car form) :defun)
 			 (second form))
@@ -56,15 +66,32 @@
 		  (set-add env fun-name)
 		  (set-add locals fun-name)))
 	      (let ((placeholder (list (car form))))
-		(queue-enqueue lmbd-forms (list form env placeholder))
+		(queue-enqueue lmbd-forms (list form env placeholder (copy-list *lexenv-chain*)))
 		placeholder))
+	   ((:toplevel)
+	      (let ((*lexenv-chain* (cons :obj *lexenv-chain*)))
+		(list (js-intern (car form))
+		      (copy-list *lexenv-chain*)
+		      (traverse-form (second form)))))
 	   (t (mapcar #'traverse-form form))))))
 
+(flet ((dump (el)
+	 (or (and (symbolp el) el) (set-elems el))))
+  (defun dump-lexenv-chain ()
+    (mapcar #'dump *lexenv-chain*))
+  (defun transform-obj-env (place)
+    (setf (car place) (dump (car place)))
+    (setf (cdr place) (mapcar #'dump (cdr place)))))
+
 (defun shallow-process-toplevel-form (form)
-  (let ((env (set-make))
-	(locals (set-make)))
-    (declare (special env locals))
-    (traverse-form form)))
+  (let* (*lexenv-chain*
+	 (env (set-make))
+	 (locals (set-make))
+	 (obj-envs nil)
+	 (new-form (traverse-form form)))
+    (declare (special env locals obj-envs))
+    (mapc #'transform-obj-env obj-envs)
+    new-form))
 
 (defun lift-defuns (form)
   (let (defuns oth)
@@ -74,18 +101,22 @@
     ;(format t ">>>>>>>>>>>defuns: ~A ~A~%" (reverse defuns) (reverse oth))
     (append (reverse defuns) (reverse oth))))
 
-(defun shallow-process-function-form (form old-env)
+(defun shallow-process-function-form (form old-env lexenv-chain)
   (let* ((env (set-copy old-env))
+	 (*lexenv-chain* (cons env lexenv-chain))
 	 (locals (set-make))
 	 (arglist (mapcar #'->sym (third form)))
+	 (obj-envs nil)
 	 (new-form (traverse-form (fourth form)))
 	 (name (and (second form) (->sym (second form)))))
-    (declare (special env locals))
+    (declare (special env locals obj-envs))
     (format t "envs fo ~A: old: ~A new: ~A~%" name (set-elems old-env) (set-elems env))
     (mapc (lambda (arg) (set-add env arg)) arglist)
+    (mapc #'transform-obj-env obj-envs)
     (list (js-intern (first form)) ;;defun or function
 	  (set-elems (set-add env name)) ;;inject function name (if any)
                                          ;;into local lexical environment
+	  (dump-lexenv-chain) ;;
 	  name arglist (set-elems locals) (lift-defuns new-form))))
 
 (defun process-ast (ast)
@@ -94,8 +125,8 @@
     (declare (special lmbd-forms))
     (let ((toplevel (shallow-process-toplevel-form ast)))
       (loop until (queue-empty? lmbd-forms)
-	    for (form env position) = (queue-dequeue lmbd-forms) do
-	      (let ((funct-form (shallow-process-function-form form env)))
+	    for (form env position lexenv-chain) = (queue-dequeue lmbd-forms) do
+	      (let ((funct-form (shallow-process-function-form form env lexenv-chain)))
 		(setf (car position) (car funct-form)
 		      (cdr position) (cdr funct-form))))
       toplevel)))
