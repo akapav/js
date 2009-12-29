@@ -90,7 +90,7 @@
 				  ,(build-tree (1- n) found)))))))
       (case name
 	((this) 'this) ;this is always bound
-	((arguments) '(!arguments)) ;todo: arguments support should be put in macrolet
+	((arguments) '(!arguments))
 	(t (multiple-value-bind (n found) (count-lookups lexchain 0)
 	     `(,@(build-tree n found))))))))
 

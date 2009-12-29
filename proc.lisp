@@ -6,7 +6,7 @@
 
 (defun traverse-form (form)
   (declare
-   (special env locals obj-envs lmbd-forms))
+   (special env locals obj-envs lmbd-forms *toplevel*))
   (cond ((null form) nil)
 	((atom form)
 	 (if (keywordp form)
@@ -59,11 +59,12 @@
 		      (traverse-form (second form))
 		      (traverse-form (third form)))))
 	   ((:function :defun)
-	      (when (and (eq (car form) :defun)
-			 (second form))
-		(let ((fun-name (->sym (second form))))
-		  (set-add env fun-name)
-		  (set-add locals fun-name)))
+	      (unless *toplevel*
+		(when (and (eq (car form) :defun)
+			   (second form))
+		  (let ((fun-name (->sym (second form))))
+		    (set-add env fun-name)
+		    (set-add locals fun-name))))
 	      (let ((placeholder (list (car form))))
 		(queue-enqueue lmbd-forms (list form env placeholder (copy-list *lexenv-chain*)))
 		placeholder))
@@ -82,11 +83,13 @@
     (setf (car place) (dump (car place)))
     (setf (cdr place) (mapcar #'dump (cdr place)))))
 
+(defparameter *toplevel* nil)
 (defun shallow-process-toplevel-form (form)
   (let* (*lexenv-chain*
 	 (env (set-make))
 	 (locals (set-make))
 	 (obj-envs nil)
+	 (*toplevel* t)
 	 (new-form (traverse-form form)))
     (declare (special env locals obj-envs))
     (mapc #'transform-obj-env obj-envs)
