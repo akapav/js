@@ -248,6 +248,53 @@ b: for(i = 0; i< 10 ; i = i + 1) {for(;;) continue b;}
   (format t "test9 passed~%")
   t)
 
+(defun test10 ()
+#{javascript}
+function f1()
+{
+   return function(val) {x10=val;}
+}
+
+o10 = new Object;
+o10.x10=2;
+f=f1()
+with(o10) f(3);
+.
+
+(no-warn
+  (test (!eval "o10.x10;") 2)
+  (test x10 3)))
+
+(defun test11 ()
+#{javascript}
+o = function () {}
+o.x11="asd"
+function f11x(o)
+{
+   with(o) {return function(val) {x11=val;};}
+}
+
+o11 = new Object
+f11 = f11x(o11)
+f11(5)
+
+r1 = x11
+r2 = o11.x11
+
+o11.x11 = 3
+f11(4)
+
+r3 = x11
+r4 = o11.x11
+
+.
+ 
+ (no-warn
+    (test r1 5)
+    (test r2 :undefined)
+    (test r3 5)
+    (test r4 4)))
+
 ;;;;;
 
 (defun js-ast (stream)
@@ -269,4 +316,4 @@ x=function a(b)
 	   (mapcar #'funcall
 		   (flist test1 test2 test3 test4
 			  test5 test6 test7 test8
-			  test9)))))
+			  test9 test10 test11)))))
