@@ -91,14 +91,16 @@
 	 (new-form (traverse-form form)))
     (declare (special env locals obj-envs))
     (mapc #'transform-obj-env obj-envs)
-    new-form))
+    (let ((toplevel-vars (set-elems env)))
+      (set-remove-all env)
+      (append (list (car new-form) toplevel-vars)
+	      (cdr new-form)))))
 
 (defun lift-defuns (form)
   (let (defuns oth)
     (loop for el in form do
       (if (eq (car el) :defun) (push el defuns)
 	  (push el oth)))
-    ;(format t ">>>>>>>>>>>defuns: ~A ~A~%" (reverse defuns) (reverse oth))
     (append (reverse defuns) (reverse oth))))
 
 (defun shallow-process-function-form (form old-env lexenv-chain)

@@ -51,6 +51,11 @@
   (remhash elem set)
   set)
 
+(defun set-remove-all (set)
+  (mapc (lambda (el)
+	  (set-remove set el)) (set-elems set))
+  set)
+
 (defun set-elems (set)
   (let (elems)
 	(maphash (lambda (k v)

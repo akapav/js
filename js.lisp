@@ -123,12 +123,17 @@
 
 ;;;
 
-(defmacro !toplevel (lex-chain form)
+(defmacro !toplevel (toplevel-vars lex-chain form)
   `(macrolet ((!name (name) (macroexpand `(lookup-in-lexchain ,name ,',lex-chain)))
 	      (!setf-name (name val) (macroexpand `(set-in-lexchain ,name ,val ,',lex-chain))))
-     (let* ((*object-env-stack* (cons *global* *object-env-stack*))
-	    (-object-env-stack- *object-env-stack*))
-       (progn ,@form))))
+     (locally #+sbcl (declare (sb-ext:muffle-conditions style-warning))
+	      #-sbcl ()
+	      (let* ((*object-env-stack* (cons *global* *object-env-stack*))
+		     (-object-env-stack- *object-env-stack*))
+		(progn ,@(mapcar (lambda (var)
+				   `(setf (prop *global* ',var)
+					  (prop *global* ',var))) (cons 'arguments toplevel-vars)))
+		(progn ,@form)))))
 
 (defmacro !dot (obj attr)
   `(prop ,obj ',attr))
