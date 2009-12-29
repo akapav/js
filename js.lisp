@@ -124,7 +124,8 @@
 ;;;
 
 (defmacro !toplevel (toplevel-vars lex-chain form)
-  `(macrolet ((!name (name) (macroexpand `(lookup-in-lexchain ,name ,',lex-chain)))
+  `(macrolet ((!arguments () 'arguments)
+	      (!name (name) (macroexpand `(lookup-in-lexchain ,name ,',lex-chain)))
 	      (!setf-name (name val) (macroexpand `(set-in-lexchain ,name ,val ,',lex-chain))))
      (locally #+sbcl (declare (sb-ext:muffle-conditions style-warning))
 	      #-sbcl ()
