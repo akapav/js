@@ -241,10 +241,10 @@
 	 (apply (proc ,func) this ,args2)))))
 
 (defmacro !with (lex-chain obj body)
-  `(macrolet ((!name (name) (macroexpand `(lookup-in-lexchain ,name ,',lex-chain)))
-	      (!setf-name (name val) (macroexpand `(set-in-lexchain ,name ,val ,',lex-chain))))
-     (let* ((*object-env-stack* (cons ,obj *object-env-stack*))
-	    (-object-env-stack- *object-env-stack*))
+  `(let* ((*object-env-stack* (cons ,obj *object-env-stack*))
+	  (-object-env-stack- *object-env-stack*))
+     (macrolet ((!name (name) (macroexpand `(lookup-in-lexchain ,name ,',lex-chain)))
+		(!setf-name (name val) (macroexpand `(set-in-lexchain ,name ,val ,',lex-chain))))
        ,body)))
 
 (defmacro js-operators (&rest ops)
