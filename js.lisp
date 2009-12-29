@@ -207,13 +207,9 @@
      (setf ,name (!function ,env ,lex-chain nil ,args ,locals ,body))
      (proc ,name)))
 
-(defmacro m2 (x)
-  `(macrolet ((m3 (y) `(macroexpand (m1 ,',x y))))
-     (m3 abc)))
-
 (defmacro !lambda (env lex-chain args locals body)
   (let* ((additional-args (gensym))
-	 (local-variable-p
+	 #+nil (local-variable-p
 	  (lambda (var)
 	    (or (eq var 'this)
 		(member var env)
@@ -223,19 +219,17 @@
     `(macrolet ((!arguments () `(or arguments (setf arguments (make-args ,',args ,',additional-args))))
 		(!name (name) (macroexpand `(lookup-in-lexchain ,name ,',lex-chain)))
 		(!setf-name (name val) (macroexpand `(set-in-lexchain ,name ,val ,',lex-chain)))
-		(!defun (env name args locals body)
-		  `(setf ,name (!function ,env ,name ,args ,locals ,body)))
+		(!defun (env lex-chain name args locals body)
+		  `(setf ,name (!function ,env ,lex-chain ,name ,args ,locals ,body)))
 		(!return (ret) `,`(return-from ,',blockname ,(or ret :undefined))))
-       (locally #+sbcl (declare (sb-ext:muffle-conditions style-warning))
-		#-sbcl ()
-		(let ((-object-env-stack- *object-env-stack*))
-		  (lambda (this
-			   &optional ,@(mapcar (lambda (arg) `(,arg :undefined)) args)
-			   &rest ,additional-args)
-		    (let (arguments)
-		      (let (,@(mapcar (lambda (var)
-					(list var :undefined)) locals))
-			(block ,blockname ,@body :undefined)))))))))
+       (let ((-object-env-stack- *object-env-stack*))
+	 (lambda (this
+		  &optional ,@(mapcar (lambda (arg) `(,arg :undefined)) args)
+		  &rest ,additional-args)
+	   (let (arguments)
+	     (let (,@(mapcar (lambda (var)
+			       (list var :undefined)) locals))
+	       (block ,blockname ,@body :undefined))))))))
   
 (defmacro !function (env lex-chain name args locals body)
   (format t "~A~%" lex-chain)
