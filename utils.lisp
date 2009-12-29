@@ -6,6 +6,12 @@
 (defun js-intern (sym)
   (intern (concatenate 'string "!" (symbol-name sym)) :js))
 
+;;
+(defmacro with-ignored-style-warnings (&body body)
+  `(locally #+sbcl (declare (sb-ext:muffle-conditions style-warning))
+	    #-sbcl ()
+	    (progn ,@body)))
+
 ;;queue
 (defstruct queue
   list

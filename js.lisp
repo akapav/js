@@ -127,14 +127,13 @@
   `(macrolet ((!arguments () 'arguments)
 	      (!name (name) (macroexpand `(lookup-in-lexchain ,name ,',lex-chain)))
 	      (!setf-name (name val) (macroexpand `(set-in-lexchain ,name ,val ,',lex-chain))))
-     (locally #+sbcl (declare (sb-ext:muffle-conditions style-warning))
-	      #-sbcl ()
-	      (let* ((*object-env-stack* (cons *global* *object-env-stack*))
-		     (-object-env-stack- *object-env-stack*))
-		(progn ,@(mapcar (lambda (var)
-				   `(setf (prop *global* ',var)
-					  (prop *global* ',var))) (cons 'arguments toplevel-vars)))
-		(progn ,@form)))))
+     (with-ignored-style-warnings
+	 (let* ((*object-env-stack* (cons *global* *object-env-stack*))
+		(-object-env-stack- *object-env-stack*))
+	   (progn ,@(mapcar (lambda (var)
+			      `(setf (prop *global* ',var)
+				     (prop *global* ',var))) (cons 'arguments toplevel-vars)))
+	   (progn ,@form)))))
 
 (defmacro !dot (obj attr)
   `(prop ,obj ',attr))
@@ -210,12 +209,6 @@
 
 (defmacro !lambda (env lex-chain args locals body)
   (let* ((additional-args (gensym))
-	 #+nil (local-variable-p
-	  (lambda (var)
-	    (or (eq var 'this)
-		(member var env)
-		(member var args)
-		(member var locals))))
 	 (blockname (gensym)))
     `(macrolet ((!arguments () `(or arguments (setf arguments (make-args ,',args ,',additional-args))))
 		(!name (name) (macroexpand `(lookup-in-lexchain ,name ,',lex-chain)))
@@ -390,9 +383,10 @@
 ;;;
 
 (defmacro define-js-function (name args &body body)
-  `(setf (prop this ',name)
-	 (!function nil nil nil ,args nil
-		    ((!return (or (progn ,@body) :undefined))))))
+  `(with-ignored-style-warnings
+     (setf (prop this ',name)
+	   (!function nil nil nil ,args nil
+		      ((!return (or (progn ,@body) :undefined)))))))
 
 (define-js-function Object ())
 
