@@ -5,6 +5,8 @@
 (defparameter *lexenv-chain* nil)
 
 (defun traverse-form (form)
+  (declare
+   (special env locals obj-envs lmbd-forms))
   (cond ((null form) nil)
 	((atom form)
 	 (if (keywordp form)
@@ -23,10 +25,8 @@
 			   (second form)))))
 	   ((:label)
 	      (let ((*label-name* (->sym (second form))))
-		(format t "label: ~A~%" *label-name*)
 		(traverse-form (third form))))
 	   ((:for)
-	      (format t "for: ~A~%" *label-name*)
 	      (let* ((label *label-name*)
 		     (*label-name* nil))
 		(list (js-intern (car form)) ;for
@@ -40,7 +40,6 @@
 			    nil (second form)
 			    nil (third form) *label-name*)))
 	   ((:do)
-	      (format t "do: ~A~%" *label-name*)
 	      (let* ((label *label-name*)
 		     (*label-name* nil))
 		(list (js-intern (car form))
@@ -112,12 +111,10 @@
 	 (new-form (traverse-form (fourth form)))
 	 (name (and (second form) (->sym (second form)))))
     (declare (special env locals obj-envs))
-    (format t "envs fo ~A: old: ~A new: ~A~%" name (set-elems old-env) (set-elems env))
     (mapc (lambda (arg) (set-add env arg)) arglist)
     (mapc #'transform-obj-env obj-envs)
+    (set-add env name) ;;inject function name (if any) into it's lexical environment
     (list (js-intern (first form)) ;;defun or function
-	  (set-elems (set-add env name)) ;;inject function name (if any)
-                                         ;;into local lexical environment
 	  (dump-lexenv-chain) ;;
 	  name arglist (set-elems locals) (lift-defuns new-form))))
 

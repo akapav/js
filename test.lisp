@@ -1,5 +1,10 @@
 (in-package :js) ;;todo: make separate package
 
+(defmacro no-warn (&body body)
+  `(locally #+sbcl (declare (sb-ext:muffle-conditions warning))
+	    #-sbcl ()
+	    (progn ,@body)))
+
 (defun test1 ()
   #+nil(setf (prop this "a") (make-instance 'native-hash))
 #{javascript}
@@ -39,6 +44,7 @@ r8 = a.f()
 
 .
 
+(no-warn
   (test r1 a)
   (test r2 1)
   (test r3 a)
@@ -46,7 +52,7 @@ r8 = a.f()
   (test r5 a)
   (test r6 a)
   (test r7 1)
-  (test r8 3))
+  (test r8 3)))
 
 
 (defun test2 ()
@@ -70,8 +76,9 @@ r1 = b.x;
 r2 = b.y;
 .
 
+(no-warn
   (test r1 3)
-  (test r2 4))
+  (test r2 4)))
 
 
 (defun test3 ()
@@ -121,12 +128,13 @@ function afun(a)
 }
 .
 
-(afun 100 200)
-(test 102 r1)
-(test 101 r2)
-(test 101 r3)
-(test 200 r4)
-(test 1 from_inside))
+(no-warn
+ (afun 100 200)
+ (test 102 r1)
+ (test 101 r2)
+ (test 101 r3)
+ (test 200 r4)
+ (test 1 from_inside)))
 
 (defun test5 ()
 #{javascript}
@@ -136,7 +144,8 @@ return function(m) {return n+m;};
 }
 r1 = adder(1)(2);
 .
-  (test r1 3))
+  (no-warn
+   (test r1 3)))
 
 (defun test6 ()
 #{javascript}
@@ -151,8 +160,8 @@ var b = function f2(n, m)
 return a(x);
 }
 .
-
-  (test (fbla 2) 6))
+  (no-warn
+   (test (fbla 2) 6)))
 
 #{javascript}
 function f4()
@@ -211,12 +220,13 @@ while(a > 0);
 r6 = a;
 .
 
-(test r1 10)
-(test r2 14)
-(test r3 20)
-(test r4 0)
-(test r5 0)
-(test r6 -1))
+(no-warn
+ (test r1 10)
+ (test r2 14)
+ (test r3 20)
+ (test r4 0)
+ (test r5 0)
+ (test r6 -1)))
 
 
 (defun test8 ()
@@ -227,8 +237,8 @@ obj = new O;
 obj.n = 20;
 r1 = obj.f();
 .
-
-  (test 21 r1))
+  (no-warn
+   (test 21 r1)))
 
 (defun test9 ()
 #{javascript}

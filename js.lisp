@@ -55,7 +55,6 @@
   (call-next-method val hash key))
 
 (defmethod prop ((hash global-object) key)
-  #+js-debug (format t "looking for ~A~%" key)
   (call-next-method hash key))
 
 (defclass native-function (native-hash)
@@ -202,19 +201,19 @@
   (declare (ignore ret))
   (error "return not in function"))
 
-(defmacro !named-lambda (name env lex-chain args locals body)
+(defmacro !named-lambda (name lex-chain args locals body)
   `(let (,name)
-     (setf ,name (!function ,env ,lex-chain nil ,args ,locals ,body))
+     (setf ,name (!function ,lex-chain nil ,args ,locals ,body))
      (proc ,name)))
 
-(defmacro !lambda (env lex-chain args locals body)
+(defmacro !lambda (lex-chain args locals body)
   (let* ((additional-args (gensym))
 	 (blockname (gensym)))
     `(macrolet ((!arguments () `(or arguments (setf arguments (make-args ,',args ,',additional-args))))
 		(!name (name) (macroexpand `(lookup-in-lexchain ,name ,',lex-chain)))
 		(!setf-name (name val) (macroexpand `(set-in-lexchain ,name ,val ,',lex-chain)))
-		(!defun (env lex-chain name args locals body)
-		  `(setf ,name (!function ,env ,lex-chain ,name ,args ,locals ,body)))
+		(!defun (lex-chain name args locals body)
+		  `(setf ,name (!function ,lex-chain ,name ,args ,locals ,body)))
 		(!return (ret) `,`(return-from ,',blockname ,(or ret :undefined))))
        (let ((-object-env-stack- *object-env-stack*))
 	 (lambda (this
@@ -225,19 +224,18 @@
 			       (list var :undefined)) locals))
 	       (block ,blockname ,@body :undefined))))))))
   
-(defmacro !function (env lex-chain name args locals body)
-  (format t "~A~%" lex-chain)
+(defmacro !function (lex-chain name args locals body)
   `(make-instance 'native-function
 		  :name ',name
 		  :proc ,(if name
-			     `(!named-lambda ,name ,env ,lex-chain ,args ,locals ,body)
-			     `(!lambda ,env ,lex-chain ,args ,locals ,body))
-		  :env ',env))
+			     `(!named-lambda ,name ,lex-chain ,args ,locals ,body)
+			     `(!lambda ,lex-chain ,args ,locals ,body))
+		  :env ',(car lex-chain)))
 
-(defmacro !defun (env lex-chain name args locals body)
+(defmacro !defun (lex-chain name args locals body)
   (let ((args2 (gensym))
 	(func (gensym)))
-    `(let ((,func (!function ,env ,lex-chain ,name ,args ,locals ,body)))
+    `(let ((,func (!function ,lex-chain ,name ,args ,locals ,body)))
        (setf (prop this ',name) ,func)
        (defun ,name (&rest ,args2)
 	 (apply (proc ,func) this ,args2)))))
@@ -346,14 +344,12 @@
    (set-arr :initarg :set-arr :reader set-arr)))
 
 (defmethod sub ((args arguments) key)
-  (format t "sub ~A~%" key)
   (if (and (integerp key) (>= key 0))
       (if (< key (len args)) (funcall (aref (get-arr args) key) key)
 	  (funcall (aref (get-arr args) (len args)) key))
-      (progn (format t "sub c-n-m~A~%" key) (call-next-method args key))))
+      (call-next-method args key)))
 
 (defmethod (setf sub) (val (args arguments) key)
-  (format t "setf syb~%")
   (if (and (integerp key) (>= key 0))
       (if (< key (len args)) (funcall (aref (set-arr args) key) key val)
 	  (funcall (aref (set-arr args) (len args)) key val))
@@ -377,7 +373,6 @@
 								`(lambda (n val) (declare (ignore n)) (setf ,var val)))
 							      vars)
 						    (lambda (n val) (setf (nth (- n ,len) ,oth) val))))))
-       (format t "creating args~%")
        (make-instance 'arguments :len ,len :get-arr ,get-arr :set-arr ,set-arr))))
 
 ;;;
@@ -385,7 +380,7 @@
 (defmacro define-js-function (name args &body body)
   `(with-ignored-style-warnings
      (setf (prop this ',name)
-	   (!function nil nil nil ,args nil
+	   (!function nil nil ,args nil
 		      ((!return (or (progn ,@body) :undefined)))))))
 
 (define-js-function Object ())
