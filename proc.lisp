@@ -22,80 +22,80 @@
     (mapcar #'transform-tree form)))
 
 (define-transform-rule (:var form)
-    (cons (js-intern (car form))
-	  (list (mapcar
-		 (lambda (var-desc)
-		   (let ((var-sym (->sym (car var-desc))))
-		     (set-add env var-sym)
-		     (set-add locals var-sym)
-		     (cons (->sym (car var-desc))
-			   (transform-tree (cdr var-desc)))))
-		 (second form)))))
+  (cons (js-intern (car form))
+	(list (mapcar
+	       (lambda (var-desc)
+		 (let ((var-sym (->sym (car var-desc))))
+		   (set-add env var-sym)
+		   (set-add locals var-sym)
+		   (cons (->sym (car var-desc))
+			 (transform-tree (cdr var-desc)))))
+	       (second form)))))
 
 (define-transform-rule (:label form)
-    (let ((*label-name* (->sym (second form))))
-      (transform-tree (third form))))
+  (let ((*label-name* (->sym (second form))))
+    (transform-tree (third form))))
 
 (define-transform-rule (:for form)
-    (let* ((label *label-name*)
-	   (*label-name* nil))
-      (list (js-intern (car form)) ;for
-	    (transform-tree (second form)) ;init
-	    (transform-tree (third form))  ;cond
-	    (transform-tree (fourth form)) ;step
-	    (transform-tree (fifth form)) ;body
-	    label)))
+  (let* ((label *label-name*)
+	 (*label-name* nil))
+    (list (js-intern (car form)) ;for
+	  (transform-tree (second form)) ;init
+	  (transform-tree (third form))  ;cond
+	  (transform-tree (fourth form)) ;step
+	  (transform-tree (fifth form)) ;body
+	  label)))
 
 (define-transform-rule (:while form)
-    (transform-tree
-     (list (js-intern :for)
-	   nil (second form)
-	   nil (third form) *label-name*)))
+  (transform-tree
+   (list (js-intern :for)
+	 nil (second form)
+	 nil (third form) *label-name*)))
 
 (define-transform-rule (:do form)
-    (let* ((label *label-name*)
-	   (*label-name* nil))
-      (list (js-intern (car form))
-	    (transform-tree (second form))
-	    (transform-tree (third form))
-	    label)))
+  (let* ((label *label-name*)
+	 (*label-name* nil))
+    (list (js-intern (car form))
+	  (transform-tree (second form))
+	  (transform-tree (third form))
+	  label)))
 
 (define-transform-rule (:name form)
-    (list (js-intern (car form)) (->sym (second form))))
+  (list (js-intern (car form)) (->sym (second form))))
 
 (define-transform-rule (:dot form)
-    (list (js-intern (car form)) (transform-tree (second form))
-	  (->sym (third form))))
+  (list (js-intern (car form)) (transform-tree (second form))
+	(->sym (third form))))
 
 (define-transform-rule (:with form)
-    (let* ((*lexenv-chain* (cons :obj *lexenv-chain*))
-	   (placeholder (copy-list *lexenv-chain*)))
-      (push placeholder obj-envs)
-      (list (js-intern (car form))
-	    placeholder
-	    (transform-tree (second form))
-	    (transform-tree (third form)))))
+  (let* ((*lexenv-chain* (cons :obj *lexenv-chain*))
+	 (placeholder (copy-list *lexenv-chain*)))
+    (push placeholder obj-envs)
+    (list (js-intern (car form))
+	  placeholder
+	  (transform-tree (second form))
+	  (transform-tree (third form)))))
 
 (define-transform-rule (:defun form)
-    (unless *toplevel*
-      (when (second form)
-	(let ((fun-name (->sym (second form))))
-	  (set-add env fun-name)
-	  (set-add locals fun-name))))
+  (unless *toplevel*
+    (when (second form)
+      (let ((fun-name (->sym (second form))))
+	(set-add env fun-name)
+	(set-add locals fun-name))))
   (let ((placeholder (list (car form))))
     (queue-enqueue lmbd-forms (list form env placeholder (copy-list *lexenv-chain*)))
     placeholder))
 
 (define-transform-rule (:function form)
-    (let ((placeholder (list (car form))))
-      (queue-enqueue lmbd-forms (list form env placeholder (copy-list *lexenv-chain*)))
-      placeholder))
+  (let ((placeholder (list (car form))))
+    (queue-enqueue lmbd-forms (list form env placeholder (copy-list *lexenv-chain*)))
+    placeholder))
 
 (define-transform-rule (:toplevel form)
-    (let ((*lexenv-chain* (cons :obj *lexenv-chain*)))
-      (list (js-intern (car form))
-	    (copy-list *lexenv-chain*)
-	    (transform-tree (second form)))))
+  (let ((*lexenv-chain* (cons :obj *lexenv-chain*)))
+    (list (js-intern (car form))
+	  (copy-list *lexenv-chain*)
+	  (transform-tree (second form)))))
 ;;
 
 (flet ((dump (el)
