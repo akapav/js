@@ -54,7 +54,7 @@
   (set key val)
   (call-next-method val hash key))
 
-(defmethod prop ((hash global-object) key)
+#+nil (defmethod prop ((hash global-object) key)
   (call-next-method hash key))
 
 (defclass native-function (native-hash)
@@ -64,10 +64,10 @@
 
 (defmethod initialize-instance :after ((f native-function) &rest args)
   (declare (ignore args))
-  (setf (prop f 'prototype) (make-instance 'native-hash)))
+  (setf (prop f 'js-user::prototype) (make-instance 'native-hash)))
 
 (defparameter *global* (make-instance 'global-object))
-(defparameter this *global*)
+(defparameter js-user::this *global*)
 (defparameter *object-env-stack* nil)
 
 ;;;
@@ -83,15 +83,15 @@
 		     (t (count-lookups (cdr chain) cnt))))
 	     (build-tree (n found)
 	       (if (zerop n)
-		   (if found `,name '(error "no prop"))
+		   (if found `,name `(error (format nil "no prop ~A" ',name)))
 		   `(let* ((,obj (car -object-env-stack-))
 			   (,prop (find-property ,obj ',name)))
 		      (or ,prop (let ((-object-env-stack-
 				       (cdr -object-env-stack-)))
 				  ,(build-tree (1- n) found)))))))
       (case name
-	((this) 'this) ;this is always bound
-	((arguments) '(!arguments))
+	((js-user::this) 'js-user::this) ;this is always bound
+	((js-user::arguments) '(!arguments))
 	(t (multiple-value-bind (n found) (count-lookups lexchain 0)
 	     `(,@(build-tree n found))))))))
 
@@ -189,13 +189,13 @@
        (funcall ,*proc
 		,(case (car func)
 		       ((!dot) (second func))
-		       (t this)) ,@args))))
+		       (t js-user::this)) ,@args))))
 
 (defmacro !new (func args)
   (let ((ret (gensym)))
-    `(let ((,ret (make-instance 'native-hash :prototype (prop ,func 'prototype))))
+    `(let ((,ret (make-instance 'native-hash :prototype (prop ,func 'js-user::prototype))))
        (funcall (proc ,func) ,ret ,@args)
-       (setf (prop ,ret 'constructor) ,func)
+       (setf (prop ,ret 'js-user::constructor) ,func)
        ,ret)))
 
 (defmacro !return (ret)
@@ -210,17 +210,17 @@
 (defmacro !lambda (lex-chain args locals body)
   (let* ((additional-args (gensym))
 	 (blockname (gensym)))
-    `(macrolet ((!arguments () `(or arguments (setf arguments (make-args ,',args ,',additional-args))))
+    `(macrolet ((!arguments () `(or js-user::arguments (setf js-user::arguments (make-args ,',args ,',additional-args))))
 		(!name (name) (macroexpand `(lookup-in-lexchain ,name ,',lex-chain)))
 		(!setf-name (name val) (macroexpand `(set-in-lexchain ,name ,val ,',lex-chain)))
 		(!defun (lex-chain name args locals body)
 		  `(setf ,name (!function ,lex-chain ,name ,args ,locals ,body)))
 		(!return (ret) `,`(return-from ,',blockname ,(or ret :undefined))))
        (let ((-object-env-stack- *object-env-stack*))
-	 (lambda (this
+	 (lambda (js-user::this
 		  &optional ,@(mapcar (lambda (arg) `(,arg :undefined)) args)
 		  &rest ,additional-args)
-	   (let (arguments)
+	   (let (js-user::arguments)
 	     (let (,@(mapcar (lambda (var)
 			       (list var :undefined)) locals))
 	       (block ,blockname ,@body :undefined))))))))
@@ -237,9 +237,9 @@
   (let ((args2 (gensym))
 	(func (gensym)))
     `(let ((,func (!function ,lex-chain ,name ,args ,locals ,body)))
-       (setf (prop this ',name) ,func)
+       (setf (prop js-user::this ',name) ,func)
        (defun ,name (&rest ,args2)
-	 (apply (proc ,func) this ,args2)))))
+	 (apply (proc ,func) js-user::this ,args2)))))
 
 (defmacro !with (lex-chain obj body)
   `(let* ((*object-env-stack* (cons ,obj *object-env-stack*))
@@ -380,9 +380,11 @@
 
 (defmacro define-js-function (name args &body body)
   `(with-ignored-style-warnings
-       (setf (prop this ',name)
+       (setf (prop js-user::this ',name)
 	     (!function nil nil ,args nil
 			((!return (or (progn ,@body) :undefined)))))))
+
+(in-package :js-user)
 
 (define-js-function Object ())
 

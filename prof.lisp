@@ -1,6 +1,6 @@
 (declaim (optimize (safety 0) (debug 0) (speed 3)))
 (asdf:oos 'asdf:load-op :js)
-(in-package :js)
+(in-package :js-user)
 
 (require :sb-sprof)
 

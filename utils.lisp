@@ -1,7 +1,7 @@
 (in-package :js)
 
 (defun ->sym (str)
-  (intern (string-upcase str)))
+  (intern (string-upcase str) :js-user))
 
 (defun js-intern (sym)
   (intern (concatenate 'string "!" (symbol-name sym)) :js))

@@ -1,4 +1,6 @@
-* TODO move program specific symbols to js-user package
+* DONE move program specific symbols to js-user package
+** check what is the status of automatically generated operators
+** cleanup exports of net.svrg.js package and try to seal it
 * TODO implement try/catch
 * TODO standard js runtime
 ** TODO builtin classes

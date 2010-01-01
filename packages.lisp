@@ -11,7 +11,10 @@
 	:ptester) ;;todo: remove ptester eventually
   (:export native-hash
 	   native-function
-	   global-object))
+	   global-object
+	   !eval
+	   javascript js
+	   define-js-function))
 
 (defpackage :net.svrg.js-user
   (:nicknames :js-user)

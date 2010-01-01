@@ -1,4 +1,4 @@
-(in-package :js) ;;todo: make separate package
+(in-package :js-user) ;;todo: make separate package
 
 (defmacro no-warn (&body body)
   `(locally #+sbcl (declare (sb-ext:muffle-conditions warning))
@@ -297,17 +297,17 @@ r4 = o11.x11
 
 ;;;;;
 
-(defun js-ast (stream)
-  `'(,(process-ast
-	   (parse-js-string (read-line-stream stream)))))
+;; (defun js-ast (stream)
+;;   `'(,(process-ast
+;; 	   (parse-js-string (read-line-stream stream)))))
 
-(define-reader 'js-ast #'js-ast)
+;; (define-reader 'js-ast #'js-ast)
 
-#{js-ast}
-x=function a(b)
-{
-};
-.
+;; #{js-ast}
+;; x=function a(b)
+;; {
+;; };
+;; .
 
 (defun fast-test ()
   (macrolet ((flist (&rest syms)
