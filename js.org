@@ -1,0 +1,22 @@
+* TODO move program specific symbols to js-user package
+* TODO implement try/catch
+* TODO standard js runtime
+** TODO builtin classes
+** TODO correct operator behavior
+* TODO split js.lisp into smaller logical units
+* TODO better integration with common lisp
+** TODO automatically promote symbols from js-user to *global* object
+** TODO macros for defining hosting environment
+** TODO easier callback to lisp
+* TODO redesign tests in the same way as namos have
+** TODO think of common system to share code between systems
+* when ready, run real benchmarks from language shootout
+
+* TODO project promotion
+** TODO web site
+*** think of using org-mode form web publishing
+*** github/common-lisp.net (think about)
+** TODO going public
+*** cliki.net
+** TODO documentation
+** TODO presentations
