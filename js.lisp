@@ -86,7 +86,8 @@
 		   (if found `,name '(error "no prop"))
 		   `(let* ((,obj (car -object-env-stack-))
 			   (,prop (find-property ,obj ',name)))
-		      (or ,prop (let ((-object-env-stack- (cdr -object-env-stack-)))
+		      (or ,prop (let ((-object-env-stack-
+				       (cdr -object-env-stack-)))
 				  ,(build-tree (1- n) found)))))))
       (case name
 	((this) 'this) ;this is always bound
@@ -155,9 +156,9 @@
 
 (defmacro !unary-postfix (op place)
   (let ((ret (gensym)))
-  `(let ((,ret ,place))
-     (!setf ,place (,op ,place))
-     ,ret)))
+    `(let ((,ret ,place))
+       (!setf ,place (,op ,place))
+       ,ret)))
 
 (defmacro !num (num) num)
 (defmacro !string (str) str)
@@ -187,8 +188,8 @@
        (declare (function ,*proc))
        (funcall ,*proc
 		,(case (car func)
-		   ((!dot) (second func))
-		   (t this)) ,@args))))
+		       ((!dot) (second func))
+		       (t this)) ,@args))))
 
 (defmacro !new (func args)
   (let ((ret (gensym)))
@@ -223,7 +224,7 @@
 	     (let (,@(mapcar (lambda (var)
 			       (list var :undefined)) locals))
 	       (block ,blockname ,@body :undefined))))))))
-  
+
 (defmacro !function (lex-chain name args locals body)
   `(make-instance 'native-function
 		  :name ',name
@@ -269,10 +270,10 @@
   (the boolean (< ls rs)))
 ;;;;;;;;
 (js-operators
-;;binary
+ ;;binary
  (+ plus) (- minus) * / (% mod)
  (== equalp) (< less) > <= >= (!= /=)
-;;unary
+ ;;unary
  (++ 1+) (-- 1-))
 
 (defmacro !binary (op-sym ls rs)
@@ -288,7 +289,7 @@
 	    (and (numberp ,rexp) (zerop ,rexp)))))))
 
 #+nil (defmacro !label (name body)
-     (tagbody ,(->sym name) ,body))
+	(tagbody ,(->sym name) ,body))
 
 (defmacro !if (exp then else)
   `(if (js->boolean ,exp) ,then ,else))
@@ -324,7 +325,7 @@
 		(go ,lbl))))))))
 
 #+nil (defmacro !while (cond body)
-  `(!for nil ,cond nil ,body))
+	`(!for nil ,cond nil ,body))
 
 (defmacro !eval (str)
   (process-ast (parse-js-string str)))
@@ -379,9 +380,9 @@
 
 (defmacro define-js-function (name args &body body)
   `(with-ignored-style-warnings
-     (setf (prop this ',name)
-	   (!function nil nil ,args nil
-		      ((!return (or (progn ,@body) :undefined)))))))
+       (setf (prop this ',name)
+	     (!function nil nil ,args nil
+			((!return (or (progn ,@body) :undefined)))))))
 
 (define-js-function Object ())
 

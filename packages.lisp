@@ -1,19 +1,19 @@
 (defpackage :net.svrg.reader-macro
-    (:use :cl)
+  (:use :cl)
   (:export :define-reader
-		   :find-reader
-		   :remove-reader
-		   :read-line-stream))
+	   :find-reader
+	   :remove-reader
+	   :read-line-stream))
 
 (defpackage :net.svrg.javascript
-	(:nicknames :js)
+  (:nicknames :js)
   (:use :cl :parse-js :net.svrg.reader-macro
-		:ptester) ;;todo: remove ptester eventually
+	:ptester) ;;todo: remove ptester eventually
   (:export native-hash
-		   native-function
-		   global-object))
+	   native-function
+	   global-object))
 
 (defpackage :net.svrg.js-user
-	(:nicknames :js-user)
+  (:nicknames :js-user)
   (:use :cl :js :net.svrg.reader-macro :parse-js
-		:ptester))
+	:ptester))
