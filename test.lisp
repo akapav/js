@@ -295,6 +295,41 @@ r4 = o11.x11
     (test r3 5)
     (test r4 4)))
 
+
+
+#{javascript}
+function f(x, o)
+{
+    function r() {print(x);}
+    with(o) return {'a': function (y) {x = y;}, 'b': r};
+}
+
+o1 = new Object
+f2 = f(10, o1)
+f2['a'](100)
+print(o1.x) //unknown
+f2['b']() //100
+o1.x = 1
+f2['a'](200)
+print(o1.x) //200
+f2['b']() //100
+.
+
+#{javascript}
+ox=new Object
+ox.g = function() {print('b');}
+
+function f(o) {
+  with(o) {
+    function g() {print('a');}
+    g();
+  }
+}
+
+f(ox) //b
+.
+
+
 ;;;;;
 
 (defun js-ast (stream)

@@ -107,8 +107,10 @@
 
 (flet ((dump (el)
 	 (or (and (symbolp el) el) (set-elems el))))
-  (defun dump-lexenv-chain ()
-    (mapcar #'dump *lexenv-chain*))
+  (defun dump-lexenv-chain (fname)
+    (let ((dump (mapcar #'dump *lexenv-chain*)))
+      (if fname (cons (list fname) dump)
+	  dump)))
   (defun transform-obj-env (place)
     (setf (car place) (dump (car place)))
     (setf (cdr place) (mapcar #'dump (cdr place)))))
@@ -136,19 +138,20 @@
     (append (reverse defuns) (reverse oth))))
 
 (defun shallow-process-function-form (form old-env lexenv-chain)
-  (let* ((env (set-copy old-env))
-	 (*lexenv-chain* (cons env lexenv-chain))
+  (let* ((env (set-make))
 	 (locals (set-make))
+	 (args (set-make))
+	 (*lexenv-chain* (append (list args locals) lexenv-chain))
 	 (arglist (mapcar #'->sym (third form)))
 	 (obj-envs nil)
 	 (new-form (transform-tree (fourth form)))
 	 (name (and (second form) (->sym (second form)))))
     (declare (special env locals obj-envs))
-    (mapc (lambda (arg) (set-add env arg)) arglist)
+    (mapc (lambda (arg) (set-add args arg)) arglist)
     (mapc #'transform-obj-env obj-envs)
-    (set-add env name) ;;inject function name (if any) into it's lexical environment
+    ;(set-add env name) ;;inject function name (if any) into it's lexical environment
     (list (js-intern (first form)) ;;defun or function
-	  (dump-lexenv-chain) ;;
+	  (dump-lexenv-chain name) ;;
 	  name arglist (set-elems locals) (lift-defuns new-form))))
 
 (defun process-ast (ast)
