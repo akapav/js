@@ -166,7 +166,7 @@
 (defmacro !object (props)
   (let ((obj (gensym)))
     `(let ((,obj (make-instance 'native-hash)))
-       ,@(mapcar (lambda (*prop) `(setf (sub ,obj ,(car *prop)) ,(cdr *prop))) props)
+       ,@(mapcar (lambda (*prop) `(setf (sub ,obj ,(first *prop)) ,(second *prop))) props)
        ,obj)))
 
 (defmacro !stat (form)

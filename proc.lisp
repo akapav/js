@@ -32,6 +32,11 @@
 			   (transform-tree (cdr var-desc)))))
 		 (second form)))))
 
+(define-transform-rule (:object form)
+  (list (js-intern (car form))
+	(mapcar (lambda (el)
+		  (list (car el) (transform-tree (cdr el)))) (second form))))
+				
 (define-transform-rule (:label form)
     (let ((*label-name* (->sym (second form))))
       (transform-tree (third form))))
