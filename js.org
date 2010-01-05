@@ -12,6 +12,7 @@
 ** TODO easier callback to lisp
 * TODO redesign tests in the same way as namos have
 ** TODO think of common system to share code between systems
+* TODO speed up the compilation phase
 * when ready, run real benchmarks from language shootout
 
 * TODO project promotion
