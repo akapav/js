@@ -288,47 +288,52 @@ r3 = x11
 r4 = o11.x11
 
 .
- 
- (no-warn
+  (no-warn
     (test r1 5)
     (test r2 :undefined)
     (test r3 5)
     (test r4 4)))
 
-
-
+(defun test12 ()
 #{javascript}
-function f(x, o)
+function f12x(x, o)
 {
-    function r() {print(x);}
+    function r() {return x;}
     with(o) return {'a': function (y) {x = y;}, 'b': r};
 }
 
-o1 = new Object
-f2 = f(10, o1)
-f2['a'](100)
-print(o1.x) //unknown
-f2['b']() //100
-o1.x = 1
-f2['a'](200)
-print(o1.x) //200
-f2['b']() //100
+o12 = new Object
+f12 = f12x(10, o12)
+f12['a'](100)
+r1 = o12.x; //undefined
+r2 = f12['b'](); //100
+o12.x = 1
+f12['a'](200)
+r3 = o12.x //200
+r4 = f12['b']() //100
 .
 
-#{javascript}
-ox=new Object
-ox.g = function() {print('b');}
+(no-warn
+  (test r1 :undefined)
+  (test r2 100)
+  (test r3 200)
+  (test r4 100)))
 
-function f(o) {
+(defun test13 ()
+#{javascript}
+o13x=new Object
+o13x.g = function() {return 2;}
+
+function f13(o) {
   with(o) {
-    function g() {print('a');}
-    g();
+    function g() {return 1;}
+    return g();
   }
 }
 
-f(ox) //b
 .
-
+(no-warn
+  (test (f13 o13x) 2)))
 
 ;;;;;
 
@@ -351,4 +356,5 @@ x=function a(b)
 	   (mapcar #'funcall
 		   (flist test1 test2 test3 test4
 			  test5 test6 test7 test8
-			  test9 test10 test11)))))
+			  test9 test10 test11 test12
+			  test13)))))
