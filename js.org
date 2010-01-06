@@ -1,7 +1,8 @@
 * DONE move program specific symbols to js-user package
 ** check what is the status of automatically generated operators
 ** cleanup exports of net.svrg.js package and try to seal it
-* TODO implement try/catch
+* DONE implement try/catch
+** TODO check what is the valid semantics of defun within a catch block
 * TODO standard js runtime
 ** TODO builtin classes
 ** TODO correct operator behavior
