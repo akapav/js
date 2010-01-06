@@ -1,9 +1,11 @@
 (in-package :js)
-
-
-(defparameter lexenv-chain nil)
-
 ;;
+(defmacro with-new-lexical-environment ((var new-env) &body body)
+  `(let* ((lexenv-chain (cons ,new-env lexenv-chain))
+	  (,var (copy-list lexenv-chain)))
+     (declare (special lexenv-chain)) ; ... later
+     (progn (push ,var environments) ,@body)))
+
 (defun transform-tree (form)
   (cond ((null form) nil)
 	((atom form)
@@ -13,7 +15,7 @@
 
 (defmacro define-transform-rule ((rule form) &body body)
   `(defmethod apply-transform-rule ((,(gensym) (eql ,rule)) ,form)
-     (declare (special locals environments toplevel))
+     (declare (special locals environments lexenv-chain toplevel))
      ,@body))
 
 (defgeneric apply-transform-rule (keyword form)
@@ -67,16 +69,14 @@
 	  label)))
 
 (define-transform-rule (:try form)
-  (let* ((var (->sym (car (third form))))
-	 (lexenv-chain (cons (list var) lexenv-chain))
-	 (placeholder (copy-list lexenv-chain)))
-    (push placeholder environments)
-    (list (js-intern (car form))
-	  placeholder
-	  (transform-tree (second form)) ;body
-	  var ;catch var
-	  (transform-tree (cdr (third form))) ;catch body
-	  (transform-tree (fourth form))))) ;finally block
+  (let* ((var (->sym (car (third form)))))
+    (with-new-lexical-environment (env (list var))
+      (list (js-intern (car form))
+	    env
+	    (transform-tree (second form)) ;body
+	    var ;catch var
+	    (transform-tree (cdr (third form))) ;catch body
+	    (transform-tree (fourth form)))))) ;finally block
 
 (define-transform-rule (:name form)
   (list (js-intern (car form)) (->sym (second form))))
@@ -86,11 +86,9 @@
 	(->sym (third form))))
 
 (define-transform-rule (:with form)
-  (let* ((lexenv-chain (cons :obj lexenv-chain))
-	 (placeholder (copy-list lexenv-chain)))
-    (push placeholder environments)
+  (with-new-lexical-environment (env :obj)
     (list (js-intern (car form))
-	  placeholder
+	  env
 	  (transform-tree (second form))
 	  (transform-tree (third form)))))
 
@@ -105,13 +103,11 @@
 	   (locals (set-make))
 	   (arglist (mapcar #'->sym (third form)))
 	   (name (and (second form) (->sym (second form)))))
-      (declare (special locals environments toplevel))
-      (let* ((lexenv-chain (cons (list name arglist locals) lexenv-chain))
-	     (placeholder (copy-list lexenv-chain)))
-	(push placeholder environments)
+      (declare (special locals environments lexenv-chain toplevel))
+      (with-new-lexical-environment (env (list name arglist locals))
 	(let ((new-form (lift-defuns (transform-tree (fourth form)))))
 	  (list (js-intern (first form))
-		placeholder
+		env
 		name
 		arglist
 		(set-elems locals)
@@ -128,6 +124,7 @@
 
 (define-transform-rule (:toplevel form)
   (let ((lexenv-chain (cons :obj lexenv-chain)))
+    (declare (special lexenv-chain))
     (list (js-intern (car form))
 	  (copy-list lexenv-chain)
 	  (transform-tree (second form)))))
@@ -148,7 +145,7 @@
 	 (environments nil)
 	 (toplevel t)
 	 (new-form (transform-tree ast)))
-    (declare (special locals environments toplevel))
+    (declare (special locals environments lexenv-chain toplevel))
     (mapc #'transform-obj-env environments)
     (let ((toplevel-vars (set-elems locals)))
       (append (list (car new-form) toplevel-vars)
