@@ -335,6 +335,18 @@ function f13(o) {
 (no-warn
   (test (f13 o13x) 2)))
 
+(defun test14 ()
+#{javascript}
+try {
+   r1 = bflj();
+} catch(e) {
+   r1 = 100;
+} finally {
+   r1 = 2 * r1;
+}
+.
+(no-warn (test r1 200)))
+
 ;;;;;
 
 (defun js-ast (stream)
@@ -357,4 +369,4 @@ x=function a(b)
 		   (flist test1 test2 test3 test4
 			  test5 test6 test7 test8
 			  test9 test10 test11 test12
-			  test13)))))
+			  test13 test14)))))

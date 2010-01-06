@@ -327,7 +327,7 @@
 (defmacro !try (lex-chain body var catch finally)
   `(unwind-protect
 	(handler-case ,body
-	  (t (,var) (print ,var)
+	  (t (,var)
 	     (macrolet ((!name (name) (macroexpand `(lookup-in-lexchain ,name ,',lex-chain)))
 			(!setf-name (name val) (macroexpand `(set-in-lexchain ,name ,val ,',lex-chain)))
 			#+nil (!defun (lex-chain name args locals body) (error "don't know how to build defun in catch block")))
