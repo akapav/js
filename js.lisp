@@ -5,7 +5,7 @@
    (prototype :accessor prototype :initform nil :initarg :prototype)))
 
 (defgeneric prop (hash key)
-  (:method (hash key) (declare (ignore hash key)) (error "no properties")))
+  (:method (hash key) (declare (ignore hash key)) :undefined))
 
 (defun find-property (hash key &optional default)
   (multiple-value-bind (val exists)
@@ -19,7 +19,7 @@
   (find-property hash key :undefined))
 
 (defgeneric (setf prop) (val hash key)
-  (:method (val hash key) (declare (ignore hash key)) (error "no properties")))
+  (:method (val hash key) (declare (ignore hash key)) val))
 
 (defun set-property (hash key val)
   (setf (gethash key (dict hash)) val))
@@ -29,7 +29,7 @@
 
 ;;; sub: similar to prop, but key is not necessary a symbol
 (defgeneric sub (hash key)
-  (:method (hash key) (declare (ignore hash key)) (error "no properties")))
+  (:method (hash key) (declare (ignore hash key)) :undefined))
 
 (defun normalize-key (key)
   (or (and (numberp key) (->sym (format nil "~A" key)))
@@ -41,7 +41,7 @@
     (prop hash key)))
 
 (defgeneric (setf sub) (val hash key)
-  (:method (val hash key) (declare (ignore hash key)) (error "no properties")))
+  (:method (val hash key) (declare (ignore hash key)) val))
 
 (defmethod (setf sub) (val (hash native-hash) key)
   (let ((key (normalize-key key)))
