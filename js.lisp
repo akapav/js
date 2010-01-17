@@ -1,8 +1,15 @@
 (in-package :js)
 
 (defclass native-hash ()
-  ((dict :accessor dict :initform (make-hash-table :test 'eq))
+  ((default-value :accessor value :initform nil :initarg :value)
+   (dict :accessor dict :initform (make-hash-table :test 'eq))
    (prototype :accessor prototype :initform nil :initarg :prototype)))
+
+(defgeneric set-default (hash val) ;;todo: put it as a slot writer
+  (:method (hash val) (declare (ignore hash)) val))
+
+(defmethod set-default ((hash native-hash) val)
+  (setf (value hash) val))
 
 (defgeneric prop (hash key)
   (:method (hash key) (declare (ignore hash key)) :undefined))
@@ -53,6 +60,9 @@
 (defmethod (setf prop) (val (hash global-object) key)
   (set key val)
   (call-next-method val hash key))
+
+(defmethod set-default ((hash global-object) val)
+  val)
 
 #+nil (defmethod prop ((hash global-object) key)
   (call-next-method hash key))
