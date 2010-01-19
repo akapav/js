@@ -3,6 +3,7 @@
 (defclass native-hash ()
   ((default-value :accessor value :initform nil :initarg :value)
    (dict :accessor dict :initform (make-hash-table :test 'eq))
+   (sealed :accessor sealed :initform nil :initarg :sealed)
    (prototype :accessor prototype :initform nil :initarg :prototype)))
 
 (defgeneric set-default (hash val) ;;todo: put it as a slot writer
@@ -11,18 +12,29 @@
 (defmethod set-default ((hash native-hash) val)
   (setf (value hash) val))
 
-(defgeneric prop (hash key)
-  (:method (hash key) (declare (ignore hash key)) :undefined))
+(defun add-sealed-property (hash key proc)
+  (flet ((ensure-sealed-table (hash)
+	   (or (sealed hash)
+	       (setf (sealed hash) (make-hash-table :test 'eq)))))
+    (let ((sealed-table (ensure-sealed-table hash)))
+      (setf (gethash key sealed-table) proc))))
 
-(defun find-property (hash key &optional default)
-  (multiple-value-bind (val exists)
-      (gethash key (dict hash))
-    (if exists val
-	(or (and (prototype hash)
-		 (find-property (prototype hash) key default))
-	    default))))
+(defgeneric prop (hash key &optional default)
+  (:method (hash key &optional default)
+    (declare (ignore hash key default)) :undefined))
 
-(defmethod prop ((hash native-hash) key)
+(defmethod prop ((hash native-hash) key &optional (default :undefined))
+  (let* ((sealed (sealed hash))
+	 (action (and sealed (gethash key sealed))))
+    (if action (funcall action hash)
+	(multiple-value-bind (val exists)
+	    (gethash key (dict hash))
+	  (if exists val
+	      (or (and (prototype hash)
+		       (prop (prototype hash) key default))
+		  default))))))
+
+#+nil (defmethod prop ((hash native-hash) key)
   (find-property hash key :undefined))
 
 (defgeneric (setf prop) (val hash key)
@@ -95,7 +107,7 @@
 	       (if (zerop n)
 		   (if found `,name `(error (format nil "no prop ~A" ',name)))
 		   `(let* ((,obj (car -object-env-stack-))
-			   (,prop (find-property ,obj ',name)))
+			   (,prop (prop ,obj ',name nil)))
 		      (or ,prop (let ((-object-env-stack-
 				       (cdr -object-env-stack-)))
 				  ,(build-tree (1- n) found)))))))
@@ -121,7 +133,7 @@
 		       `(setf ,name ,val)
 		       `(setf (prop *global* ',name) ,val))
 		   `(let* ((,obj (car -object-env-stack-))
-			   (,prop (find-property ,obj ',name)))
+			   (,prop (prop ,obj ',name nil)))
 		      (if ,prop (setf (prop ,obj ',name) ,val)
 			  (let ((-object-env-stack- (cdr -object-env-stack-)))
 			    ,(build-tree (1- n) found)))))))
@@ -202,8 +214,12 @@
 		       (t js-user::this)) ,@args))))
 
 (defmacro !new (func args)
-  (let ((ret (gensym)))
-    `(let ((,ret (make-instance 'native-hash :prototype (prop ,func 'js-user::prototype))))
+  (let ((ret (gensym))
+	(proto (gensym)))
+    `(let* ((,proto (prop ,func 'js-user::prototype))
+	    (,ret (make-instance 'native-hash
+				 :prototype ,proto
+				 :sealed (sealed ,proto))))
        (funcall (proc ,func) ,ret ,@args)
        (setf (prop ,ret 'js-user::constructor) ,func)
        ,ret)))

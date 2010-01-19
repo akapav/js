@@ -1,35 +1,5 @@
 (in-package :js)
 
-;;todo: move the block somewhere else
-(defparameter *class-cache* (make-hash-table :test 'equal))
-
-(defun make-class (&rest supers)
-  (let ((cls (gethash supers *class-cache*)))
-    (or cls
-	(let ((new-cls (make-instance 'standard-class :direct-superclasses supers)))
-	  (setf (gethash supers *class-cache*) new-cls)))))
-
-(defclass obj-with-sealed-props ()
-  ((sealed-properties :accessor sealed-properties)))
-
-(defmethod prop :around ((hash obj-with-sealed-props) key)
-  (let ((sealed-prop (gethash key (sealed-properties hash))))
-    (if sealed-prop (js-funcall sealed-prop hash)
-        (call-next-method hash key))))
-
-(defmethod (setf prop) :around (val (hash obj-with-sealed-props) key)
-  (let ((sealed-prop (gethash key (sealed-properties hash))))
-    (if sealed-prop val
-        (call-next-method val hash key))))
-
-(defun seal-properties (obj &rest props)
-  (let ((cls (make-class (class-of obj) (find-class 'obj-with-sealed-props)))
-	(hash (make-hash-table)))
-    (change-class obj cls)
-    (mapc (lambda (prop) (setf (gethash (first prop) hash) (second prop))) props)
-    (setf (sealed-properties obj) hash)))
-;;
-
 (defun js-funcall (func &rest args)
   (apply (proc func) nil args))
 
@@ -69,11 +39,10 @@
 
 (setf (prop *global* 'js-user::String) string.ctor)
 
-(seal-properties string.prototype (list 'js-user::length
-					(js-function (obj) (length (value obj)))))
+(add-sealed-property string.prototype
+		     'js-user::length
+		     (lambda (obj) (length (value obj))))
 
-;;at the moment bug with prop and (setf prop) exists -- instead of
-;;using find-property they should be implemented directly
 
 ;;test ...
 #{javascript}
@@ -83,5 +52,7 @@ String.prototype.y=12
 print(s2.y)
 print(s2.charAt(1))
 print(String.prototype.length)
+print(s2.length)
+print(s2.length = 555)
 print(s2.length)
 .
