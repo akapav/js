@@ -44,6 +44,9 @@
 		     (lambda (obj) (length (value obj))))
 
 
+(add-sealed-property string.ctor 'js-user::length (constantly 1))
+;not sure what is the meaning of that property. recheck the spec
+
 ;;test ...
 #{javascript}
 s1 = String(123)
