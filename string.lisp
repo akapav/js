@@ -67,31 +67,38 @@
 ;;
 
 (defun clip-index (n)
-  (let ((n (floor n)))
-    (if (< n 0) 0 n)))
+  (if (eq n :NaN 0
+      (let ((n (floor n)))
+	(if (< n 0) 0 n))))
 
 (define-js-method string charAt (str (ndx 0))
-		  (with-asserted-types ((ndx number))
-		    (string (aref str (clip-index ndx)))))
+  (with-asserted-types ((ndx number))
+    (string (aref str (clip-index ndx)))))
 
 (define-js-method string indexOf (str substr (beg 0))
-		  (if (eq substr :undefined) -1
-		      (with-asserted-types ((substr string)
-					    (beg number))
-			(or (search substr str :start2 (clip-index beg)) -1))))
+  (if (eq substr :undefined) -1
+      (with-asserted-types ((substr string)
+			    (beg number))
+	(or (search substr str :start2 (clip-index beg)) -1))))
 
 (define-js-method string lastIndexOf (str substr)
-		  (if (eq substr :undefined) -1
-		      (with-asserted-types ((substr string))
-			(or (search substr str :from-end t) -1))))
+  (if (eq substr :undefined) -1
+      (with-asserted-types ((substr string))
+	(or (search substr str :from-end t) -1))))
 
+(define-js-method string substring (str (from 0) to)
+  (if (eq to :undefined)
+      (with-asserted-types ((from number))
+	(subseq str (clip-index from)))))
+;;
 
 (defparameter number.ctor ;;todo: set-default (same as atring)
   (js-function (n)
-	       (cond ((numberp n) n)
-		     ((stringp n) (with-input-from-string (s n)
-				    (js-funcall number.ctor (read s))))
-		     (t :NaN))))
+    (cond ((numberp n) n)
+	  ((stringp n)
+	   (with-input-from-string (s n)
+	     (js-funcall number.ctor (read s))))
+	  (t :NaN))))
 
 ;;test ...
 #{javascript}
