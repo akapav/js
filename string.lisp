@@ -42,7 +42,15 @@
      ;;todo: type declarations
      ,@body))
 ;;
+(defparameter number.ctor ;;todo: set-default (same as string)
+  (js-function (n)
+    (cond ((numberp n) n)
+	  ((stringp n)
+	   (with-input-from-string (s n)
+	     (js-funcall number.ctor (read s))))
+	  (t :NaN))))
 
+;;
 (defparameter string.ctor
   (js-function (obj)
 	       (let ((str (if (stringp obj) obj (format nil "~A" obj))))
@@ -50,7 +58,7 @@
 		 str)))
 
 (defparameter string.prototype
-  (make-instance 'native-hash :value ""))
+  (js::!new js::string.ctor ("")))
 
 (setf (prop string.ctor 'js-user::prototype) string.prototype)
 (setf (prop *global* 'js-user::String) string.ctor)
@@ -61,7 +69,7 @@
 	 (action (gethash key sealed)))
     (if action
 	(funcall action str)
-	(prop string.prototype key))))
+	(prop string.prototype key default))))
 
 (defmethod value ((str string)) str)
 
@@ -121,16 +129,8 @@
 (define-js-method string toLowerCase (str)
   (string-downcase str))
 
-;;
 
-(defparameter number.ctor ;;todo: set-default (same as string)
-  (js-function (n)
-    (cond ((numberp n) n)
-	  ((stringp n)
-	   (with-input-from-string (s n)
-	     (js-funcall number.ctor (read s))))
-	  (t :NaN))))
-
+#|
 ;;test ...
 #{javascript}
 s1 = String(123)
@@ -145,3 +145,4 @@ print(s2.length)
 print(s2.substr("1",8))
 print(s2.substring (0, 100))
 .
+|#
