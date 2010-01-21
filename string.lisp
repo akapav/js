@@ -42,6 +42,7 @@
      ;;todo: type declarations
      ,@body))
 ;;
+
 (defparameter string.ctor
   (js-function (obj)
 	       (let ((str (if (stringp obj) obj (format nil "~A" obj))))
@@ -53,6 +54,16 @@
 
 (setf (prop string.ctor 'js-user::prototype) string.prototype)
 (setf (prop *global* 'js-user::String) string.ctor)
+
+;;
+(defmethod prop ((str string) key &optional (default :undefined))
+  (let* ((sealed (sealed string.prototype))
+	 (action (gethash key sealed)))
+    (if action
+	(funcall action str)
+	(prop string.prototype key))))
+
+(defmethod value ((str string)) str)
 
 ;;
 
@@ -67,7 +78,7 @@
 ;;
 
 (defun clip-index (n)
-  (if (eq n :NaN 0
+  (if (eq n :NaN) 0
       (let ((n (floor n)))
 	(if (< n 0) 0 n))))
 
@@ -89,10 +100,30 @@
 (define-js-method string substring (str (from 0) to)
   (if (eq to :undefined)
       (with-asserted-types ((from number))
-	(subseq str (clip-index from)))))
+	(subseq str (clip-index from)))
+      (with-asserted-types ((from number)
+			    (to number))
+	(let* ((from (clip-index from))
+	       (to (max from (clip-index to))))
+	  (subseq str from (min to (length str)))))))
+
+(define-js-method string substr (str (from 0) to)
+  (if (eq to :undefined)
+      (js-funcall string.substring str from)
+      (with-asserted-types ((from number)
+			    (to number))
+	(let ((from (clip-index from)))
+	  (js-funcall string.substring str from (+ from (clip-index to)))))))
+
+(define-js-method string toUpperCase (str)
+  (string-upcase str))
+
+(define-js-method string toLowerCase (str)
+  (string-downcase str))
+
 ;;
 
-(defparameter number.ctor ;;todo: set-default (same as atring)
+(defparameter number.ctor ;;todo: set-default (same as string)
   (js-function (n)
     (cond ((numberp n) n)
 	  ((stringp n)
@@ -111,4 +142,6 @@ print(String.prototype.length)
 print(s2.length)
 print(s2.length = 555)
 print(s2.length)
+print(s2.substr("1",8))
+print(s2.substring (0, 100))
 .
