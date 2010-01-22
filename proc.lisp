@@ -130,7 +130,8 @@
 	  (transform-tree (second form)))))
 ;;
 (labels ((dump-decl-env (env)
-	   (let ((rest (append (second env) (and (third env) (set-elems (third env))))))
+	   (let ((rest (append (second env)
+			       (and (third env) (set-elems (third env))))))
 	     (if (first env) (cons (first env) rest) rest)))
 	 (dump (el)
 	   (if (listp el) (dump-decl-env el) el)))

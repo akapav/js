@@ -14,30 +14,40 @@
 		       (symbol-name sym) "." (symbol-name 'ctor))))
 
 (defmacro define-js-method (type name args &body body)
-  (flet ((arg-names (args) (mapcar (lambda (arg) (if (consp arg) (first arg) arg)) args))
-	 (arg-defaults (args) (mapcar (lambda (arg) (if (consp arg) (second arg) :undefined)) args)))
-    (let ((canonical-name (intern (concatenate 'string (symbol-name type) "." (symbol-name name))))
+  (flet ((arg-names (args)
+	   (mapcar (lambda (arg) (if (consp arg) (first arg) arg)) args))
+	 (arg-defaults (args)
+	   (mapcar (lambda (arg) (if (consp arg) (second arg) :undefined)) args)))
+    (let ((canonical-name
+	   (intern (concatenate 'string
+				(symbol-name type) "." (symbol-name name))))
 	  (ctor-name (ctor type))
-	  (prototype-name (intern (concatenate 'string (symbol-name type) ".PROTOTYPE")))
+	  (prototype-name
+	   (intern (concatenate 'string (symbol-name type) ".PROTOTYPE")))
 	  (arg-names (arg-names args))
 	  (arg-defaults (arg-defaults args)))
       `(progn
 	 (defparameter ,canonical-name
 	   (js-function ,arg-names
-			(let ((,(car arg-names) (js-funcall ,ctor-name ,(car arg-names)))
-			      ,@(mapcar (lambda (name val)
-					  `(,name (if (eq ,name :undefined) ,val ,name)))
-					(cdr arg-names) (cdr arg-defaults)))
+			(let ((,(car arg-names)
+			       (js-funcall ,ctor-name ,(car arg-names)))
+			      ,@(mapcar
+				 (lambda (name val)
+				   `(,name (if (eq ,name :undefined) ,val ,name)))
+				 (cdr arg-names) (cdr arg-defaults)))
 			  ,@body)))
 	 (defparameter ,name
 	   (js-function ,(cdr arg-names)
-			(js-funcall ,canonical-name (value js-user::this) ,@(cdr arg-names))))
+			(js-funcall
+			 ,canonical-name (value js-user::this) ,@(cdr arg-names))))
 	 (setf (prop ,prototype-name ',(intern (symbol-name name) :js-user)) ,name)
-	 (setf (prop ,ctor-name ',(intern (symbol-name name) :js-user)) ,canonical-name)))))
+	 (setf (prop ,ctor-name
+		     ',(intern (symbol-name name) :js-user)) ,canonical-name)))))
 
 (defmacro with-asserted-types ((&rest type-pairs) &body body)
   `(let (,@(mapcar (lambda (pair)
-		     `(,(first pair) (js-funcall ,(ctor (second pair)) ,(first pair))))
+		     `(,(first pair) (js-funcall
+				      ,(ctor (second pair)) ,(first pair))))
 		   type-pairs))
      ;;todo: type declarations
      ,@body))
@@ -129,6 +139,31 @@
 (define-js-method string toLowerCase (str)
   (string-downcase str))
 
+
+;;;
+(defparameter array.ctor
+  (js-function ()
+    (let* ((len (js::arg-length (!arguments)))
+	   (arr (make-array len
+			    :initial-contents
+			    (loop for i from 0 below len
+			       collect (sub (!arguments) i)))))
+      (set-default js-user::this arr) ;;todo ... one of those two 
+                                      ;;      calls is unnecessary
+      (make-instance 'native-hash :value arr))))
+
+(defparameter array.prototype (js::!new js::array.ctor ()))
+
+(setf (prop array.ctor 'js-user::prototype) array.prototype)
+(shadow 'js-user::Array 'js-user) ;;todo: ...
+(setf (prop *global* 'js-user::Array) array.ctor)
+
+(add-sealed-property array.prototype
+		     'js-user::length
+		     (lambda (obj) (length (value obj))))
+
+(add-sealed-property array.ctor 'js-user::length (constantly 1))
+;;not sure what is the meaning of that property. recheck the spec
 
 #|
 ;;test ...

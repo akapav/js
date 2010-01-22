@@ -147,14 +147,18 @@
 
 (defmacro !toplevel (toplevel-vars lex-chain form)
   `(macrolet ((!arguments () 'arguments)
-	      (!name (name) (macroexpand `(lookup-in-lexchain ,name ,',lex-chain)))
-	      (!setf-name (name val) (macroexpand `(set-in-lexchain ,name ,val ,',lex-chain))))
+	      (!name (name)
+		(macroexpand `(lookup-in-lexchain ,name ,',lex-chain)))
+	      (!setf-name (name val)
+		(macroexpand `(set-in-lexchain ,name ,val ,',lex-chain))))
      (with-ignored-style-warnings
 	 (let* ((*object-env-stack* (cons *global* *object-env-stack*))
 		(-object-env-stack- *object-env-stack*))
-	   (progn ,@(mapcar (lambda (var)
-			      `(setf (prop *global* ',var)
-				     (prop *global* ',var))) (cons 'arguments toplevel-vars)))
+	   (progn
+	     ,@(mapcar (lambda (var)
+			 `(setf (prop *global* ',var)
+				(prop *global* ',var)))
+		       (cons 'arguments toplevel-vars)))
 	   (progn ,@form)))))
 
 (defmacro !dot (obj attr)
@@ -188,8 +192,13 @@
 (defmacro !object (props)
   (let ((obj (gensym)))
     `(let ((,obj (make-instance 'native-hash)))
-       ,@(mapcar (lambda (*prop) `(setf (sub ,obj ,(first *prop)) ,(second *prop))) props)
+       ,@(mapcar (lambda (*prop)
+		   `(setf (sub ,obj ,(first *prop)) ,(second *prop)))
+		 props)
        ,obj)))
+
+(defmacro !array (elems)
+  `(!new array.ctor ,elems))
 
 (defmacro !stat (form)
   `(progn ,form))
@@ -236,9 +245,14 @@
 (defmacro !lambda (lex-chain args locals body)
   (let* ((additional-args (gensym))
 	 (blockname (gensym)))
-    `(macrolet ((!arguments () `(or js-user::arguments (setf js-user::arguments (make-args ,',args ,',additional-args))))
-		(!name (name) (macroexpand `(lookup-in-lexchain ,name ,',lex-chain)))
-		(!setf-name (name val) (macroexpand `(set-in-lexchain ,name ,val ,',lex-chain)))
+    `(macrolet ((!arguments ()
+		  `(or js-user::arguments
+		       (setf js-user::arguments
+			     (make-args ,',args ,',additional-args))))
+		(!name (name)
+		  (macroexpand `(lookup-in-lexchain ,name ,',lex-chain)))
+		(!setf-name (name val)
+		  (macroexpand `(set-in-lexchain ,name ,val ,',lex-chain)))
 		(!defun (lex-chain name args locals body)
 		  `(setf ,name (!function ,lex-chain ,name ,args ,locals ,body)))
 		(!return (ret) `,`(return-from ,',blockname ,(or ret :undefined))))
@@ -270,8 +284,10 @@
 (defmacro !with (lex-chain obj body)
   `(let* ((*object-env-stack* (cons ,obj *object-env-stack*))
 	  (-object-env-stack- *object-env-stack*))
-     (macrolet ((!name (name) (macroexpand `(lookup-in-lexchain ,name ,',lex-chain)))
-		(!setf-name (name val) (macroexpand `(set-in-lexchain ,name ,val ,',lex-chain))))
+     (macrolet ((!name (name)
+		  (macroexpand `(lookup-in-lexchain ,name ,',lex-chain)))
+		(!setf-name (name val)
+		  (macroexpand `(set-in-lexchain ,name ,val ,',lex-chain))))
        ,body)))
 
 (defmacro js-operators (&rest ops)
@@ -279,7 +295,8 @@
      ,@(mapcar (lambda (op)
 		 (if (symbolp op)
 		     `(setf (symbol-function ',(js-intern op)) (function ,op))
-		     `(setf (symbol-function ',(js-intern (first op))) (function ,(second op)))))
+		     `(setf (symbol-function ',(js-intern (first op)))
+			    (function ,(second op)))))
 	       ops)))
 
 ;;;;;;;;
@@ -354,9 +371,14 @@
   `(unwind-protect
 	(handler-case ,body
 	  (t (,var)
-	     (macrolet ((!name (name) (macroexpand `(lookup-in-lexchain ,name ,',lex-chain)))
-			(!setf-name (name val) (macroexpand `(set-in-lexchain ,name ,val ,',lex-chain)))
-			#+nil (!defun (lex-chain name args locals body) (error "don't know how to build defun in catch block")))
+	     (macrolet ((!name (name)
+			  (macroexpand
+			   `(lookup-in-lexchain ,name ,',lex-chain)))
+			(!setf-name (name val)
+			  (macroexpand
+			   `(set-in-lexchain ,name ,val ,',lex-chain)))
+			#+nil (!defun (lex-chain name args locals body)
+				(error "can't build defun in catch block")))
 	       ,catch)))
      ,finally))
 
@@ -373,41 +395,51 @@
 ;;;
 
 (defclass arguments (native-hash)
-  ((len :initarg :len :reader len)
+  ((vlen :initarg :vlen :reader vlen)
+   (length :initarg :length :reader arg-length)
    (get-arr :initarg :get-arr :reader get-arr)
    (set-arr :initarg :set-arr :reader set-arr)))
 
 (defmethod sub ((args arguments) key)
   (if (and (integerp key) (>= key 0))
-      (if (< key (len args)) (funcall (aref (get-arr args) key) key)
-	  (funcall (aref (get-arr args) (len args)) key))
+      (if (< key (vlen args)) (funcall (aref (get-arr args) key) key)
+	  (funcall (aref (get-arr args) (vlen args)) key))
       (call-next-method args key)))
 
 (defmethod (setf sub) (val (args arguments) key)
   (if (and (integerp key) (>= key 0))
-      (if (< key (len args)) (funcall (aref (set-arr args) key) key val)
-	  (funcall (aref (set-arr args) (len args)) key val))
+      (if (< key (vlen args)) (funcall (aref (set-arr args) key) key val)
+	  (funcall (aref (set-arr args) (vlen args)) key val))
       (call-next-method val args key)))
 
 (defmacro make-args (vars oth)
   (let ((get-arr (gensym))
 	(set-arr (gensym))
 	(len (length vars)))
-    `(let ((,get-arr (make-array ,(1+ len)
-				 :element-type 'function
-				 :initial-contents (list
-						    ,@(mapcar (lambda (var)
-								`(lambda (n) (declare (ignore n)) ,var))
-							      vars)
-						    (lambda (n) (nth (- n ,len) ,oth)))))
-	   (,set-arr (make-array ,(1+ len)
-				 :element-type 'function
-				 :initial-contents (list
-						    ,@(mapcar (lambda (var)
-								`(lambda (n val) (declare (ignore n)) (setf ,var val)))
-							      vars)
-						    (lambda (n val) (setf (nth (- n ,len) ,oth) val))))))
-       (make-instance 'arguments :len ,len :get-arr ,get-arr :set-arr ,set-arr))))
+    `(let ((,get-arr
+	    (make-array ,(1+ len)
+			:element-type 'function
+			:initial-contents
+			(list
+			 ,@(mapcar (lambda (var)
+				     `(lambda (n) (declare (ignore n)) ,var))
+				   vars)
+			 (lambda (n) (nth (- n ,len) ,oth)))))
+	   (,set-arr
+	    (make-array ,(1+ len)
+			:element-type 'function
+			:initial-contents
+			(list
+			 ,@(mapcar (lambda (var)
+				     `(lambda (n val)
+					(declare (ignore n))
+					(setf ,var val)))
+				   vars)
+			 (lambda (n val) (setf (nth (- n ,len) ,oth) val))))))
+       (make-instance 'arguments
+		      :vlen ,len
+		      :length (+ ,len (length ,oth))
+		      :get-arr ,get-arr :set-arr ,set-arr))))
 
 ;;;
 
