@@ -9,9 +9,10 @@
        (!function nil nil ,args nil
 		  ((!return (or (progn ,@body) :undefined))))))
 
-(defun ctor (sym)
-  (intern (concatenate 'string
-		       (symbol-name sym) "." (symbol-name 'ctor))))
+(eval-when (:compile-toplevel :load-toplevel)
+  (defun ctor (sym)
+    (intern (concatenate 'string
+			 (symbol-name sym) "." (symbol-name 'ctor)))))
 
 (defmacro define-js-method (type name args &body body)
   (flet ((arg-names (args)
@@ -65,7 +66,7 @@
   (js-function (obj)
 	       (let ((str (if (stringp obj) obj (format nil "~A" obj))))
 		 (set-default js-user::this str)
-		 str)))
+		 (the string str))))
 
 (defparameter string.prototype
   (js::!new js::string.ctor ("")))
@@ -155,7 +156,8 @@
 (defparameter array.prototype (js::!new js::array.ctor ()))
 
 (setf (prop array.ctor 'js-user::prototype) array.prototype)
-(shadow 'js-user::Array 'js-user) ;;todo: ...
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (shadow 'js-user::Array 'js-user)) ;;todo: ...
 (setf (prop *global* 'js-user::Array) array.ctor)
 
 (add-sealed-property array.prototype

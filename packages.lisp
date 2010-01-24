@@ -7,6 +7,7 @@
 
 (defpackage :net.svrg.javascript
   (:nicknames :js)
+  (:shadow :array)
   (:use :cl :parse-js :net.svrg.reader-macro
 	:ptester) ;;todo: remove ptester eventually
   (:export native-hash

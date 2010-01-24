@@ -9,4 +9,6 @@
    (:file "utils")
    (:file "reader")
    (:file "proc")
-   (:file "js")))
+   (:file "js")
+   (:file "stdlib")
+   (:file "operators")))

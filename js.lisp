@@ -300,7 +300,7 @@
 	       ops)))
 
 ;;;;;;;;
-(defun plus (ls rs)
+#+nil (defun plus (ls rs)
   (declare (fixnum ls rs))
   (+ ls rs))
 
@@ -314,7 +314,7 @@
 ;;;;;;;;
 (js-operators
  ;;binary
- (+ plus) (- minus) * / (% mod)
+ #+nil (+ plus) (- minus) * / (% mod)
  (== equalp) (< less) > <= >= (!= /=)
  ;;unary
  (++ 1+) (-- 1-))
