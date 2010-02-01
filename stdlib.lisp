@@ -21,10 +21,11 @@
 	   (mapcar (lambda (arg) (if (consp arg) (second arg) :undefined)) args)))
     (let ((canonical-name
 	   (intern (concatenate 'string
-				(symbol-name type) "." (symbol-name name))))
+				(symbol-name type) "." name)))
 	  (ctor-name (ctor type))
 	  (prototype-name
 	   (intern (concatenate 'string (symbol-name type) ".PROTOTYPE")))
+	  (sym-name (intern name :js-user))
 	  (arg-names (arg-names args))
 	  (arg-defaults (arg-defaults args)))
       `(progn
@@ -37,13 +38,12 @@
 				   `(,name (if (eq ,name :undefined) ,val ,name)))
 				 (cdr arg-names) (cdr arg-defaults)))
 			  ,@body)))
-	 (defparameter ,name
+	 (defparameter ,sym-name
 	   (js-function ,(cdr arg-names)
 			(js-funcall
 			 ,canonical-name (value js-user::this) ,@(cdr arg-names))))
-	 (setf (prop ,prototype-name ',(intern (symbol-name name) :js-user)) ,name)
-	 (setf (prop ,ctor-name
-		     ',(intern (symbol-name name) :js-user)) ,canonical-name)))))
+	 (setf (prop ,prototype-name ,name) ,sym-name) ;;todo -- ...
+	 (setf (prop ,ctor-name ,name) ,canonical-name)))))
 
 (defmacro with-asserted-types ((&rest type-pairs) &body body)
   `(let (,@(mapcar (lambda (pair)
@@ -71,8 +71,8 @@
 (defparameter string.prototype
   (js::!new js::string.ctor ("")))
 
-(setf (prop string.ctor 'js-user::prototype) string.prototype)
-(setf (prop *global* 'js-user::String) string.ctor)
+(setf (prop string.ctor "prototype") string.prototype)
+(setf (prop *global* "String") string.ctor)
 
 ;;
 (defmethod prop ((str string) key &optional (default :undefined))
@@ -87,11 +87,11 @@
 ;;
 
 (add-sealed-property string.prototype
-		     'js-user::length
+		     "length"
 		     (lambda (obj) (length (value obj))))
 
 
-(add-sealed-property string.ctor 'js-user::length (constantly 1))
+(add-sealed-property string.ctor "length" (constantly 1))
 ;;not sure what is the meaning of that property. recheck the spec
 
 ;;
@@ -101,22 +101,22 @@
       (let ((n (floor n)))
 	(if (< n 0) 0 n))))
 
-(define-js-method string charAt (str (ndx 0))
+(define-js-method string "charAt" (str (ndx 0))
   (with-asserted-types ((ndx number))
     (string (aref str (clip-index ndx)))))
 
-(define-js-method string indexOf (str substr (beg 0))
+(define-js-method string "indexOf" (str substr (beg 0))
   (if (eq substr :undefined) -1
       (with-asserted-types ((substr string)
 			    (beg number))
 	(or (search substr str :start2 (clip-index beg)) -1))))
 
-(define-js-method string lastIndexOf (str substr)
+(define-js-method string "lastIndexOf" (str substr)
   (if (eq substr :undefined) -1
       (with-asserted-types ((substr string))
 	(or (search substr str :from-end t) -1))))
 
-(define-js-method string substring (str (from 0) to)
+(define-js-method string "substring" (str (from 0) to)
   (if (eq to :undefined)
       (with-asserted-types ((from number))
 	(subseq str (clip-index from)))
@@ -124,20 +124,20 @@
 			    (to number))
 	(let* ((from (clip-index from))
 	       (to (max from (clip-index to))))
-	  (subseq str from (min to (length str)))))))
+	  (subseq str from (min to (length str)))))) )
 
-(define-js-method string substr (str (from 0) to)
+(define-js-method string "substr" (str (from 0) to)
   (if (eq to :undefined)
-      (js-funcall string.substring str from)
+      (js-funcall |STRING.substring| str from)
       (with-asserted-types ((from number)
 			    (to number))
 	(let ((from (clip-index from)))
-	  (js-funcall string.substring str from (+ from (clip-index to)))))))
+	  (js-funcall |STRING.substring| str from (+ from (clip-index to)))))))
 
-(define-js-method string toUpperCase (str)
+(define-js-method string "toUpperCase" (str)
   (string-upcase str))
 
-(define-js-method string toLowerCase (str)
+(define-js-method string "toLowerCase" (str)
   (string-downcase str))
 
 
@@ -155,16 +155,18 @@
 
 (defparameter array.prototype (js::!new js::array.ctor ()))
 
-(setf (prop array.ctor 'js-user::prototype) array.prototype)
-(eval-when (:compile-toplevel :load-toplevel :execute)
-  (shadow 'js-user::Array 'js-user)) ;;todo: ...
-(setf (prop *global* 'js-user::Array) array.ctor)
+(setf (prop array.ctor "prototype") array.prototype)
+
+#+nil (eval-when (:compile-toplevel :load-toplevel :execute)
+  (shadow "Array" 'js-user)) ;;todo: ...
+
+(setf (prop *global* "Array") array.ctor)
 
 (add-sealed-property array.prototype
-		     'js-user::length
+		     "length"
 		     (lambda (obj) (length (value obj))))
 
-(add-sealed-property array.ctor 'js-user::length (constantly 1))
+(add-sealed-property array.ctor "length" (constantly 1))
 ;;not sure what is the meaning of that property. recheck the spec
 
 #|

@@ -27,9 +27,9 @@
   (cons (js-intern (car form))
 	(list (mapcar
 	       (lambda (var-desc)
-		 (let ((var-sym (->sym (car var-desc))))
+		 (let ((var-sym (car var-desc)))
 		   (set-add locals var-sym)
-		   (cons (->sym (car var-desc))
+		   (cons (car var-desc)
 			 (transform-tree (cdr var-desc)))))
 	       (second form)))))
 
@@ -69,7 +69,7 @@
 	  label)))
 
 (define-transform-rule (:try form)
-  (let* ((var (->sym (car (third form)))))
+  (let* ((var (car (third form))))
     (with-new-lexical-environment (env (list var))
       (list (js-intern (car form))
 	    env
@@ -78,10 +78,10 @@
 	    (transform-tree (cdr (third form))) ;catch body
 	    (transform-tree (fourth form)))))) ;finally block
 
-(define-transform-rule (:name form)
+#+nil (define-transform-rule (:name form)
   (list (js-intern (car form)) (->sym (second form))))
 
-(define-transform-rule (:dot form)
+#+nil (define-transform-rule (:dot form)
   (list (js-intern (car form)) (transform-tree (second form))
 	(->sym (third form))))
 
@@ -101,8 +101,8 @@
 	     (append (reverse defuns) (reverse oth)))))
     (let* (toplevel
 	   (locals (set-make))
-	   (arglist (mapcar #'->sym (third form)))
-	   (name (and (second form) (->sym (second form)))))
+	   (arglist (third form))
+	   (name (second form)))
       (declare (special locals environments lexenv-chain toplevel))
       (with-new-lexical-environment (env (list name arglist locals))
 	(let ((new-form (lift-defuns (transform-tree (fourth form)))))
@@ -114,7 +114,7 @@
 		new-form))))))
 
 (define-transform-rule (:defun form)
-  (let ((fun-name (->sym (second form))))
+  (let ((fun-name (second form)))
     (unless toplevel
       (set-add locals fun-name))
     (transform-function form)))

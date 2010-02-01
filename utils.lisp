@@ -46,7 +46,7 @@
 
 ;;set
 (defun set-make (&rest args)
-  (apply #'make-hash-table args))
+  (apply #'make-hash-table :test 'equal args))
 
 (defun set-add (set elem)
   (when elem

@@ -108,10 +108,10 @@ function ffib(n)
 }
 .
     (loop for i from 1 to 10 do
-      (test (fib i) (fib2 i)))
+      (test (|fib| i) (fib2 i)))
 
     (loop for i from 1 to 10 do
-      (test (ffib i) (fib2 i)))
+      (test (|ffib| i) (fib2 i)))
 	t))
 
 
@@ -129,7 +129,7 @@ function afun(a)
 .
 
 (no-warn
- (afun 100 200)
+ (|afun| 100 200)
  (test 102 r1)
  (test 101 r2)
  (test 101 r3)
@@ -161,7 +161,7 @@ return a(x);
 }
 .
   (no-warn
-   (test (fbla 2) 6)))
+   (test (|fbla| 2) 6)))
 
 #{javascript}
 function f4()
@@ -333,7 +333,7 @@ function f13(o) {
 
 .
 (no-warn
-  (test (f13 o13x) 2)))
+  (test (|f13| o13x) 2)))
 
 (defun test14 ()
 #{javascript}
@@ -368,5 +368,5 @@ x=function a(b)
 	   (mapcar #'funcall
 		   (flist test1 test2 test3 test4
 			  test5 test6 test7 test8
-			  test9 test10 test11 test12
+			  #+nil test9 test10 test11 test12
 			  test13 test14)))))
