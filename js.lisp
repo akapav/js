@@ -47,18 +47,14 @@
 (defgeneric sub (hash key)
   (:method (hash key) (declare (ignore hash key)) :undefined))
 
-(defun normalize-key (key) key)
-
 (defmethod sub ((hash native-hash) key)
-  (let ((key (normalize-key key)))
-    (prop hash key)))
+  (prop hash key))
 
 (defgeneric (setf sub) (val hash key)
   (:method (val hash key) (declare (ignore hash key)) val))
 
 (defmethod (setf sub) (val (hash native-hash) key)
-  (let ((key (normalize-key key)))
-    (setf (prop hash key) val)))
+  (setf (prop hash key) val))
 
 (defclass global-object (native-hash)
   ())
