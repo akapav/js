@@ -428,18 +428,3 @@
 		      :vlen ,len
 		      :length (+ ,len (length ,oth))
 		      :get-arr ,get-arr :set-arr ,set-arr))))
-
-;;;
-
-(defmacro define-js-function (name args &body body)
-  `(with-ignored-style-warnings
-     (setf (prop js-user::this ,name)
-	   (!function nil nil ,args nil
-		      ((!return (or (progn ,@body) :undefined)))))))
-
-(in-package :js-user)
-
-(define-js-function "Object" ())
-
-(define-js-function "print" (arg)
-  (format t "~A~%" arg) )

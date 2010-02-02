@@ -50,6 +50,7 @@
 		   type-pairs))
      ;;todo: type declarations
      ,@body))
+
 ;;
 (defparameter number.ctor ;;todo: set-default (same as string)
   (js-function (n)
@@ -165,6 +166,14 @@
 
 (add-sealed-property array.ctor "length" (constantly 1))
 ;;not sure what is the meaning of that property. recheck the spec
+
+;;
+(setf (prop *global* "Object")
+      (js-function (arg) arg))
+
+(setf (prop *global* "print")
+      (js-function (arg)
+	(format t "~A~%" (js-funcall string.ctor arg))))
 
 #|
 ;;test ...
