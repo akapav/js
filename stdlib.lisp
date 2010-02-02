@@ -25,7 +25,6 @@
 	  (ctor-name (ctor type))
 	  (prototype-name
 	   (intern (concatenate 'string (symbol-name type) ".PROTOTYPE")))
-	  (sym-name (->usersym name))
 	  (arg-names (arg-names args))
 	  (arg-defaults (arg-defaults args)))
       `(progn
@@ -38,11 +37,10 @@
 				   `(,name (if (eq ,name :undefined) ,val ,name)))
 				 (cdr arg-names) (cdr arg-defaults)))
 			  ,@body)))
-	 (defparameter ,sym-name
-	   (js-function ,(cdr arg-names)
-			(js-funcall
-			 ,canonical-name (value js-user::this) ,@(cdr arg-names))))
-	 (setf (prop ,prototype-name ,name) ,sym-name) ;;todo -- ...
+	 (setf (prop ,prototype-name ,name)
+	       (js-function ,(cdr arg-names)
+		 (js-funcall
+		  ,canonical-name (value js-user::this) ,@(cdr arg-names))))
 	 (setf (prop ,ctor-name ,name) ,canonical-name)))))
 
 (defmacro with-asserted-types ((&rest type-pairs) &body body)
