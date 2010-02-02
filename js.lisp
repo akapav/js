@@ -34,27 +34,18 @@
 		       (prop (prototype hash) key default))
 		  default))))))
 
-#+nil (defmethod prop ((hash native-hash) key)
-  (find-property hash key :undefined))
-
 (defgeneric (setf prop) (val hash key)
   (:method (val hash key) (declare (ignore hash key)) val))
 
 (defmethod (setf prop) (val (hash native-hash) key)
   (setf (gethash key (dict hash)) val))
 
-;;; sub: similar to prop, but key is not necessary a symbol
+;;; sub: by default same as prop
 (defgeneric sub (hash key)
-  (:method (hash key) (declare (ignore hash key)) :undefined))
-
-(defmethod sub ((hash native-hash) key)
-  (prop hash key))
+  (:method (hash key) (prop hash key)))
 
 (defgeneric (setf sub) (val hash key)
-  (:method (val hash key) (declare (ignore hash key)) val))
-
-(defmethod (setf sub) (val (hash native-hash) key)
-  (setf (prop hash key) val))
+  (:method (val hash key) (setf (prop hash key) val)))
 
 (defclass global-object (native-hash)
   ())
