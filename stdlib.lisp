@@ -6,8 +6,8 @@
 
 (defmacro js-function (args &body body)
   `(with-ignored-style-warnings
-       (!function nil nil ,args nil
-		  ((!return (or (progn ,@body) :undefined))))))
+     (!function nil nil ,args nil
+		((!return (or (progn ,@body) :undefined))))))
 
 (eval-when (:compile-toplevel :load-toplevel)
   (defun ctor (sym)
@@ -30,13 +30,13 @@
       `(progn
 	 (defparameter ,canonical-name
 	   (js-function ,arg-names
-			(let ((,(car arg-names)
-			       (js-funcall ,ctor-name ,(car arg-names)))
-			      ,@(mapcar
-				 (lambda (name val)
-				   `(,name (if (eq ,name :undefined) ,val ,name)))
-				 (cdr arg-names) (cdr arg-defaults)))
-			  ,@body)))
+	     (let ((,(car arg-names)
+		    (js-funcall ,ctor-name ,(car arg-names)))
+		   ,@(mapcar
+		      (lambda (name val)
+			`(,name (if (eq ,name :undefined) ,val ,name)))
+		      (cdr arg-names) (cdr arg-defaults)))
+	       ,@body)))
 	 (setf (prop ,prototype-name ,name)
 	       (js-function ,(cdr arg-names)
 		 (js-funcall
@@ -62,9 +62,9 @@
 ;;
 (defparameter string.ctor
   (js-function (obj)
-	       (let ((str (if (stringp obj) obj (format nil "~A" obj))))
-		 (set-default js-user::this str)
-		 (the string str))))
+    (let ((str (if (stringp obj) obj (format nil "~A" obj))))
+      (set-default js-user::this str)
+      (the string str))))
 
 (defparameter string.prototype
   (js::!new js::string.ctor ("")))
@@ -148,7 +148,7 @@
 			    (loop for i from 0 below len
 			       collect (sub (!arguments) i)))))
       (set-default js-user::this arr) ;;todo ... one of those two 
-                                      ;;      calls is unnecessary
+      ;;      calls is unnecessary
       (make-instance 'native-hash :value arr))))
 
 (defparameter array.prototype (js::!new js::array.ctor ()))

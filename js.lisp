@@ -58,7 +58,7 @@
   val)
 
 #+nil (defmethod prop ((hash global-object) key)
-  (call-next-method hash key))
+	(call-next-method hash key))
 
 (defclass native-function (native-hash)
   ((name :accessor name :initarg :name)
@@ -135,14 +135,14 @@
 	      (!setf-name (name val)
 		(macroexpand `(set-in-lexchain ,name ,val ,',lex-chain))))
      (with-ignored-style-warnings
-	 (let* ((*object-env-stack* (cons *global* *object-env-stack*))
-		(-object-env-stack- *object-env-stack*))
-	   (progn
-	     ,@(mapcar (lambda (var)
-			 `(setf (prop *global* ,var)
-				(prop *global* ,var)))
-		       (cons "arguments" toplevel-vars)))
-	   (progn ,@form)))))
+       (let* ((*object-env-stack* (cons *global* *object-env-stack*))
+	      (-object-env-stack- *object-env-stack*))
+	 (progn
+	   ,@(mapcar (lambda (var)
+		       `(setf (prop *global* ,var)
+			      (prop *global* ,var)))
+		     (cons "arguments" toplevel-vars)))
+	 (progn ,@form)))))
 
 (defmacro !dot (obj attr)
   `(prop ,obj ,attr))
@@ -288,10 +288,10 @@
 
 ;;;;;;;;
 #+nil (defun plus (ls rs)
-  (declare (fixnum ls rs))
-  (+ ls rs))
+	(declare (fixnum ls rs))
+	(+ ls rs))
 
-(defun minus (ls rs)
+#+nil (defun minus (ls rs)
   (declare (fixnum ls rs))
   (the fixnum (- ls rs)))
 
@@ -301,7 +301,7 @@
 ;;;;;;;;
 (js-operators
  ;;binary
- #+nil (+ plus) (- minus) * / (% mod)
+ #+nil (+ plus) #+nil (- minus) * / (% mod)
  (== equalp) (< less) > <= >= (!= /=)
  ;;unary
  (++ 1+) (-- 1-))
@@ -358,15 +358,15 @@
   `(unwind-protect
 	(handler-case ,body
 	  (t (,(->usersym var))
-	     (macrolet ((!name (name)
-			  (macroexpand
-			   `(lookup-in-lexchain ,name ,',lex-chain)))
-			(!setf-name (name val)
-			  (macroexpand
-			   `(set-in-lexchain ,name ,val ,',lex-chain)))
-			#+nil (!defun (lex-chain name args locals body)
-				(error "can't build defun in catch block")))
-	       ,catch)))
+	    (macrolet ((!name (name)
+			 (macroexpand
+			  `(lookup-in-lexchain ,name ,',lex-chain)))
+		       (!setf-name (name val)
+			 (macroexpand
+			  `(set-in-lexchain ,name ,val ,',lex-chain)))
+		       #+nil (!defun (lex-chain name args locals body)
+			       (error "can't build defun in catch block")))
+	      ,catch)))
      ,finally))
 
 (defmacro !eval (str)
@@ -433,9 +433,9 @@
 
 (defmacro define-js-function (name args &body body)
   `(with-ignored-style-warnings
-       (setf (prop js-user::this ,name)
-	     (!function nil nil ,args nil
-			((!return (or (progn ,@body) :undefined)))))))
+     (setf (prop js-user::this ,name)
+	   (!function nil nil ,args nil
+		      ((!return (or (progn ,@body) :undefined)))))))
 
 (in-package :js-user)
 
