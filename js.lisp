@@ -202,7 +202,7 @@
        (declare (function ,*proc))
        (funcall ,*proc
 		,(case (car func)
-		       ((!dot) (second func))
+		       ((!sub !dot) (second func))
 		       (t js-user::this)) ,@args))))
 
 (defmacro !new (func args)
