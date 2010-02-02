@@ -29,7 +29,7 @@
 	       (lambda (var-desc)
 		 (let ((var-sym (car var-desc)))
 		   (set-add locals var-sym)
-		   (cons (car var-desc)
+		   (cons var-sym
 			 (transform-tree (cdr var-desc)))))
 	       (second form)))))
 
@@ -39,9 +39,9 @@
 		  (list (car el) (transform-tree (cdr el)))) (second form))))
 
 (defparameter *label-name* nil)
-		
+
 (define-transform-rule (:label form)
-  (let ((*label-name* (->sym (second form))))
+  (let ((*label-name* (->usersym (second form))))
     (transform-tree (third form))))
 
 (define-transform-rule (:for form)

@@ -25,7 +25,7 @@
 	  (ctor-name (ctor type))
 	  (prototype-name
 	   (intern (concatenate 'string (symbol-name type) ".PROTOTYPE")))
-	  (sym-name (intern name :js-user))
+	  (sym-name (->usersym name))
 	  (arg-names (arg-names args))
 	  (arg-defaults (arg-defaults args)))
       `(progn

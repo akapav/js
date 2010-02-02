@@ -64,7 +64,7 @@
   ())
 
 (defmethod (setf prop) (val (hash global-object) key)
-  (set (if (stringp key) (intern (string-upcase key)) key) val)
+  (set (if (stringp key) (intern (string-upcase key)) key) val);;todo:
   (call-next-method val hash key))
 
 (defmethod set-default ((hash global-object) val)
@@ -91,7 +91,7 @@
 (defmacro lookup-in-lexchain (name lexchain)
   (let ((obj (gensym))
 	(prop (gensym))
-	(name-sym (intern name :js-user)))
+	(name-sym (->usersym name)))
     (labels ((count-lookups (chain cnt) ;;todo: move count-lookups to 
 	       (cond ((not chain) (values cnt nil)) ;;common labels around both macros
 		     ((eq (car chain) :obj)
@@ -115,7 +115,7 @@
 (defmacro set-in-lexchain (name val-exp lexchain)
   (let ((obj (gensym))
 	(prop (gensym))
-	(name-sym (intern name :js-user))
+	(name-sym (->usersym name))
 	(val (gensym)))
     (labels ((count-lookups (chain cnt) ;;todo: ... look above ...
 	       (cond ((not chain) (values cnt nil))
@@ -234,9 +234,9 @@
   (error "return not in function"))
 
 (defmacro !named-lambda (name lex-chain args locals body)
-  `(let (,(intern name :js-user))
-     (setf ,(intern name :js-user) (!function ,lex-chain nil ,args ,locals ,body))
-     (proc ,(intern name :js-user))))
+  `(let (,(->usersym name))
+     (setf ,(->usersym name) (!function ,lex-chain nil ,args ,locals ,body))
+     (proc ,(->usersym name))))
 
 (defmacro !lambda (lex-chain args locals body)
   (let* ((additional-args (gensym))
@@ -250,15 +250,17 @@
 		(!setf-name (name val)
 		  (macroexpand `(set-in-lexchain ,name ,val ,',lex-chain)))
 		(!defun (lex-chain name args locals body)
-		  `(setf ,(intern name :js-user) (!function ,lex-chain ,name ,args ,locals ,body)))
+		  `(setf ,(->usersym name)
+			 (!function ,lex-chain ,name ,args ,locals ,body)))
 		(!return (ret) `,`(return-from ,',blockname ,(or ret :undefined))))
        (let ((-object-env-stack- *object-env-stack*))
 	 (lambda (js-user::this
-		  &optional ,@(mapcar (lambda (arg) `(,(if (symbolp arg) arg (intern arg :js-user)) :undefined)) args)
+		  &optional ,@(mapcar (lambda (arg)
+					`(,(->usersym arg) :undefined)) args)
 		  &rest ,additional-args)
 	   (let (js-user::arguments)
 	     (let (,@(mapcar (lambda (var)
-			       (list (intern var :js-user) :undefined)) locals))
+			       (list (->usersym var) :undefined)) locals))
 	       (block ,blockname ,@body :undefined))))))))
 
 (defmacro !function (lex-chain name args locals body)
@@ -274,7 +276,7 @@
 	(func (gensym)))
     `(let ((,func (!function ,lex-chain ,name ,args ,locals ,body)))
        (setf (prop js-user::this ,name) ,func)
-       (defun ,(intern name :js-user) (&rest ,args2)
+       (defun ,(->usersym name) (&rest ,args2)
 	 (apply (proc ,func) js-user::this ,args2)))))
 
 (defmacro !with (lex-chain obj body)
@@ -336,9 +338,9 @@
 (defmacro !do (cond body label)
   (let ((lbl (or label (gensym))))
     `(macrolet ((!break (named-lbl)
-		  `,`(return-from ,(or (->sym named-lbl) ',lbl)))
+		  `,`(return-from ,(or (->usersym named-lbl) ',lbl)))
 		(!continue (named-lbl)
-		  `,`(go ,(or (->sym named-lbl) ',lbl))))
+		  `,`(go ,(or (->usersym named-lbl) ',lbl))))
        (block ,lbl
 	 (tagbody ,lbl
 	    (progn ,body
@@ -350,9 +352,9 @@
 	(execute-step (gensym))
 	(cond (or cond t))) ;;when for(init;;step) ...
     `(macrolet ((!break (named-lbl)
-		  `,`(return-from ,(or (->sym named-lbl) ',lbl)))
+		  `,`(return-from ,(or (->usersym named-lbl) ',lbl)))
 		(!continue (named-lbl)
-		  `,`(go ,(or (->sym named-lbl) ',lbl))))
+		  `,`(go ,(or (->usersym named-lbl) ',lbl))))
        (block ,lbl
 	 (let (,execute-step)
 	   ,init
@@ -366,7 +368,7 @@
 (defmacro !try (lex-chain body var catch finally)
   `(unwind-protect
 	(handler-case ,body
-	  (t (,(intern var :js-user))
+	  (t (,(->usersym var))
 	     (macrolet ((!name (name)
 			  (macroexpand
 			   `(lookup-in-lexchain ,name ,',lex-chain)))
@@ -409,7 +411,7 @@
       (call-next-method val args key)))
 
 (defmacro make-args (var-names oth)
-  (let* ((vars (mapcar (lambda (var) (intern var :js-user)) var-names))
+  (let* ((vars (mapcar (lambda (var) (->usersym var)) var-names))
 	 (get-arr (gensym))
 	 (set-arr (gensym))
 	 (len (length vars)))
@@ -451,4 +453,4 @@
 (define-js-function "Object" ())
 
 (define-js-function "print" (arg)
-  (format t "~A~%" arg))
+  (format t "~A~%" arg) )

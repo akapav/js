@@ -1,6 +1,12 @@
 (in-package :js)
 
-(defun ->sym (str)
+(defun ->usersym (obj)
+  (typecase obj
+    (symbol obj)
+    (string (intern obj :js-user))
+    (t (error "invalid variable identifier"))))
+
+#+mil (defun ->sym (str)
   (intern (string-upcase str) :js-user))
 
 (defun js-intern (sym)
