@@ -157,9 +157,8 @@
 
 (setf (prop array.ctor "prototype") array.prototype)
 
-#+nil (eval-when (:compile-toplevel :load-toplevel :execute)
-  (shadow "Array" 'js-user)) ;;todo: ...
-
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (shadow 'Array 'js-user)) ;;todo: ...
 (setf (prop *global* "Array") array.ctor)
 
 (add-sealed-property array.prototype

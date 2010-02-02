@@ -64,7 +64,7 @@
   ())
 
 (defmethod (setf prop) (val (hash global-object) key)
-  (set (if (stringp key) (intern (string-upcase key)) key) val);;todo:
+  (set (if (stringp key) (intern (string-upcase key) :js-user) key) val);;todo:
   (call-next-method val hash key))
 
 (defmethod set-default ((hash global-object) val)
@@ -276,7 +276,9 @@
 	(func (gensym)))
     `(let ((,func (!function ,lex-chain ,name ,args ,locals ,body)))
        (setf (prop js-user::this ,name) ,func)
-       (defun ,(->usersym name) (&rest ,args2)
+       ;;; intentional violating -- all global functions are case
+       ;;; insensitive for easier usage from lisp
+       (defun ,(intern (string-upcase name) :js-user) (&rest ,args2)
 	 (apply (proc ,func) js-user::this ,args2)))))
 
 (defmacro !with (lex-chain obj body)
