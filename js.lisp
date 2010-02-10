@@ -373,6 +373,9 @@
   (process-ast (parse-js-string str)))
 
 ;;;
+(defun js-load-file (fname)
+  (with-open-file (str fname)
+    (eval (process-ast (parse-js str)))))
 
 (defun js-reader (stream)
   `(!eval ,(read-line-stream stream)))
