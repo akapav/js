@@ -81,7 +81,8 @@
 	(funcall action str)
 	(prop string.prototype key default))))
 
-(defmethod value ((str string)) str)
+;(defmethod value ((str string)) str)
+(defmethod value ((v t)) v)
 
 ;;
 
@@ -140,6 +141,12 @@
   (string-downcase str))
 
 
+;;; todo: array differs from string (according to spidermonkey) in
+;;; respect of calling constructor without operator new. string
+;;; returns a new basic string instead of an object, but arrays behave
+;;; like there is no difference whether the ctor is invoked with or
+;;; without new. our current implementation implements array to behave
+;;; like string. recheck the spec
 ;;;
 (defparameter array.ctor
   (js-function ()
@@ -148,9 +155,8 @@
 			    :initial-contents
 			    (loop for i from 0 below len
 			       collect (sub (!arguments) i)))))
-      (set-default js-user::this arr) ;;todo ... one of those two 
-      ;;      calls is unnecessary
-      (make-instance 'native-hash :value arr))))
+      (set-default js-user::this arr)
+      arr)))
 
 (defparameter array.prototype (js::!new js::array.ctor ()))
 
@@ -167,6 +173,26 @@
 (add-sealed-property array.ctor "length" (constantly 1))
 ;;not sure what is the meaning of that property. recheck the spec
 
+
+(defparameter |ARRAY.concat|
+  (js-function ()
+    (let* ((len (arg-length (!arguments)))
+	   (arr (apply #'concatenate 'list
+		       (loop for i from 0 below len
+			  collect
+			    (let* ((arg (sub (!arguments) i))
+				   (val (value arg)))
+			      (if (typep val 'simple-array)
+				  val
+				  (js-funcall array.ctor arg)))))))
+      (apply #'js-new array.ctor arr))))
+
+(setf (prop array.prototype "concat")
+	(js-function ()
+	  (js-funcall |ARRAY.concat| (value net.svrg.js-user::this))))
+
+(setf (prop array.ctor "concat") |ARRAY.concat|)
+  
 ;;
 (setf (prop *global* "Object")
       (js-function (arg) arg))
