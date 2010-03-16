@@ -68,7 +68,7 @@
       (the string str))))
 
 (defparameter string.prototype
-  (js::!new js::string.ctor ("")))
+  (js-new js::string.ctor '("") 'native-hash))
 
 (setf (prop string.ctor "prototype") string.prototype)
 (setf (prop *global* "String") string.ctor)
@@ -124,7 +124,7 @@
 			    (to number))
 	(let* ((from (clip-index from))
 	       (to (max from (clip-index to))))
-	  (subseq str from (min to (length str)))))) )
+	  (subseq str from (min to (length str)))))))
 
 (define-js-method string "substr" (str (from 0) to)
   (if (eq to :undefined)
@@ -152,13 +152,14 @@
   (js-function ()
     (let* ((len (js::arg-length (!arguments)))
 	   (arr (make-array len
+			    :fill-pointer len
 			    :initial-contents
 			    (loop for i from 0 below len
 			       collect (sub (!arguments) i)))))
       (set-default js-user::this arr)
       arr)))
 
-(defparameter array.prototype (js::!new js::array.ctor ()))
+(defparameter array.prototype (js-new js::array.ctor () 'native-hash));;!!!
 
 (setf (prop array.ctor "prototype") array.prototype)
 
@@ -174,6 +175,8 @@
 ;;not sure what is the meaning of that property. recheck the spec
 
 
+;; concat can't use standard define-js-method macro because it takes
+;; variable number of arguments
 (defparameter |ARRAY.concat|
   (js-function ()
     (let* ((len (arg-length (!arguments)))
@@ -182,17 +185,100 @@
 			  collect
 			    (let* ((arg (sub (!arguments) i))
 				   (val (value arg)))
-			      (if (typep val 'simple-array)
+			      (if (typep val 'vector)
 				  val
 				  (js-funcall array.ctor arg)))))))
-      (apply #'js-new array.ctor arr))))
+      (js-new array.ctor arr))))
 
 (setf (prop array.prototype "concat")
 	(js-function ()
 	  (js-funcall |ARRAY.concat| (value net.svrg.js-user::this))))
 
 (setf (prop array.ctor "concat") |ARRAY.concat|)
-  
+
+#+nil (define-js-method array "join" (str)
+  (with-asserted-types ((str string))))
+
+(defun nthcdr+ (n list)
+  (loop for i from 0 to n
+     for l = list then (cdr l)
+     for coll = (list (car l)) then (cons (car l) coll)
+     while l
+     finally (return (values l (reverse (cdr coll))))))
+
+(defun vector-splice (v ndx elements-to-remove &rest insert)
+  (let* ((elems (coerce v 'list))
+	 (len (length v))
+	 (insert (copy-list insert))
+	 (removed
+	  (cond ((>= ndx len) (nconc elems insert) nil)
+		((zerop ndx)
+		 (multiple-value-bind (elems- removed)
+		     (nthcdr+ elements-to-remove elems)
+		   (setf elems (append insert elems-))
+		   removed))
+		(t
+		 (let ((c1 (nthcdr (1- ndx) elems)))
+		   (multiple-value-bind (c2 removed)
+		       (nthcdr+ (1+ elements-to-remove) c1)
+		     (setf (cdr c1) insert)
+		     (if insert
+			 (let ((c3 (last insert)))
+			   (setf (cdr c3) c2))
+			 (setf (cdr c1) c2))
+		     (cdr removed)))))))
+    (let ((len (length elems)))
+      (adjust-array v len
+		    :fill-pointer len
+		    :initial-contents elems))
+    removed))
+
+(defun apply-splicing (arr ndx howmany arguments)
+  (let ((arguments (loop for i from 3 below (arg-length arguments)
+		      collecting (sub arguments i))))
+    (js-new array.ctor
+	    (apply #'vector-splice arr ndx howmany arguments) 'native-hash)))
+
+(defparameter |ARRAY.splice|
+  (js-function (arr ndx howmany)
+    (let ((arr (value (if (typep (value arr) 'vector) arr
+			  (js-funcall array.ctor arr)))))
+      (cond ((and (eq ndx :undefined) (eq howmany :undefined))
+	     (apply-splicing arr 0 0 (!arguments)))
+	    ((eq ndx :undefined)
+	     (with-asserted-types ((howmany number))
+	       (apply-splicing arr 0 howmany (!arguments))))
+	    ((eq howmany :undefined)
+	     (with-asserted-types ((ndx number))
+	       (apply-splicing arr ndx (length arr) (!arguments))))
+	    (t (with-asserted-types ((ndx number)
+				     (howmany number))
+		 (apply-splicing arr ndx howmany (!arguments))))))))
+
+(setf (prop array.prototype "splice")
+      (js-function () ;;;missing arguments!
+	(format t "splice with: ~A~%" (value net.svrg.js-user::this))
+	(js-funcall |ARRAY.splice| net.svrg.js-user::this)))
+
+(setf (prop array.ctor "splice") |ARRAY.splice|)
+
+(defun test-splice (ndx elems &rest insert)
+  (let ((v (make-array 3 :fill-pointer 3 :initial-contents '(1 2 3))))
+    (values (apply #'vector-splice v ndx elems insert) v)))
+
+
+(test-splice 0 0)
+(test-splice 0 0 100 200)
+(test-splice 1 1000)
+(test-splice 0 1)
+(test-splice 0 2 10 11 12)
+(test-splice 0 3 10 11 12)
+(test-splice 2 2)
+(test-splice 2 2 10 12)
+(test-splice 1 1 10 12)
+(test-splice 100 100 10 12)
+(test-splice 1 1 7 8 9)
+
 ;;
 (setf (prop *global* "Object")
       (js-function (arg) arg))

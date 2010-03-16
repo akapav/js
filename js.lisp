@@ -205,9 +205,9 @@
 		       ((!sub !dot) (second func))
 		       (t js-user::this)) ,@args))))
 
-(defun js-new (func &rest args)
+(defun js-new (func args class)
   (let* ((proto (prop func "prototype"))
-	 (ret (make-instance 'native-hash
+	 (ret (make-instance class
 			     :prototype proto
 			     :sealed (sealed proto))))
     (apply (proc func) ret args)
@@ -215,7 +215,7 @@
     ret))
 
 (defmacro !new (func args)
-  `(js-new ,func ,@args))
+  `(js-new ,func ,args 'native-hash))
 
 (defmacro !return (ret)
   (declare (ignore ret))
