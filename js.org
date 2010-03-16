@@ -1,26 +1,72 @@
 * DONE move program specific symbols to js-user package
+
 ** check what is the status of automatically generated operators
+
 ** cleanup exports of net.svrg.js package and try to seal it
+
 * DONE implement try/catch
+
 ** TODO check what is the valid semantics of defun within a catch block
+
 * TODO standard js runtime
+
 ** TODO builtin classes
+it is still unclear what is the proper behavior when constructors are
+invoked without new. at the moment the only way to distinct whether
+function is invoked from within new expression is to check the value
+of this. if this equals global object most likely constructor is
+invoked as a plain function
+
+*** TODO Object
+
+**** TODO new Object(val) -> val
+
+*** DONE String
+
+**** split is not implemented ... will be added after implementation of Array
+
+*** TODO Array
+
+**** sill open questions regarding the semantics of constructor
+
+**** add methods
+
+*** TODO Number
+
 ** TODO correct operator behavior
+few arithmetic operator added. most is still missing
+
 * TODO split js.lisp into smaller logical units
+
 * TODO better integration with common lisp
-** TODO automatically promote symbols from js-user to *global* object
+
+** DONE automatically promote symbols from js-user to *global* object
+think about case sensitivity
+
 ** TODO macros for defining hosting environment
+
 ** TODO easier callback to lisp
+
 * TODO redesign tests in the same way as namos have
+
 ** TODO think of common system to share code between systems
+
 * TODO speed up the compilation phase
+
 * when ready, run real benchmarks from language shootout
 
 * TODO project promotion
+
 ** TODO web site
+
 *** think of using org-mode form web publishing
+
 *** github/common-lisp.net (think about)
+
 ** TODO going public
+
 *** cliki.net
+
 ** TODO documentation
+
 ** TODO presentations
