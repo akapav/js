@@ -252,8 +252,12 @@
 			       (list (->usersym var) :undefined)) locals))
 	       (block ,blockname ,@body :undefined))))))))
 
+;;todo: adhoc solution -- Function object should be added
+(defparameter function.prototype (make-instance 'native-hash))
+
 (defmacro !function (lex-chain name args locals body)
   `(make-instance 'native-function
+		  :prototype function.prototype
 		  :name ,name
 		  :proc ,(if name
 			     `(!named-lambda ,name ,lex-chain ,args ,locals ,body)

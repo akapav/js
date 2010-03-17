@@ -52,6 +52,40 @@
      ,@body))
 
 ;;
+#+nil (defparameter function.prototype (js-new (js-function ()) () 'native-hash))
+
+;; infrastructure for Function constructor
+(defun new-function (&rest args) ;;due to parser error it is
+				 ;;impossible to use anonymous
+				 ;;function as a atandalone expression
+				 ;;so we propagate it via identity
+				 ;;lambda
+  (eval
+   (process-ast
+    (parse-js-string
+     (format nil "(function(val) {return val;})(function (~{~a~^, ~}) {~A});"
+	     (butlast args) (car (last args)))))))
+
+(defparameter |FUNCTION.call|
+  (js-function (func context)
+    (let ((arguments (loop for i from 2 below (arg-length (!arguments))
+			collecting (sub (!arguments) i))))
+      (format t "~A ~A~%" context arguments)
+      (apply (proc func) context arguments))))
+
+(setf (prop function.prototype "call")
+      (js-function (context)
+	(let ((arguments (loop for i from 1 below (arg-length (!arguments))
+			    collecting (sub (!arguments) i))))
+	  (apply #'js-funcall |FUNCTION.call| js-user::this context arguments))))
+
+#+nil (setf (prop function.prototype "apply")
+      (js-function (context args)
+	(let ((arguments (loop for i from 1 below (arg-length (!arguments))
+			    collecting (sub (!arguments) i))))
+	  (apply #'js-funcall |FUNCTION.call| js-user::this context arguments))))
+
+;;
 (defparameter number.ctor ;;todo: set-default (same as string)
   (js-function (n)
     (cond ((numberp n) n)
