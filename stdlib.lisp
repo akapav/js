@@ -126,6 +126,7 @@
 	       (to (max from (clip-index to))))
 	  (subseq str from (min to (length str)))))))
 
+;todo: maybe rewrite it to javascript (see Array.shift)
 (define-js-method string "substr" (str (from 0) to)
   (if (eq to :undefined)
       (js-funcall |STRING.substring| str from)
@@ -140,6 +141,20 @@
 (define-js-method string "toLowerCase" (str)
   (string-downcase str))
 
+(defun string-split (str delim)
+  (let ((step (length delim)))
+    (if (zerop step) (list str)
+	(loop for beg = 0 then (+ pos step)
+	   for pos = (search delim str) then (search delim str :start2 (+ pos step))
+	   collecting (subseq str beg pos)
+	   while pos))))
+
+(define-js-method string "split" (str delimiter)
+  (with-asserted-types ((str string)
+			(delimiter string))
+    (declare (special array.ctor))
+    (js-new array.ctor (string-split str delimiter) 'array-object)))
+  
 
 ;;; todo: array differs from string (according to spidermonkey) in
 ;;; respect of calling constructor without operator new. string
@@ -148,6 +163,20 @@
 ;;; without new. our current implementation implements array to behave
 ;;; like string. recheck the spec
 ;;;
+
+(defclass array-object (native-hash)
+  ())
+
+(defmethod prop ((arr array-object) key &optional (default :undefined))
+  (if (integerp key) ;;todo: safe conversion to integer and boundary check
+      (aref (value arr) key)
+      (call-next-method arr key default)))
+
+(defmethod (setf prop) (val (arr array-object) key)
+  (if (integerp key) ;;todo: ... as above ...
+      (setf (aref (value arr) key) val)
+      (call-next-method val arr key)))
+
 (defparameter array.ctor
   (js-function ()
     (let* ((len (js::arg-length (!arguments)))
@@ -159,7 +188,7 @@
       (set-default js-user::this arr)
       arr)))
 
-(defparameter array.prototype (js-new js::array.ctor () 'native-hash));;!!!
+(defparameter array.prototype (js-new js::array.ctor () 'array-object))
 
 (setf (prop array.ctor "prototype") array.prototype)
 
@@ -188,7 +217,7 @@
 			      (if (typep val 'vector)
 				  val
 				  (js-funcall array.ctor arg)))))))
-      (js-new array.ctor arr))))
+      (js-new array.ctor arr 'array-object))))
 
 (setf (prop array.prototype "concat")
 	(js-function ()
@@ -198,6 +227,11 @@
 
 #+nil (define-js-method array "join" (str)
   (with-asserted-types ((str string))))
+
+(defmacro with-asserted-array ((var) &body body)
+  `(let ((,var (value (if (typep (value ,var) 'vector) ,var
+			  (js-funcall array.ctor ,var)))))
+     ,@body))
 
 (defun nthcdr+ (n list)
   (loop for i from 0 to n
@@ -237,12 +271,11 @@
   (let ((arguments (loop for i from 3 below (arg-length arguments)
 		      collecting (sub arguments i))))
     (js-new array.ctor
-	    (apply #'vector-splice arr ndx howmany arguments) 'native-hash)))
+	    (apply #'vector-splice arr ndx howmany arguments) 'array-object)))
 
 (defparameter |ARRAY.splice|
   (js-function (arr ndx howmany)
-    (let ((arr (value (if (typep (value arr) 'vector) arr
-			  (js-funcall array.ctor arr)))))
+    (with-asserted-array (arr)
       (cond ((and (eq ndx :undefined) (eq howmany :undefined))
 	     (apply-splicing arr 0 0 (!arguments)))
 	    ((eq ndx :undefined)
@@ -256,12 +289,33 @@
 		 (apply-splicing arr ndx howmany (!arguments))))))))
 
 (setf (prop array.prototype "splice")
-      (js-function () ;;;missing arguments!
-	(format t "splice with: ~A~%" (value net.svrg.js-user::this))
-	(js-funcall |ARRAY.splice| net.svrg.js-user::this)))
+      (js-function ()
+	(let ((arguments (loop for i from 0 below (arg-length (!arguments))
+			    collecting (sub (!arguments) i))))
+	  (apply #'js-funcall |ARRAY.splice| net.svrg.js-user::this arguments))))
 
 (setf (prop array.ctor "splice") |ARRAY.splice|)
 
+#| todo: fix eval-whens
+#{javascript}
+Array.shift = function(arr) {if(arr.length > 0) return  arr.splice(0,1)[0];}
+Array.prototype.shift = function() {return Array.shift(this);}
+.
+|#
+
+(defparameter |ARRAY.pop|
+  (js-function (arr)
+    (with-asserted-array (arr)
+      (unless (zerop (length arr))
+	(vector-pop arr)))))
+
+(setf (prop array.prototype "pop")
+      (js-function ()
+	(js-funcall |ARRAY.pop| net.svrg.js-user::this)))
+
+(setf (prop array.ctor "pop") |ARRAY.pop|)
+
+;
 (defun test-splice (ndx elems &rest insert)
   (let ((v (make-array 3 :fill-pointer 3 :initial-contents '(1 2 3))))
     (values (apply #'vector-splice v ndx elems insert) v)))

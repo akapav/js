@@ -170,6 +170,7 @@
        ,ret)))
 
 (defmacro !num (num) num)
+
 (defmacro !string (str) str)
 
 (defmacro !object (props)
@@ -181,7 +182,7 @@
        ,obj)))
 
 (defmacro !array (elems)
-  `(!new array.ctor ,elems))
+  `(js-new array.ctor (list ,@elems) 'array-object))
 
 (defmacro !stat (form)
   `(progn ,form))
@@ -214,8 +215,8 @@
     (setf (prop ret "constructor") func)
     ret))
 
-(defmacro !new (func args)
-  `(js-new ,func ,args 'native-hash))
+(defmacro !new (func &rest args)
+  `(js-new ,func (list ,@args) 'native-hash))
 
 (defmacro !return (ret)
   (declare (ignore ret))
