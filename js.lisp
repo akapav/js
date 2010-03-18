@@ -187,7 +187,7 @@
 (defmacro !stat (form)
   `(progn ,form))
 
-(defmacro !block (form)
+(defmacro !block (&optional form)
   `(progn ,@form))
 
 (defmacro !var (vars)
