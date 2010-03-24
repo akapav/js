@@ -96,7 +96,7 @@
   (flet ((lift-defuns (form)
 	   (let (defuns oth)
 	     (loop for el in form do
-		  (if (eq (car el) :defun) (push el defuns)
+		  (if (eq (car el) '!defun) (push el defuns)
 		      (push el oth)))
 	     (append (reverse defuns) (reverse oth)))))
     (let* (toplevel
