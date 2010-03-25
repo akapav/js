@@ -96,6 +96,7 @@
       (cond
 	((string-equal name "this") 'js-user::this) ;this is always bound
 	((string-equal name "arguments") '(!arguments))
+	((string-equal name "eval") '(!evalx))
 	(t (multiple-value-bind (n found) (count-lookups lexchain 0)
 	     `(,@(build-tree n found))))))))
 
@@ -227,6 +228,35 @@
      (setf ,(->usersym name) (!function ,lex-chain nil ,args ,locals ,body))
      (proc ,(->usersym name))))
 
+(defmacro lexenv (lex-chain)
+  (let* ((vars `(,@(apply #'append
+		      (mapcar (lambda (el)
+				(when (listp el)
+				  (mapcar #'->usersym el))) lex-chain))))
+	 (binds `(,@(mapcar (lambda (var) `(list ',var ,var)) vars))))
+    `(list ,@binds)))
+
+(eval (js::eval-in-lexenv (("A1" "A2" "A3")) (+ A1 A2 A3)))
+
+(defmacro eval-in-lexenv (lex-chain form)
+  (let* ((vars `(,@(apply #'append
+			  (mapcar (lambda (el)
+				    (when (listp el)
+				      (mapcar #'->usersym el))) lex-chain))))
+	 (binds `(,@(mapcar (lambda (var) `(list ',var ,var)) vars))))
+    `(cons 'let (list (list ,@binds) ',form) )))
+	 
+;;ok
+(!eval "(function a(b,c){var x2=555; g(1,2); function g(x,y) {with({}) eval();};})(100,103);")
+
+(defmacro lexenv2 (lex-chain)
+  (let* ((vars `(,@(apply #'append
+		      (mapcar (lambda (el)
+				(when (listp el)
+				  (mapcar #'->usersym el))) lex-chain))))
+	 (binds `(,@(mapcar (lambda (var) `(list ',var ,var)) vars))))
+    `(list ,@binds)))
+
 (defmacro !lambda (lex-chain args locals body)
   (let* ((additional-args (gensym))
 	 (blockname (gensym)))
@@ -234,6 +264,10 @@
 		  `(or js-user::arguments
 		       (setf js-user::arguments
 			     (make-args ,',args ,',additional-args))))
+		(!evalx ()
+		  `(!function nil nil nil nil
+			      ((format t "lex-chain: ~A~%"
+				       (lexenv ,',lex-chain)))))
 		(!name (name)
 		  (macroexpand `(lookup-in-lexchain ,name ,',lex-chain)))
 		(!setf-name (name val)
