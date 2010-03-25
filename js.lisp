@@ -228,16 +228,6 @@
      (setf ,(->usersym name) (!function ,lex-chain nil ,args ,locals ,body))
      (proc ,(->usersym name))))
 
-(defmacro lexenv (lex-chain)
-  (let* ((vars `(,@(apply #'append
-		      (mapcar (lambda (el)
-				(when (listp el)
-				  (mapcar #'->usersym el))) lex-chain))))
-	 (binds `(,@(mapcar (lambda (var) `(list ',var ,var)) vars))))
-    `(list ,@binds)))
-
-#+nil (eval (js::eval-in-lexenv (("A1" "A2" "A3")) (+ A1 A2 A3)))
-
 (defmacro eval-in-lexenv (lex-chain form)
   (let* ((vars `(,@(apply #'append
 			  (mapcar (lambda (el)
@@ -245,17 +235,6 @@
 				      (mapcar #'->usersym el))) lex-chain))))
 	 (binds `(,@(mapcar (lambda (var) `(list ',var ,var)) vars))))
     `(cons 'let (list (list ,@binds) ,form))))
-	 
-;;ok
-#+nil (!eval "(function a(b,c){var x2=555; g(1,2); function g(x,y) {with({}) eval();};})(100,103);")
-
-(defmacro lexenv2 (lex-chain)
-  (let* ((vars `(,@(apply #'append
-		      (mapcar (lambda (el)
-				(when (listp el)
-				  (mapcar #'->usersym el))) lex-chain))))
-	 (binds `(,@(mapcar (lambda (var) `(list ',var ,var)) vars))))
-    `(list ,@binds)))
 
 (defmacro !lambda (lex-chain args locals body)
   (let* ((additional-args (gensym))
