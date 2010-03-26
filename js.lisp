@@ -129,15 +129,19 @@
 
 ;;;
 
-(defmacro !toplevel (toplevel-vars lex-chain form)
+(defmacro !toplevel (toplevel-vars lex-chain from-eval-p form)
   `(macrolet ((!arguments () 'arguments)
 	      (!name (name)
 		(macroexpand `(lookup-in-lexchain ,name ,',lex-chain)))
 	      (!setf-name (name val)
 		(macroexpand `(set-in-lexchain ,name ,val ,',lex-chain))))
      (with-ignored-style-warnings
-       (let* ((*object-env-stack* (cons *global* *object-env-stack*))
-	      (-object-env-stack- *object-env-stack*))
+       (let* ((*object-env-stack* (or *object-env-stack* (list *global*)))
+	      (-object-env-stack- (if ,from-eval-p
+				      -object-env-stack-
+				      *object-env-stack*)))
+	 (format t ">>>>>>>> ~A ~A ~A ~A~%" *object-env-stack*
+		 -object-env-stack- ',lex-chain ,from-eval-p)
 	 (progn
 	   ,@(mapcar (lambda (var)
 		       `(setf (prop *global* ,var)
@@ -228,12 +232,15 @@
      (setf ,(->usersym name) (!function ,lex-chain nil ,args ,locals ,body))
      (proc ,(->usersym name))))
 
+(defparameter *hack* nil)
+
 (defmacro eval-in-lexenv (lex-chain form)
   (let* ((vars `(,@(apply #'append
 			  (mapcar (lambda (el)
 				    (when (listp el)
 				      (mapcar #'->usersym el))) lex-chain))))
-	 (binds `(,@(mapcar (lambda (var) `(list ',var ,var)) vars))))
+	 (binds `('(-object-env-stack- *hack*)
+		  ,@(mapcar (lambda (var) `(list ',var ,var)) vars))))
     `(cons 'let (list (list ,@binds) ,form))))
 
 (defmacro !lambda (lex-chain args locals body)
@@ -246,6 +253,7 @@
 		(!evalx ()
 		  `(!function nil nil (str) nil
 			      ((let ((form (process-ast (parse-js-string str) ',',lex-chain)))
+				 (format t "-o-: ~A~%" -object-env-stack-)
 				 (!return (eval (eval-in-lexenv ,',lex-chain form)))))))
 		(!name (name)
 		  (macroexpand `(lookup-in-lexchain ,name ,',lex-chain)))

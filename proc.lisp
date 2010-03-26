@@ -123,11 +123,12 @@
   (transform-function form))
 
 (define-transform-rule (:toplevel form)
-  (declare (special exsisting-env))
+  (declare (special exsisting-env from-eval-p))
   (let ((lexenv-chain (append exsisting-env lexenv-chain)))
     (declare (special lexenv-chain))
     (list (js-intern (car form))
 	  (copy-list lexenv-chain)
+	  from-eval-p
 	  (transform-tree (second form)))))
 ;;
 (labels ((dump-decl-env (env)
@@ -140,7 +141,8 @@
     (setf (car place) (dump (car place)))
     (setf (cdr place) (mapcar #'dump (cdr place)))))
 
-(defun process-ast (ast &optional (exsisting-env '(:obj)))
+(defun process-ast (ast &optional (exsisting-env '(:obj) from-eval-p))
+  (declare (special from-eval-p))
   (assert (eq :toplevel (car ast)))
   (let* ((lexenv-chain nil)
 	 (exsisting-env (mapcar (lambda (el)
