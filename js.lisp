@@ -245,7 +245,7 @@
 			     (make-args ,',args ,',additional-args))))
 		(!evalx ()
 		  `(!function nil nil (str) nil
-			      ((let ((form (process-ast (parse-js-string js-user::|str|) ',',lex-chain)))
+			      ((let ((form (process-ast (parse-js-string str) ',',lex-chain)))
 				 (!return (eval (eval-in-lexenv ,',lex-chain form)))))))
 		(!name (name)
 		  (macroexpand `(lookup-in-lexchain ,name ,',lex-chain)))
