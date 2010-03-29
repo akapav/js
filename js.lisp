@@ -71,7 +71,6 @@
 
 (defparameter *global* (make-instance 'global-object))
 (defparameter js-user::this *global*)
-#+nil (defparameter *object-env-stack* nil)
 
 ;;;
 
@@ -96,7 +95,7 @@
       (cond
 	((string-equal name "this") 'js-user::this) ;this is always bound
 	((string-equal name "arguments") '(!arguments))
-	((string-equal name "eval") '(!evalx))
+	((string-equal name "eval") '(!eval-in-lexenv))
 	(t (multiple-value-bind (n found) (count-lookups lexchain 0)
 	     `(,@(build-tree n found))))))))
 
@@ -127,22 +126,39 @@
 	(t (multiple-value-bind (n found) (count-lookups lexchain 0)
 	     `(let ((,val ,val-exp)) ,(build-tree n found))))))))
 
+(defmacro eval-in-lexenv (lex-chain obj-env-stack form)
+  (let* ((vars `(,@(apply #'append
+			  (mapcar (lambda (el)
+				    (when (listp el)
+				      (mapcar #'->usersym el))) lex-chain))))
+	 (binds `((list '-object-env-stack- (cons 'list ,obj-env-stack))
+		  ,@(mapcar (lambda (var) `(list ',var ,var)) vars)))
+	 (eval-form 
+	  `(cons 'with-ignored-style-warnings
+		 (list 
+		  (cons 'let (list (list ,@binds) ,form))))))
+    `(eval ,eval-form)))
+
+(defmacro eval-function (lex-chain)
+  `(!function nil nil (str) nil
+	      ((let ((form (process-ast (parse-js-string str) ',lex-chain)))
+		 (!return
+		  (eval-in-lexenv ,lex-chain -object-env-stack- form))))))
+
 ;;;
 
 (defmacro !toplevel (toplevel-vars lex-chain from-eval-p form)
   `(macrolet ((!arguments () 'arguments)
+	      (!eval-in-lexenv ()
+		(macroexpand `(eval-function ,',lex-chain)))
 	      (!name (name)
 		(macroexpand `(lookup-in-lexchain ,name ,',lex-chain)))
 	      (!setf-name (name val)
 		(macroexpand `(set-in-lexchain ,name ,val ,',lex-chain))))
      (with-ignored-style-warnings
-       (let* (#+nil (*object-env-stack* (or *object-env-stack* (list *global*)))
-	      (-object-env-stack- ,(if from-eval-p
-				      '-object-env-stack-
-				      '(list *global*)
-				      #+nil *object-env-stack*)))
-	 #+nil (format t ">>>>>>>> ~A ~A ~A ~A~%" *object-env-stack*
-		 -object-env-stack- ',lex-chain ,from-eval-p)
+       (let* ((-object-env-stack- ,(if from-eval-p
+				       '-object-env-stack-
+				       '(list *global*))))
 	 (progn
 	   ,@(mapcar (lambda (var)
 		       `(setf (prop *global* ,var)
@@ -233,17 +249,6 @@
      (setf ,(->usersym name) (!function ,lex-chain nil ,args ,locals ,body))
      (proc ,(->usersym name))))
 
-(defmacro eval-in-lexenv (lex-chain obj-env-stack form)
-  (let* ((vars `(,@(apply #'append
-			  (mapcar (lambda (el)
-				    (when (listp el)
-				      (mapcar #'->usersym el))) lex-chain))))
-	 (binds `((list '-object-env-stack- (cons 'list ,obj-env-stack))
-		  ,@(mapcar (lambda (var) `(list ',var ,var)) vars))))
-    `(cons 'with-ignored-style-warnings
-	   (list 
-	    (cons 'let (list (list ,@binds) ,form))))))
-
 (defmacro !lambda (lex-chain args locals body)
   (let* ((additional-args (gensym))
 	 (blockname (gensym)))
@@ -251,11 +256,8 @@
 		  `(or js-user::arguments
 		       (setf js-user::arguments
 			     (make-args ,',args ,',additional-args))))
-		(!evalx ()
-		  `(!function nil nil (str) nil
-			      ((let ((form (process-ast (parse-js-string str) ',',lex-chain)))
-				 (!return
-				  (eval (eval-in-lexenv ,',lex-chain -object-env-stack- form)))))))
+		(!eval-in-lexenv ()
+		  (macroexpand `(eval-function ,',lex-chain)))
 		(!name (name)
 		  (macroexpand `(lookup-in-lexchain ,name ,',lex-chain)))
 		(!setf-name (name val)
@@ -264,15 +266,14 @@
 		  `(setf ,(->usersym name)
 			 (!function ,lex-chain ,name ,args ,locals ,body)))
 		(!return (ret) `,`(return-from ,',blockname ,(or ret :undefined))))
-       (let (#+nil (-object-env-stack- *object-env-stack*))
-	 (lambda (js-user::this
-		  &optional ,@(mapcar (lambda (arg)
-					`(,(->usersym arg) :undefined)) args)
-		  &rest ,additional-args)
-	   (let (js-user::arguments)
-	     (let (,@(mapcar (lambda (var)
-			       (list (->usersym var) :undefined)) locals))
-	       (block ,blockname ,@body :undefined))))))))
+       (lambda (js-user::this
+		&optional ,@(mapcar (lambda (arg)
+				      `(,(->usersym arg) :undefined)) args)
+		&rest ,additional-args)
+	 (let (js-user::arguments)
+	   (let (,@(mapcar (lambda (var)
+			     (list (->usersym var) :undefined)) locals))
+	     (block ,blockname ,@body :undefined)))))))
 
 ;;todo: adhoc solution -- Function object should be added
 (defparameter function.prototype (make-instance 'native-hash))
@@ -297,10 +298,10 @@
 	 (apply (proc ,func) js-user::this ,args2)))))
 
 (defmacro !with (lex-chain obj body)
-  `(let* #+nil ((*object-env-stack* (cons ,obj *object-env-stack*))
-	  (-object-env-stack- *object-env-stack*))
-	 ((-object-env-stack- (cons ,obj -object-env-stack-)))
-     (macrolet ((!name (name)
+  `(let* ((-object-env-stack- (cons ,obj -object-env-stack-)))
+     (macrolet ((!eval-in-lexenv ()
+		  (macroexpand `(eval-function ,',lex-chain)))
+		(!name (name)
 		  (macroexpand `(lookup-in-lexchain ,name ,',lex-chain)))
 		(!setf-name (name val)
 		  (macroexpand `(set-in-lexchain ,name ,val ,',lex-chain))))
