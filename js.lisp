@@ -237,7 +237,7 @@
     (setf (prop ret "constructor") func)
     ret))
 
-(defmacro !new (func &rest args)
+(defmacro !new (func args)
   `(js-new ,func (list ,@args) 'native-hash))
 
 (defmacro !return (ret)
