@@ -347,6 +347,94 @@ try {
 .
 (no-warn (test r1 200)))
 
+(defun test15 ()
+#{javascript}
+function f15(x,s1)
+{
+  return function(y, s2) {return eval(s1+s2);}
+}
+
+r15 = f15(5, "y+")(6, "x;");
+.
+
+(no-warn (test r15 11)))
+
+(defun test16 ()
+#{javascript}
+function f16(x,s)
+{
+  return eval(s);
+}
+
+r16 = f16(55, "x+x;")
+.
+(no-warn (test r16 110)))
+
+(defun test17 ()
+#{javascript}
+function f17(o)
+{
+  var x = 3;
+  with(o) {x = 4;}
+  return x
+}
+
+oo = new Object
+r17_1 = f17(oo)
+
+oo.x = 7
+r17_2 = f17(oo)
+r17_3 = oo.x
+.
+
+(no-warn
+  (test r17_1 4)
+  (test r17_2 3)
+  (test r17_3 4)))
+
+(defun test18 ()
+#{javascript}
+function f18(o)
+{
+   with(o) return function(y) {x = y;}
+}
+
+oo = new Object
+f18_1 = f18(oo)
+f18_1(5)
+r18_1 = x
+
+oo.x = 7
+f18_1(6)
+r18_2 = x
+r18_3 = oo.x
+.
+(no-warn
+  (test r18_1 5)
+  (test r18_2 5)
+  (test r18_3 6)))
+
+(defun test19 ()
+#{javascript}
+function f19(o, str)
+{
+   with(o) return function(y) {eval(str);}
+}
+oo = new Object
+f19_1 = f19(oo, "x=y;")
+f19_1(5)
+r19_1 = x
+
+oo.x = 7
+f19_1(6)
+r19_2 = x
+r19_3 = oo.x
+.
+(no-warn
+  (test r19_1 5)
+  (test r19_2 5)
+  (test r19_3 6)))
+
 ;;;;;
 
 (defun js-ast (stream)
@@ -369,4 +457,5 @@ x=function a(b)
 		   (flist test1 test2 test3 test4
 			  test5 test6 test7 test8
 			  test9 test10 test11 test12
-			  test13 test14)))))
+			  test13 test14 test15 test16
+			  test17 test18 test19)))))
