@@ -435,6 +435,29 @@ r19_3 = oo.x
   (test r19_2 5)
   (test r19_3 6)))
 
+(defun test20 ()
+#{javascript}
+s1 = String(123)
+s2 = new String(456)
+String.prototype.y=12
+r20_1 = s2.y
+r20_2 = s2.charAt(1)
+r20_3 = String.prototype.length
+r20_4 = s2.length
+r20_5 = (s2.length = 555)
+r20_6 = s2.length
+r20_7 = s2.substr("1",8)
+r20_8 = s2.substring (0, 100)
+.
+(no-warn
+  (test r20_1 12)
+  (test r20_2 "5" :test #'string-equal)
+  (test r20_3 0)
+  (test r20_4 3)
+  (test r20_5 555)
+  (test r20_6 3)
+  (test r20_7 "56" :test #'string-equal)
+  (test r20_8 "456" :test #'string-equal)))
 ;;;;;
 
 (defun js-ast (stream)
@@ -458,4 +481,4 @@ x=function a(b)
 			  test5 test6 test7 test8
 			  test9 test10 test11 test12
 			  test13 test14 test15 test16
-			  test17 test18 test19)))))
+			  test17 test18 test19 test20)))))
