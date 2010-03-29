@@ -152,7 +152,6 @@
 	 (toplevel t)
 	 (new-form (transform-tree ast)))
     (declare (special locals environments lexenv-chain toplevel exsisting-env))
-    (format t ">>> ~A~%" environments)
     (mapc #'transform-obj-env environments)
     (let ((toplevel-vars (set-elems locals)))
       (append (list (car new-form) toplevel-vars)
