@@ -332,13 +332,6 @@
 
 (setf (prop array.ctor "splice") |ARRAY.splice|)
 
-#| todo: fix eval-whens
-#{javascript}
-Array.shift = function(arr) {if(arr.length > 0) return  arr.splice(0,1)[0];}
-Array.prototype.shift = function() {return Array.shift(this);}
-.
-|#
-
 (defparameter |ARRAY.pop|
   (js-function (arr)
     (with-asserted-array (arr)
@@ -376,20 +369,3 @@ Array.prototype.shift = function() {return Array.shift(this);}
 (setf (prop *global* "print")
       (js-function (arg)
 	(format t "~A~%" (js-funcall string.ctor arg))))
-
-#|
-;;test ...
-#{javascript}
-s1 = String(123)
-s2 = new String(456)
-String.prototype.y=12
-print(s2.y)
-print(s2.charAt(1))
-print(String.prototype.length)
-print(s2.length)
-print(s2.length = 555)
-print(s2.length)
-print(s2.substr("1",8))
-print(s2.substring (0, 100))
-.
-|#

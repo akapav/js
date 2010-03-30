@@ -11,4 +11,6 @@
    (:file "proc")
    (:file "js")
    (:file "stdlib")
-   (:file "operators")))
+   (:file "operators"))
+  :perform (load-op :after (op js)
+		    (load (system-relative-pathname 'js "js.stdlib.lisp"))))
