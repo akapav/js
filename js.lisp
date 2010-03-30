@@ -393,7 +393,9 @@
   `(unwind-protect
 	(handler-case ,body
 	  (t (,(->usersym var))
-	    (macrolet ((!name (name)
+	    (macrolet ((!eval-in-lexenv ()
+			 (macroexpand `(eval-function ,',lex-chain)))
+		       (!name (name)
 			 (macroexpand
 			  `(lookup-in-lexchain ,name ,',lex-chain)))
 		       (!setf-name (name val)
