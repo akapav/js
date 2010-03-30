@@ -102,7 +102,7 @@
       (the string str))))
 
 (defparameter string.prototype
-  (js-new js::string.ctor '("") 'native-hash))
+  (js-new js::string.ctor '("")))
 
 (setf (prop string.ctor "prototype") string.prototype)
 (setf (prop *global* "String") string.ctor)
@@ -187,7 +187,7 @@
   (with-asserted-types ((str string)
 			(delimiter string))
     (declare (special array.ctor))
-    (js-new array.ctor (string-split str delimiter) 'array-object)))
+    (js-new array.ctor (string-split str delimiter))))
   
 
 ;;; todo: array differs from string (according to spidermonkey) in
@@ -222,7 +222,9 @@
       (set-default js-user::this arr)
       arr)))
 
-(defparameter array.prototype (js-new js::array.ctor () 'array-object))
+(defmethod placeholder-class ((func (eql array.ctor))) 'array-object)
+
+(defparameter array.prototype (js-new js::array.ctor ()))
 
 (setf (prop array.ctor "prototype") array.prototype)
 
@@ -251,7 +253,7 @@
 			      (if (typep val 'vector)
 				  val
 				  (js-funcall array.ctor arg)))))))
-      (js-new array.ctor arr 'array-object))))
+      (js-new array.ctor arr))))
 
 (setf (prop array.prototype "concat")
 	(js-function ()
@@ -305,7 +307,7 @@
   (let ((arguments (loop for i from 3 below (arg-length arguments)
 		      collecting (sub arguments i))))
     (js-new array.ctor
-	    (apply #'vector-splice arr ndx howmany arguments) 'array-object)))
+	    (apply #'vector-splice arr ndx howmany arguments))))
 
 (defparameter |ARRAY.splice|
   (js-function (arr ndx howmany)

@@ -204,7 +204,7 @@
        ,obj)))
 
 (defmacro !array (elems)
-  `(js-new array.ctor (list ,@elems) 'array-object))
+  `(js-new array.ctor (list ,@elems)))
 
 (defmacro !stat (form)
   `(progn ,form))
@@ -228,9 +228,14 @@
 		       ((!sub !dot) (second func))
 		       (t js-user::this)) ,@args))))
 
-(defun js-new (func args class)
+(defgeneric placeholder-class (func)
+  (:method (func)
+    (declare (ignore func))
+    'native-hash))
+
+(defun js-new (func args)
   (let* ((proto (prop func "prototype"))
-	 (ret (make-instance class
+	 (ret (make-instance (placeholder-class func)
 			     :prototype proto
 			     :sealed (sealed proto))))
     (apply (proc func) ret args)
@@ -238,7 +243,7 @@
     ret))
 
 (defmacro !new (func args)
-  `(js-new ,func (list ,@args) 'native-hash))
+  `(js-new ,func (list ,@args)))
 
 (defmacro !return (ret)
   (declare (ignore ret))
