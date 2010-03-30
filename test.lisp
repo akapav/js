@@ -458,6 +458,70 @@ r20_8 = s2.substring (0, 100)
   (test r20_6 3)
   (test r20_7 "56" :test #'string-equal)
   (test r20_8 "456" :test #'string-equal)))
+
+(defun test21 ()
+#{javascript}
+function test_splice()
+{
+  var a = new Array(1,2,3)
+  r21_1 =  [a.splice(0, 0), a]
+
+  var a = new Array(1,2,3)
+  r21_2 =  [a.splice(0, 0, 100, 200), a]
+
+  var a = new Array(1,2,3)
+  r21_3 =  [a.splice(1, 1000), a]
+
+  var a = new Array(1,2,3)
+  r21_4 =  [a.splice(0, 1), a]
+
+  var a = new Array(1,2,3)
+  r21_5 =  [a.splice(0, 2, 10, 11, 12), a]
+
+  var a = new Array(1,2,3)
+  r21_6 =  [a.splice(0, 3, 10, 11, 12), a]
+
+  var a = new Array(1,2,3)
+  r21_7 =  [a.splice(2, 2), a]
+
+  var a = new Array(1,2,3)
+  r21_8 =  [a.splice(2, 2, 10, 12), a]
+
+  var a = new Array(1,2,3)
+  r21_9 =  [a.splice(1, 1, 10, 12), a]
+
+  var a = new Array(1,2,3)
+  r21_10 =  [a.splice(100, 100, 10, 12), a]
+
+  var a = new Array(1,2,3)
+  r21_11 =  [a.splice(1, 1, 7, 8, 9), a]
+
+}
+
+test_splice()
+.
+
+(defun dump-r21 (val arr1 arr2)
+	   (let* ((p (js::value val))
+		  (p1 (aref p 0))
+		  (p2 (aref p 1)))
+	     (test arr1 (js::value p1) :test #'equalp)
+	     (test arr2 (js::value p2) :test #'equalp)))
+
+(no-warn (mapc (lambda (l) (apply #'dump-r21 l))
+	       (list
+		(list r21_1 #() #(1 2 3))
+		(list r21_2 #() #(100 200 1 2 3))
+		(list r21_3 #(2 3) #(1))
+		(list r21_4 #(1) #(2 3))
+		(list r21_5 #(1 2) #(10 11 12 3))
+		(list r21_6 #(1 2 3) #(10 11 12))
+		(list r21_7 #(3) #(1 2))
+		(list r21_8 #(3) #(1 2 10 12))
+		(list r21_9 #(2) #(1 10 12 3))
+		(list r21_10 #() #(1 2 3 10 12))
+		(list r21_11 #(2) #(1 7 8 9 3))))))
+
 ;;;;;
 
 (defun js-ast (stream)
@@ -481,4 +545,5 @@ x=function a(b)
 			  test5 test6 test7 test8
 			  test9 test10 test11 test12
 			  test13 test14 test15 test16
-			  test17 test18 test19 test20)))))
+			  test17 test18 test19 test20
+			  test21)))))
