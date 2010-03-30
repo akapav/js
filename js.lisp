@@ -443,6 +443,7 @@
   (let* ((vars (mapcar (lambda (var) (->usersym var)) var-names))
 	 (get-arr (gensym))
 	 (set-arr (gensym))
+	 (inst (gensym))
 	 (len (length vars)))
     `(let ((,get-arr
 	    (make-array ,(1+ len)
@@ -464,7 +465,15 @@
 					(setf ,var val)))
 				   vars)
 			 (lambda (n val) (setf (nth (- n ,len) ,oth) val))))))
-       (make-instance 'arguments
-		      :vlen ,len
-		      :length (+ ,len (length ,oth))
-		      :get-arr ,get-arr :set-arr ,set-arr))))
+       (let ((,inst (make-instance 'arguments
+				   :vlen ,len
+				   :length (+ ,len (length ,oth))
+				   :get-arr ,get-arr :set-arr ,set-arr)))
+	 (add-sealed-property ,inst
+			      "length"
+			      (lambda (-)
+				(declare (ignore -))
+				(+ ,len (length ,oth))))
+	 ,inst))))
+
+
