@@ -344,26 +344,8 @@
 
 (setf (prop array.ctor "pop") |ARRAY.pop|)
 
-;
-(defun test-splice (ndx elems &rest insert)
-  (let ((v (make-array 3 :fill-pointer 3 :initial-contents '(1 2 3))))
-    (values (apply #'vector-splice v ndx elems insert) v)))
-
-
-(test-splice 0 0)
-(test-splice 0 0 100 200)
-(test-splice 1 1000)
-(test-splice 0 1)
-(test-splice 0 2 10 11 12)
-(test-splice 0 3 10 11 12)
-(test-splice 2 2)
-(test-splice 2 2 10 12)
-(test-splice 1 1 10 12)
-(test-splice 100 100 10 12)
-(test-splice 1 1 7 8 9)
-
 ;;
-(setf (prop *global* "Object")
+#+nil (setf (prop *global* "Object")
       (js-function (arg) arg))
 
 (setf (prop *global* "print")
