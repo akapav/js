@@ -273,7 +273,7 @@
 		(!return (ret) `,`(return-from ,',blockname ,(or ret :undefined))))
        (lambda (js-user::this
 		&optional ,@(mapcar (lambda (arg)
-				      `(,(->usersym arg) :undefined)) args)
+				      `(,(->usersym arg) :undefined-unset)) args)
 		&rest ,additional-args)
 	 (let (js-user::arguments)
 	   (let (,@(mapcar (lambda (var)
@@ -351,7 +351,8 @@
        (not
 	(or (not ,exp)
 	    (eq ,exp :undefined)
-	    (and (numberp ,rexp) (zerop ,rexp)))))))
+	    (and (numberp ,rexp) (zerop ,rexp))
+	    (eq ,exp :undefined-unset))))))
 
 #+nil (defmacro !label (name body)
 	(tagbody ,(->sym name) ,body))
@@ -444,8 +445,13 @@
 	 (get-arr (gensym))
 	 (set-arr (gensym))
 	 (inst (gensym))
+	 (argument-cnt (gensym))
+	 (var (gensym))
 	 (len (length vars)))
-    `(let ((,get-arr
+    `(let* ((,argument-cnt(loop for ,var in (list ,@vars)
+			     until (eq ,var :undefined-unset)
+			     count t))
+	   (,get-arr
 	    (make-array ,(1+ len)
 			:element-type 'function
 			:initial-contents
@@ -464,16 +470,16 @@
 					(declare (ignore n))
 					(setf ,var val)))
 				   vars)
-			 (lambda (n val) (setf (nth (- n ,len) ,oth) val))))))
-       (let ((,inst (make-instance 'arguments
+			 (lambda (n val) (setf (nth (- n ,len) ,oth) val)))))
+	    (,inst (make-instance 'arguments
 				   :vlen ,len
-				   :length (+ ,len (length ,oth))
+				   :length (+ ,argument-cnt (length ,oth))
 				   :get-arr ,get-arr :set-arr ,set-arr)))
-	 (add-sealed-property ,inst
-			      "length"
-			      (lambda (-)
-				(declare (ignore -))
-				(+ ,len (length ,oth))))
-	 ,inst))))
+       (add-sealed-property ,inst
+			    "length"
+			    (lambda (-)
+			      (declare (ignore -))
+			      (+ ,argument-cnt (length ,oth))))
+       ,inst)))
 
 
