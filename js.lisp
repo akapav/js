@@ -127,17 +127,30 @@
 	     `(let ((,val ,val-exp)) ,(build-tree n found))))))))
 
 (defmacro eval-in-lexenv (lex-chain obj-env-stack form)
-  (let* ((vars `(,@(apply #'append
+  (let* ((result (gensym))
+	 (lex-values (gensym))
+	 (vars `(,@(apply #'append
 			  (mapcar (lambda (el)
 				    (when (listp el)
 				      (mapcar #'->usersym el))) lex-chain))))
 	 (binds `((list '-object-env-stack- (cons 'list ,obj-env-stack))
-		  ,@(mapcar (lambda (var) `(list ',var ,var)) vars)))
+		  ,@(mapcar (lambda (var) `(list ',var ,var)) vars)
+		  (list ',result ,form)))
 	 (eval-form 
 	  `(cons 'with-ignored-style-warnings
 		 (list 
-		  (cons 'let (list (list ,@binds) ,form))))))
-    `(eval ,eval-form)))
+		  (cons 'let* (list (list ,@binds)
+				    (list 'values ',result
+					  (list 'list
+						,@(mapcar (lambda (var) `',var) vars)))))))))
+    `(multiple-value-bind (,result ,lex-values) (eval ,eval-form)
+       (flet ((assign-locals (,lex-values)
+		,@(mapcar (lambda (var)
+			    `(progn
+			       (setf ,var (car ,lex-values))
+			       (setf ,lex-values (cdr ,lex-values)))) vars)))
+	 (assign-locals ,lex-values)
+	 ,result))))
 
 (defmacro eval-function (lex-chain)
   `(!function nil nil (str) nil
@@ -481,5 +494,3 @@
 			      (declare (ignore -))
 			      (+ ,argument-cnt (length ,oth))))
        ,inst)))
-
-
