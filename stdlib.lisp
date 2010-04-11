@@ -54,7 +54,6 @@
 ;;
 #+nil (defparameter function.prototype (js-new (js-function ()) () 'native-hash))
 
-;; infrastructure for Function constructor
 (defun new-function (&rest args) ;;due to parser error it is
 				 ;;impossible to use anonymous
 				 ;;function as a atandalone expression
@@ -65,6 +64,23 @@
     (parse-js-string
      (format nil "(function(val) {return val;})(function (~{~a~^, ~}) {~A});"
 	     (butlast args) (car (last args)))))))
+
+(defmethod set-default ((func native-function) val)
+  (setf (prototype func) function.prototype)
+  (setf (proc func) (proc val))
+  (setf (name func) nil))
+
+(defparameter function.ctor
+  (js-function ()
+    (let* ((arguments (loop for i from 0 below (arg-length (!arguments))
+			collecting (sub (!arguments) i)))
+	   (func (apply #'new-function arguments)))
+      (set-default js-user::this func)
+      func)))
+
+(defmethod placeholder-class ((func (eql function.ctor))) 'native-function)
+
+(setf (prop *global* "Function") function.ctor)
 
 (defparameter |FUNCTION.call|
   (js-function (func context)
