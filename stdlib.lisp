@@ -52,7 +52,12 @@
      ,@body))
 
 ;;
-#+nil (defparameter function.prototype (js-new (js-function ()) () 'native-hash))
+
+(defparameter function.prototype
+  (make-instance 'native-function
+		 :proc (lambda (&rest args)
+			 (declare (ignore args))
+			 :undefined)))
 
 (defun new-function (&rest args) ;;due to parser error it is
 				 ;;impossible to use anonymous
@@ -62,8 +67,10 @@
   (eval
    (process-ast
     (parse-js-string
-     (format nil "(function(val) {return val;})(function (~{~a~^, ~}) {~A});"
-	     (butlast args) (car (last args)))))))
+     (if args
+	 (format nil "(function(val) {return val;})(function (~{~a~^, ~}) {~A});"
+		 (butlast args) (car (last args)))
+	 "(function(val) {return val;})(function () {});")))))
 
 (defmethod set-default ((func native-function) val)
   (setf (prototype func) function.prototype)
@@ -78,8 +85,11 @@
       (set-default js-user::this func)
       func)))
 
+(setf (prop function.prototype "constructor") function.ctor)
+
 (defmethod placeholder-class ((func (eql function.ctor))) 'native-function)
 
+(setf (prop function.ctor "prototype") function.prototype)
 (setf (prop *global* "Function") function.ctor)
 
 (defparameter |FUNCTION.call|
