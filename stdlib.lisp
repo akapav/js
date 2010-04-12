@@ -352,9 +352,8 @@
 
 (setf (prop array.prototype "splice")
       (js-function ()
-	(let ((arguments (loop for i from 0 below (arg-length (!arguments))
-			    collecting (sub (!arguments) i))))
-	  (apply #'js-funcall |ARRAY.splice| net.svrg.js-user::this arguments))))
+	(apply #'js-funcall |ARRAY.splice| net.svrg.js-user::this
+	       (arguments-as-list (!arguments)))))
 
 (setf (prop array.ctor "splice") |ARRAY.splice|)
 

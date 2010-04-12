@@ -450,6 +450,10 @@
 	  (funcall (aref (set-arr args) (vlen args)) key val))
       (call-next-method val args key)))
 
+(defun arguments-as-list (args)
+  (loop for i from 0 below (arg-length args)
+     collecting (sub args i)))
+
 (defmacro make-args (var-names oth)
   (let* ((vars (mapcar (lambda (var) (->usersym var)) var-names))
 	 (get-arr (gensym))
