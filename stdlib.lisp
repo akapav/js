@@ -79,9 +79,7 @@
 
 (defparameter function.ctor
   (js-function ()
-    (let* ((arguments (loop for i from 0 below (arg-length (!arguments))
-			collecting (sub (!arguments) i)))
-	   (func (apply #'new-function arguments)))
+    (let ((func (apply #'new-function (arguments-as-list (!arguments)))))
       (set-default js-user::this func)
       func)))
 
@@ -94,15 +92,13 @@
 
 (defparameter |FUNCTION.call|
   (js-function (func context)
-    (let ((arguments (loop for i from 2 below (arg-length (!arguments))
-			collecting (sub (!arguments) i))))
+    (let ((arguments (nthcdr 2 (arguments-as-list (!arguments)))))
       (format t "~A ~A~%" context arguments)
       (apply (proc func) context arguments))))
 
 (setf (prop function.prototype "call")
       (js-function (context)
-	(let ((arguments (loop for i from 1 below (arg-length (!arguments))
-			    collecting (sub (!arguments) i))))
+	(let ((arguments (cdr (arguments-as-list (!arguments)))))
 	  (apply #'js-funcall |FUNCTION.call| js-user::this context arguments))))
 
 (setf (prop function.prototype "apply")
@@ -247,8 +243,7 @@
 	   (arr (make-array len
 			    :fill-pointer len
 			    :initial-contents
-			    (loop for i from 0 below len
-			       collect (sub (!arguments) i)))))
+			    (arguments-as-list (!arguments)))))
       (set-default js-user::this arr)
       arr)))
 
@@ -334,8 +329,7 @@
     removed))
 
 (defun apply-splicing (arr ndx howmany arguments)
-  (let ((arguments (loop for i from 3 below (arg-length arguments)
-		      collecting (sub arguments i))))
+  (let ((arguments (nthcdr 3 (arguments-as-list arguments))))
     (js-new array.ctor
 	    (apply #'vector-splice arr ndx howmany arguments))))
 
