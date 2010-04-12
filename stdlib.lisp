@@ -105,11 +105,15 @@
 			    collecting (sub (!arguments) i))))
 	  (apply #'js-funcall |FUNCTION.call| js-user::this context arguments))))
 
-#+nil (setf (prop function.prototype "apply")
-      (js-function (context args)
-	(let ((arguments (loop for i from 1 below (arg-length (!arguments))
-			    collecting (sub (!arguments) i))))
-	  (apply #'js-funcall |FUNCTION.call| js-user::this context arguments))))
+(setf (prop function.prototype "apply")
+      (js-function (context argarr)
+	(apply (proc js-user::this) context
+	       (coerce (typecase argarr
+			 (vector argarr)
+			 (array-object (value argarr))
+			 (arguments (arguments-as-list argarr))
+			 (t (error "second argument to apply must be an array")))
+		       'list))))
 
 ;;
 (defparameter number.ctor ;;todo: set-default (same as string)
