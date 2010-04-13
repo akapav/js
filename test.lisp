@@ -522,6 +522,114 @@ test_splice()
 		(list r21_10 #() #(1 2 3 10 12))
 		(list r21_11 #(2) #(1 7 8 9 3))))))
 
+(defun test22 ()
+#{javascript}
+function f22(x, y, str)
+{
+  f(0)
+  r22_1 = x
+  function f(x) {
+     eval(str)
+     r22_2 = x
+  }
+}
+
+f22(1, 2, "x=y;")
+.
+
+(no-warn
+  (test r22_1 1)
+  (test r22_2 2)))
+
+(defun test23 ()
+#{javascript}
+function f23(str)
+{
+  var f23_1 = function() {return 100;}
+  eval(str);
+  return f23_1()
+}
+
+r23_1 = f23("f23_1 = function() {return 5;};")
+r23_2 = 0;
+try {
+ f23_1();
+} catch(e) {
+  r23_2 = 2;
+}
+r23_3 = f23("f23_2 = function() {return 5;};")
+r23_4 = f23_2()
+.
+
+(no-warn
+  (test r23_1 5)
+  (test r23_2 2)
+  (test r23_3 100)
+  (test r23_4 5)))
+
+(defun test24 ()
+#{javascript}
+r24_1 = new Function("a", "b", "return a+b;")(2,3)
+r24_2 = new Function.prototype.constructor("a", "b", "return a+b;")(3,4)
+r24_3 = new (function(){}).constructor("a", "b", "return a+b;")(4,5)
+
+r24_4 = Function;
+r24_5 = Function.prototype.constructor;
+r24_6 = (function(){}).constructor;
+.
+
+(no-warn
+  (test r24_1 5)
+  (test r24_2 7)
+  (test r24_3 9)
+  (test r24_4 r24_5 :test #'eq)
+  (test r24_4 r24_6 :test #'eq)))
+
+(defun test25 ()
+#{javascript}
+r25_1 = Function.call(1, 'a', 'b' , 'return a*b;')(2,3)
+r25_2 = "abc".charAt.call("def", 1); //todo: possible parser error -
+                                     //when ; is omitted, program compiles
+                                     //next line as an arguments list and
+	         		     //tries to apply it to the result of
+                                     //the previous one ("e")
+r25_3 = (function(x,y) {return x-y;}).call(new Object,10,5)
+.
+(no-warn
+  (test r25_1 6)
+  (test r25_2 "e" :test #'string-equal)
+  (test r25_3 5)))
+
+(defun test26 ()
+#{javascript}
+function f26(x,y,z)
+{
+  return x+y*z;
+}
+
+r26_1 = f26.apply(new Object, [1,2,3,4])
+r26_2 = f26.apply(new Object, new Array(1,2,3,4))
+
+function f26_1()
+{
+  return f26.apply(new Object, arguments)
+}
+
+r26_3 = f26_1(1,2,3,4)
+
+v26=[7,8,9];
+[1,2,3].splice.apply(v26, [0,2,100,101])
+for(var i = 0; i < v26.length; ++i)
+  eval("r26_arr" + i + "=v26[i];")
+.
+
+(no-warn
+  (test r26_1 7)
+  (test r26_2 7)
+  (test r26_3 7)
+  (test r26_arr0 100)
+  (test r26_arr1 101)
+  (test r26_arr2 9)))
 ;;;;;
 
 (defun js-ast (stream)
@@ -546,6 +654,7 @@ x=function a(b)
 			  test9 test10 test11 test12
 			  test13 test14 test15 test16
 			  test17 test18 test19 test20
-			  test21)))))
+			  test21 test22 test23 test24
+			  test25 test26)))))
 
 
