@@ -179,6 +179,11 @@
 		     (cons "arguments" toplevel-vars)))
 	 (progn ,@form)))))
 
+(defmacro !atom (atom)
+  (case atom
+    ((!false !null) nil)
+    ((!true) t)))
+
 (defmacro !dot (obj attr)
   `(prop ,obj ,attr))
 
