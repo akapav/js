@@ -34,7 +34,7 @@
 		    (js-funcall ,ctor-name ,(car arg-names)))
 		   ,@(mapcar
 		      (lambda (name val)
-			`(,name (if (eq ,name :undefined) ,val ,name)))
+			`(,name (if (undefined? ,name) ,val ,name)))
 		      (cdr arg-names) (cdr arg-defaults)))
 	       ,@body)))
 	 (setf (prop ,prototype-name ,name)
@@ -160,18 +160,18 @@
     (string (aref str (clip-index ndx)))))
 
 (define-js-method string "indexOf" (str substr (beg 0))
-  (if (eq substr :undefined) -1
+  (if (undefined? substr) -1
       (with-asserted-types ((substr string)
 			    (beg number))
 	(or (search substr str :start2 (clip-index beg)) -1))))
 
 (define-js-method string "lastIndexOf" (str substr)
-  (if (eq substr :undefined) -1
+  (if (undefined? substr) -1
       (with-asserted-types ((substr string))
 	(or (search substr str :from-end t) -1))))
 
 (define-js-method string "substring" (str (from 0) to)
-  (if (eq to :undefined)
+  (if (undefined? to)
       (with-asserted-types ((from number))
 	(subseq str (clip-index from)))
       (with-asserted-types ((from number)
@@ -182,7 +182,7 @@
 
 ;todo: maybe rewrite it to javascript (see Array.shift)
 (define-js-method string "substr" (str (from 0) to)
-  (if (eq to :undefined)
+  (if (undefined? to)
       (js-funcall |STRING.substring| str from)
       (with-asserted-types ((from number)
 			    (to number))
@@ -330,12 +330,12 @@
 (defparameter |ARRAY.splice|
   (js-function (arr ndx howmany)
     (with-asserted-array (arr)
-      (cond ((and (eq ndx :undefined) (eq howmany :undefined))
+      (cond ((and (undefined? ndx) (undefined? howmany))
 	     (apply-splicing arr 0 0 (!arguments)))
-	    ((eq ndx :undefined)
+	    ((undefined? ndx)
 	     (with-asserted-types ((howmany number))
 	       (apply-splicing arr 0 howmany (!arguments))))
-	    ((eq howmany :undefined)
+	    ((undefined? howmany)
 	     (with-asserted-types ((ndx number))
 	       (apply-splicing arr ndx (length arr) (!arguments))))
 	    (t (with-asserted-types ((ndx number)

@@ -355,14 +355,17 @@
   (let ((op (symbol-function op-sym)))
     `(funcall ,op ,ls ,rs)))
 
+(defun undefined? (exp)
+  (or (eq exp :undefined)
+      (eq exp :undefined-unset)))
+
 (defmacro js->boolean (exp)
   (let ((rexp (gensym)))
     `(let ((,rexp ,exp))
        (not
 	(or (not ,exp)
-	    (eq ,exp :undefined)
-	    (and (numberp ,rexp) (zerop ,rexp))
-	    (eq ,exp :undefined-unset))))))
+	    (undefined? ,exp)
+	    (and (numberp ,rexp) (zerop ,rexp)))))))
 
 #+nil (defmacro !label (name body)
 	(tagbody ,(->sym name) ,body))
