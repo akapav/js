@@ -90,16 +90,10 @@
 (setf (prop function.ctor "prototype") function.prototype)
 (setf (prop *global* "Function") function.ctor)
 
-(defparameter |FUNCTION.call|
-  (js-function (func context)
-    (let ((arguments (nthcdr 2 (arguments-as-list (!arguments)))))
-      (format t "~A ~A~%" context arguments)
-      (apply (proc func) context arguments))))
-
 (setf (prop function.prototype "call")
       (js-function (context)
 	(let ((arguments (cdr (arguments-as-list (!arguments)))))
-	  (apply #'js-funcall |FUNCTION.call| js-user::this context arguments))))
+	  (apply (proc js-user::this) context arguments))))
 
 (setf (prop function.prototype "apply")
       (js-function (context argarr)
