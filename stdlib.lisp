@@ -95,6 +95,9 @@
 	(let ((arguments (cdr (arguments-as-list (!arguments)))))
 	  (apply (proc js-user::this) context arguments))))
 
+(defclass array-object (native-hash)
+  ())
+
 (setf (prop function.prototype "apply")
       (js-function (context argarr)
 	(apply (proc js-user::this) context
@@ -217,9 +220,6 @@
 ;;; without new. our current implementation implements array to behave
 ;;; like string. recheck the spec
 ;;;
-
-(defclass array-object (native-hash)
-  ())
 
 (defmethod prop ((arr array-object) key &optional (default :undefined))
   (if (integerp key) ;;todo: safe conversion to integer and boundary check
