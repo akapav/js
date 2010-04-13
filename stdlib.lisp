@@ -367,4 +367,5 @@
 
 (setf (prop *global* "print")
       (js-function (arg)
-	(format t "~A~%" (js-funcall string.ctor arg))))
+	(if (undefined? arg) (format t "~%")
+	    (format t "~A~%" (js-funcall string.ctor arg)))))
