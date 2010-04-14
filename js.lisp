@@ -1,79 +1,5 @@
 (in-package :js)
 
-(defclass native-hash ()
-  ((default-value :accessor value :initform nil :initarg :value)
-   (dict :accessor dict :initform (make-hash-table :test 'equal))
-   (sealed :accessor sealed :initform nil :initarg :sealed)
-   (prototype :accessor prototype :initform nil :initarg :prototype)))
-
-(defgeneric set-default (hash val) ;;todo: put it as a slot writer
-  (:method (hash val) (declare (ignore hash)) val))
-
-(defmethod set-default ((hash native-hash) val)
-  (setf (value hash) val))
-
-(defun add-sealed-property (hash key proc)
-  (flet ((ensure-sealed-table (hash)
-	   (or (sealed hash)
-	       (setf (sealed hash) (make-hash-table :test 'equal)))))
-    (let ((sealed-table (ensure-sealed-table hash)))
-      (setf (gethash key sealed-table) proc))))
-
-(defgeneric prop (hash key &optional default)
-  (:method (hash key &optional default)
-    (declare (ignore hash key default)) :undefined))
-
-(defmethod prop ((hash native-hash) key &optional (default :undefined))
-  (let* ((sealed (sealed hash))
-	 (action (and sealed (gethash key sealed))))
-    (if action (funcall action hash)
-	(multiple-value-bind (val exists)
-	    (gethash key (dict hash))
-	  (if exists val
-	      (or (and (prototype hash)
-		       (prop (prototype hash) key default))
-		  default))))))
-
-(defgeneric (setf prop) (val hash key)
-  (:method (val hash key) (declare (ignore hash key)) val))
-
-(defmethod (setf prop) (val (hash native-hash) key)
-  (setf (gethash key (dict hash)) val))
-
-;;; sub: by default same as prop
-(defgeneric sub (hash key)
-  (:method (hash key) (prop hash key)))
-
-(defgeneric (setf sub) (val hash key)
-  (:method (val hash key) (setf (prop hash key) val)))
-
-(defclass global-object (native-hash)
-  ())
-
-(defmethod (setf prop) (val (hash global-object) key)
-  (set (if (stringp key) (intern (string-upcase key) :js-user) key) val);;todo:
-  (call-next-method val hash key))
-
-(defmethod set-default ((hash global-object) val)
-  val)
-
-#+nil (defmethod prop ((hash global-object) key)
-	(call-next-method hash key))
-
-(defclass native-function (native-hash)
-  ((name :accessor name :initarg :name)
-   (proc :accessor proc :initarg :proc)
-   (env :accessor env :initarg :env)))
-
-(defmethod initialize-instance :after ((f native-function) &rest args)
-  (declare (ignore args))
-  (setf (prop f "prototype") (make-instance 'native-hash)))
-
-(defparameter *global* (make-instance 'global-object))
-(defparameter js-user::this *global*)
-
-;;;
-
 (defmacro lookup-in-lexchain (name lexchain)
   (let ((obj (gensym))
 	(prop (gensym))
@@ -158,10 +84,9 @@
 		 (!return
 		  (eval-in-lexenv ,lex-chain -object-env-stack- form))))))
 
-;;;
-
+;;
 (defmacro !toplevel (toplevel-vars lex-chain from-eval-p form)
-  `(macrolet ((!arguments () 'arguments)
+  `(macrolet ((!arguments () :undefined)
 	      (!eval-in-lexenv ()
 		(macroexpand `(eval-function ,',lex-chain)))
 	      (!name (name)
@@ -245,21 +170,7 @@
        (funcall ,*proc
 		,(case (car func)
 		       ((!sub !dot) (second func))
-		       (t js-user::this)) ,@args))))
-
-(defgeneric placeholder-class (func)
-  (:method (func)
-    (declare (ignore func))
-    'native-hash))
-
-(defun js-new (func args)
-  (let* ((proto (prop func "prototype"))
-	 (ret (make-instance (placeholder-class func)
-			     :prototype proto
-			     :sealed (sealed proto))))
-    (apply (proc func) ret args)
-    (setf (prop ret "constructor") func)
-    ret))
+		       (t 'js-user::this)) ,@args))))
 
 (defmacro !new (func args)
   `(js-new ,func (list ,@args)))
@@ -328,45 +239,9 @@
 		  (macroexpand `(set-in-lexchain ,name ,val ,',lex-chain))))
        ,body)))
 
-(defmacro js-operators (&rest ops)
-  `(progn
-     ,@(mapcar (lambda (op)
-		 (if (symbolp op)
-		     `(setf (symbol-function ',(js-intern op)) (function ,op))
-		     `(setf (symbol-function ',(js-intern (first op)))
-			    (function ,(second op)))))
-	       ops)))
-
-;;;;;;;;
-
-(defun less (ls rs)
-  (declare (fixnum ls rs))
-  (the boolean (< ls rs)))
-;;;;;;;;
-(js-operators
- ;;binary
- (< less) > <= >=
- ;;unary
- (++ 1+) (-- 1-))
-
 (defmacro !binary (op-sym ls rs)
   (let ((op (symbol-function op-sym)))
     `(funcall ,op ,ls ,rs)))
-
-(defun undefined? (exp)
-  (or (eq exp :undefined)
-      (eq exp :undefined-unset)))
-
-(defmacro js->boolean (exp)
-  (let ((rexp (gensym)))
-    `(let ((,rexp ,exp))
-       (not
-	(or (not ,exp)
-	    (undefined? ,exp)
-	    (and (numberp ,rexp) (zerop ,rexp)))))))
-
-#+nil (defmacro !label (name body)
-	(tagbody ,(->sym name) ,body))
 
 (defmacro !if (exp then else)
   `(if (js->boolean ,exp) ,then ,else))
@@ -418,43 +293,6 @@
 	      ,catch)))
      ,finally))
 
-(defmacro !eval (str)
-  (process-ast (parse-js-string str)))
-
-;;;
-(defun js-load-file (fname)
-  (with-open-file (str fname)
-    (eval (process-ast (parse-js str)))))
-
-(defun js-reader (stream)
-  `(!eval ,(read-line-stream stream)))
-
-(define-reader 'javascript #'js-reader)
-
-;;;
-
-(defclass arguments (native-hash)
-  ((vlen :initarg :vlen :reader vlen)
-   (length :initarg :length :reader arg-length)
-   (get-arr :initarg :get-arr :reader get-arr)
-   (set-arr :initarg :set-arr :reader set-arr)))
-
-(defmethod sub ((args arguments) key)
-  (if (and (integerp key) (>= key 0))
-      (if (< key (vlen args)) (funcall (aref (get-arr args) key) key)
-	  (funcall (aref (get-arr args) (vlen args)) key))
-      (call-next-method args key)))
-
-(defmethod (setf sub) (val (args arguments) key)
-  (if (and (integerp key) (>= key 0))
-      (if (< key (vlen args)) (funcall (aref (set-arr args) key) key val)
-	  (funcall (aref (set-arr args) (vlen args)) key val))
-      (call-next-method val args key)))
-
-(defun arguments-as-list (args)
-  (loop for i from 0 below (arg-length args)
-     collecting (sub args i)))
-
 (defmacro make-args (var-names oth)
   (let* ((vars (mapcar (lambda (var) (->usersym var)) var-names))
 	 (get-arr (gensym))
@@ -496,3 +334,46 @@
 			      (declare (ignore -))
 			      (+ ,argument-cnt (length ,oth))))
        ,inst)))
+
+(defmacro !eval (str)
+  (process-ast (parse-js-string str)))
+
+;;
+(defun js-funcall (func &rest args)
+  (apply (proc func) nil args))
+
+(defmacro js-function (args &body body)
+  `(with-ignored-style-warnings
+     (!function nil nil ,args nil
+		((!return (or (progn ,@body) :undefined))))))
+
+(defun js-new (func args)
+  (let* ((proto (prop func "prototype"))
+	 (ret (make-instance (placeholder-class func)
+			     :prototype proto
+			     :sealed (sealed proto))))
+    (apply (proc func) ret args)
+    (setf (prop ret "constructor") func)
+    ret))
+
+(defun undefined? (exp)
+  (or (eq exp :undefined)
+      (eq exp :undefined-unset)))
+
+(defmacro js->boolean (exp)
+  (let ((rexp (gensym)))
+    `(let ((,rexp ,exp))
+       (not
+	(or (not ,exp)
+	    (undefined? ,exp)
+	    (and (numberp ,rexp) (zerop ,rexp)))))))
+
+;;
+(defun js-load-file (fname)
+  (with-open-file (str fname)
+    (eval (process-ast (parse-js str)))))
+
+(defun js-reader (stream)
+  `(!eval ,(read-line-stream stream)))
+
+(define-reader 'javascript #'js-reader)

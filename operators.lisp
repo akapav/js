@@ -146,3 +146,26 @@
 
 (defun !!= (ls rs)
   (not (!== ls rs)))
+
+
+(defmacro js-operators (&rest ops)
+  `(progn
+     ,@(mapcar (lambda (op)
+		 (if (symbolp op)
+		     `(setf (symbol-function ',(js-intern op)) (function ,op))
+		     `(setf (symbol-function ',(js-intern (first op)))
+			    (function ,(second op)))))
+	       ops)))
+
+;;;;;;;;
+
+(defun less (ls rs)
+  (declare (fixnum ls rs))
+  (the boolean (< ls rs)))
+;;;;;;;;
+(js-operators
+ ;;binary
+ (< less) > <= >=
+ ;;unary
+ (++ 1+) (-- 1-))
+

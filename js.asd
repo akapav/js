@@ -10,6 +10,7 @@
    (:file "reader")
    (:file "proc")
    (:file "js")
+   (:file "runtime")
    (:file "stdlib")
    (:file "operators"))
   :perform (load-op :after (op js)
