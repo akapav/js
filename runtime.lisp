@@ -100,10 +100,6 @@
   (setf (proc func) (proc val))
   (setf (name func) nil))
 
-(defparameter function.prototype
-  (make-instance 'native-function
-		 :proc (lambda (&rest args) (declare (ignore args)) :undefined)))
-
 (defparameter function.ctor
   (js-function ()
     (let ((func (apply #'new-function (arguments-as-list (!arguments)))))
