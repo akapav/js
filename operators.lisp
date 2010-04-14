@@ -130,3 +130,19 @@
      ((and (numberp ls) (numberp rs)) #'mod)
      ((and (js-number? ls) (js-number? rs)) #'%number.ext)
      (t (constantly :NaN))) ls rs))
+
+;;
+(defun !=== (ls rs)
+  (unless (or (eq ls :NaN) (eq rs :NaN))
+    (equalp ls rs)))
+
+(defun !!== (ls rs)
+  (not (!=== ls rs)))
+
+;;
+;;tmp hack!!!
+(defun !== (ls rs)
+  (!=== ls rs))
+
+(defun !!= (ls rs)
+  (not (!== ls rs)))

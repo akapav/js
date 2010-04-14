@@ -209,7 +209,8 @@
        (!setf ,place (,op ,place))
        ,ret)))
 
-(defmacro !num (num) num)
+(defmacro !num (num) (if (integerp num) num
+			 (coerce num 'double-float)))
 
 (defmacro !string (str) str)
 
@@ -344,7 +345,7 @@
 ;;;;;;;;
 (js-operators
  ;;binary
- (== equalp) (< less) > <= >= (!= /=)
+ (< less) > <= >=
  ;;unary
  (++ 1+) (-- 1-))
 
