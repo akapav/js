@@ -344,7 +344,6 @@
 ;;;;;;;;
 (js-operators
  ;;binary
- (% mod)
  (== equalp) (< less) > <= >= (!= /=)
  ;;unary
  (++ 1+) (-- 1-))

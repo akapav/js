@@ -9,13 +9,13 @@
        (declare (,type ,ls ,rs))
        (,op ,ls ,rs))))
 
-(defmacro extended-number-op ((op)
+(defmacro extended-number-op ((op &key var)
 			      inf-inf inf-minf minf-inf minf-minf
 			      num-inf num-minf inf-num minf-num)
   (let* ((namestr (concatenate 'string (symbol-name op) "NUMBER"))
 	 (name (intern namestr))
 	 (nameext (intern (concatenate 'string namestr ".EXT")))
-	 (ls (gensym))
+	 (ls (or var (gensym)))
 	 (rs (gensym)))
     `(defun ,nameext (,ls ,rs)
        (declare (js.number ,ls ,rs))
@@ -115,4 +115,18 @@
    (cond
      ((and (numberp ls) (numberp rs)) #'/number)
      ((and (js-number? ls) (js-number? rs)) #'/number.ext)
+     (t (constantly :NaN))) ls rs))
+
+;;
+(defun %number (ls rs) (mod ls rs))
+
+(extended-number-op (% :var num)
+		    :NaN :NaN :NaN :NaN
+		    num num :NaN :NaN)
+
+(defun !% (ls rs)
+  (funcall
+   (cond
+     ((and (numberp ls) (numberp rs)) #'mod)
+     ((and (js-number? ls) (js-number? rs)) #'%number.ext)
      (t (constantly :NaN))) ls rs))
