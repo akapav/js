@@ -33,16 +33,6 @@
 
 ;;
 
-(defun js-number? (o)
-  (or (numberp o)
-      (eq o :NaN)
-      (eq o :Inf)
-      (eq o :-Inf)))
-
-(deftype js.number ()
-  `(satisfies js-number?))
-
-;;
 (trivial-op fixnum +)
 (trivial-op number +)
 
@@ -140,13 +130,27 @@
   (not (!=== ls rs)))
 
 ;;
-;;tmp hack!!!
 (defun !== (ls rs)
-  (!=== ls rs))
+  (or (!=== ls rs)
+      (cond
+	((and (js-number? ls) (js-string? rs))
+	 (!=== ls (js-funcall number.ctor rs)))
+	((and (js-string? ls) (js-number? rs))
+	 (!=== (js-funcall number.ctor ls) rs))
+	((or
+	  (and (undefined? ls) (eq rs :null))
+	  (and (eq ls :null) (undefined? rs))) t)
+	((eq ls :true) (!== 1 rs))
+	((eq ls :false) (!== 0 rs))
+	((eq rs :true) (!== ls 1))
+	((eq rs :false) (!== ls 0))
+	(t (!=== (to-string (value ls))
+		 (to-string (value rs)))))))
 
 (defun !!= (ls rs)
   (not (!== ls rs)))
 
+;;tmp hack!!!
 
 (defmacro js-operators (&rest ops)
   `(progn

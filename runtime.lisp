@@ -201,6 +201,10 @@
 (setf (prop *global* "Array") array.ctor)
 
 ;;
+(defun js-string? (o)
+  (or (stringp o)
+      (stringp (value o))))
+
 (defparameter string.ctor
   (js-function (obj)
     (let ((str (if (stringp obj) obj (format nil "~A" obj))))
