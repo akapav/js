@@ -220,10 +220,41 @@
 	(prop string.prototype key default))))
 
 ;;
-(defparameter number.ctor ;;todo: set-default (same as string)
+(defun js-number? (o)
+  (or (numberp o)
+      (eq o :NaN)
+      (eq o :Inf)
+      (eq o :-Inf)))
+
+;;todo: there is an asymmetry between js-number? and js-string?
+;;predicates. js-string? checks for a default value within object too
+;;while js-number? doesn't. fix will affect comparison operators
+
+(deftype js.number ()
+  `(satisfies js-number?))
+
+(defparameter number.ctor
   (js-function (n)
-    (cond ((numberp n) n)
-	  ((stringp n)
-	   (with-input-from-string (s n)
-	     (js-funcall number.ctor (read s))))
-	  (t :NaN))))
+    (let ((val (cond ((eq n :undefined-unset) 0)
+		     ((js-number? n) n)
+		     (t (with-input-from-string (s (to-string (value n)))
+			  (let ((n2 (read s)))
+			    (if (js-number? n2) n2 :NaN)))))))
+      (set-default js-user::this val)
+      (the js.number val))))
+
+(define-primitive-prototype number.prototype (js-new number.ctor '(0)))
+
+(setf (prop number.ctor "prototype") number.prototype)
+
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (shadow 'Number 'js-user)) ;;todo: ...
+
+(setf (prop *global* "Number") number.ctor)
+
+(defmethod prop ((num number) key &optional (default :undefined))
+  (let* ((sealed (sealed number.prototype))
+	 (action (and sealed (gethash key sealed)))) ;todo: not sure yet wether nums have sealed props
+    (if action
+	(funcall action num)
+	(prop number.prototype key default))))
