@@ -43,6 +43,33 @@
      ,@body))
 
 ;;
+(setf value-of (js-function (obj) (value js-user::this)))
+
+(defgeneric to-string (obj)
+  (:method (obj) (format nil "~A" obj)))
+
+(defmethod to-string ((obj (eql *global*)))
+  "[object global]")
+
+(defmethod to-string ((obj native-hash))
+  "[object Object]")
+
+(defmethod to-string ((obj native-function))
+  (if (name obj)
+      (format nil "function ~A() {[code]}" (name obj))
+      "function () {[code]}"))
+
+(defmethod to-string ((obj string))
+  obj)
+
+(defmethod to-string ((obj vector))
+  (format nil "~{~A~^,~}" (coerce obj 'list)))
+
+(setf to-string (js-function () (to-string (value js-user::this))))
+
+(mapc #'add-standard-properties (cons *global* *primitive-prototypes*))
+
+;;
 (add-sealed-property string.prototype
 		     "length"
 		     (lambda (obj) (length (value obj))))

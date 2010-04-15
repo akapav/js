@@ -1,9 +1,6 @@
 (in-package :js)
 
 ;;
-(defgeneric set-default (hash val) ;;todo: put it as a slot writer
-  (:method (hash val) (declare (ignore hash)) val))
-
 (defgeneric prop (hash key &optional default)
   (:method (hash key &optional default)
     (declare (ignore hash key default)) :undefined))
@@ -20,8 +17,27 @@
 (defgeneric placeholder-class (func)
   (:method (func) (declare (ignore func)) 'native-hash))
 
+(defgeneric set-default (hash val) ;;todo: put it as a slot writer
+  (:method (hash val) (declare (ignore hash)) val))
+
 (defgeneric value (obj)
   (:method (obj) obj))
+
+;;
+(defparameter value-of nil) ;;function.prototype is not defined yet
+(defparameter to-string nil)
+
+(defun add-standard-properties (obj)
+  (setf (prop obj "valueOf") value-of)
+  (setf (prop obj "toString") to-string)
+  obj)
+
+(defparameter *primitive-prototypes* nil)
+
+(defmacro define-primitive-prototype (name exp)
+  `(progn
+     (defparameter ,name ,exp)
+     (push ,name *primitive-prototypes*)))
 
 ;;
 (defclass native-hash ()
@@ -29,6 +45,10 @@
    (dict :accessor dict :initform (make-hash-table :test 'equal))
    (sealed :accessor sealed :initform nil :initarg :sealed)
    (prototype :accessor prototype :initform nil :initarg :prototype)))
+
+(defmethod initialize-instance :after ((obj native-hash) &rest args)
+  (declare (ignore args))
+  (setf (value obj) obj))
 
 (defmethod set-default ((hash native-hash) val)
   (setf (value hash) val))
@@ -76,11 +96,11 @@
 
 (defmethod initialize-instance :after ((f native-function) &rest args)
   (declare (ignore args))
-  (setf (prop f "prototype") (make-instance 'native-hash)))
+  (setf (prop f "prototype") (add-standard-properties (make-instance 'native-hash))))
 
-(defparameter function.prototype
-  (make-instance 'native-function
-		 :proc (lambda (&rest args) (declare (ignore args)) :undefined)))
+(define-primitive-prototype function.prototype
+    (make-instance 'native-function
+		   :proc (lambda (&rest args) (declare (ignore args)) :undefined)))
 
 (defun new-function (&rest args) ;;due to parser error it is
 				 ;;impossible to use anonymous
@@ -98,7 +118,8 @@
 (defmethod set-default ((func native-function) val)
   (setf (prototype func) function.prototype)
   (setf (proc func) (proc val))
-  (setf (name func) nil))
+  (setf (name func) nil)
+  (call-next-method func val))
 
 (defparameter function.ctor
   (js-function ()
@@ -113,6 +134,7 @@
 (setf (prop function.ctor "prototype") function.prototype)
 (setf (prop *global* "Function") function.ctor)
 
+(defparameter value-of (js-function () (print "kiki")))
 ;;
 (defclass arguments (native-hash)
   ((vlen :initarg :vlen :reader vlen)
@@ -169,7 +191,7 @@
 
 (defmethod placeholder-class ((func (eql array.ctor))) 'array-object)
 
-(defparameter array.prototype (js-new js::array.ctor ()))
+(define-primitive-prototype array.prototype (js-new js::array.ctor ()))
 
 (setf (prop array.ctor "prototype") array.prototype)
 
@@ -185,8 +207,7 @@
       (set-default js-user::this str)
       (the string str))))
 
-(defparameter string.prototype
-  (js-new js::string.ctor '("")))
+(define-primitive-prototype string.prototype (js-new js::string.ctor '("")))
 
 (setf (prop string.ctor "prototype") string.prototype)
 (setf (prop *global* "String") string.ctor)
