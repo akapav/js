@@ -23,6 +23,9 @@
     (declare (ignore keyword))
     (mapcar #'transform-tree form)))
 
+(define-transform-rule (:atom form)
+  (list (js-intern (car form)) (second form)))
+
 (define-transform-rule (:var form)
   (cons (js-intern (car form))
 	(list (mapcar

@@ -104,10 +104,7 @@
 		     (cons "arguments" toplevel-vars)))
 	 (progn ,@form)))))
 
-(defmacro !atom (atom)
-  (case atom
-    ((!false !null) nil)
-    ((!true) t)))
+(defmacro !atom (atom) atom)
 
 (defmacro !dot (obj attr)
   `(prop ,obj ,attr))
@@ -366,6 +363,8 @@
        (not
 	(or (not ,exp)
 	    (undefined? ,exp)
+	    (eq ,exp :null)
+	    (eq ,exp :false)
 	    (and (numberp ,rexp) (zerop ,rexp)))))))
 
 ;;
