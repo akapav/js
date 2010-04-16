@@ -9,7 +9,7 @@
        (declare (,type ,ls ,rs))
        (,op ,ls ,rs))))
 
-(defmacro extended-number-op ((op &key var)
+(defmacro extended-number-op ((op &key var (nan :NaN))
 			      inf-inf inf-minf minf-inf minf-minf
 			      num-inf num-minf inf-num minf-num)
   (let* ((namestr (concatenate 'string (symbol-name op) "NUMBER"))
@@ -20,7 +20,9 @@
     `(defun ,nameext (,ls ,rs)
        (declare (js.number ,ls ,rs))
        (cond
-	 ((or (eq ,ls :NaN) (eq ,rs :NaN)) :NaN)
+	 ((and (numberp (value ,ls)) (numberp (value ,rs)))
+	  (,name (value ,ls) (value ,rs)))
+	 ((or (eq ,ls :NaN) (eq ,rs :NaN)) ,nan)
 	 ((and (eq ,ls :Inf) (eq ,rs :Inf)) ,inf-inf)
 	 ((and (eq ,ls :Inf) (eq ,rs :-Inf)) ,inf-minf)
 	 ((and (eq ,ls :-Inf) (eq ,rs :Inf)) ,minf-inf)
@@ -29,7 +31,7 @@
 	 ((eq ,rs :-Inf) ,num-minf)
 	 ((eq ,ls :Inf) ,inf-num)
 	 ((eq ,ls :-Inf) ,minf-num)
-	 (t (,name ,ls ,rs))))))
+	 (t (error (format nil "internal error in ~A~%" ',op)))))))
 
 ;;
 
@@ -93,11 +95,13 @@
 (defun /number (ls rs)
   (declare (number ls rs))
   (if (zerop rs)
-      (if (minusp ls) :-Inf :Inf)
+      (cond ((zerop ls) :NaN)
+	    ((minusp ls) :-Inf)
+	    (t :Inf))
       (coerce (/ ls rs) 'double-float)))
 
 (extended-number-op (/)
-		    :Inf :-Inf :-Inf :Inf
+		    :NaN :NaN :NaN :NaN
 		    0 0 :Inf :-Inf)
 
 (defun !/ (ls rs)
@@ -124,7 +128,7 @@
 ;;
 (defun !=== (ls rs)
   (unless (or (eq ls :NaN) (eq rs :NaN))
-    (equalp ls rs)))
+    (equal ls rs)))
 
 (defun !!== (ls rs)
   (not (!=== ls rs)))
@@ -133,6 +137,8 @@
 (defun !== (ls rs)
   (or (!=== ls rs)
       (cond
+	((eq (type-of (value ls)) (type-of (value rs)))
+	 (!=== (value ls) (value rs)))
 	((and (js-number? ls) (js-string? rs))
 	 (!=== ls (js-funcall number.ctor rs)))
 	((and (js-string? ls) (js-number? rs))
@@ -150,26 +156,76 @@
 (defun !!= (ls rs)
   (not (!== ls rs)))
 
-;;tmp hack!!!
+;;
+(trivial-op fixnum <)
+(trivial-op number <)
 
-(defmacro js-operators (&rest ops)
-  `(progn
-     ,@(mapcar (lambda (op)
-		 (if (symbolp op)
-		     `(setf (symbol-function ',(js-intern op)) (function ,op))
-		     `(setf (symbol-function ',(js-intern (first op)))
-			    (function ,(second op)))))
-	       ops)))
+(extended-number-op (< :nan nil)
+		    nil nil t nil
+		    t nil nil t)
 
-;;;;;;;;
+(defun !< (ls rs)
+  (cond
+    ((and (typep ls 'fixnum) (typep rs 'fixnum)) (<fixnum ls rs))
+    ((and (numberp ls) (numberp rs)) (<number ls rs))
+    ((and (js-number? ls) (js-number? rs)) (<number.ext ls rs))
+    ((and (js-number? ls) (js-string? rs))
+     (<number.ext ls (js-funcall number.ctor rs)))
+    ((and (js-string? ls) (js-number? rs))
+     (<number.ext (js-funcall number.ctor ls) rs))
+    (t (when (string< (to-string (value ls))
+		      (to-string (value rs))) t))))
 
-(defun less (ls rs)
-  (declare (fixnum ls rs))
-  (the boolean (< ls rs)))
-;;;;;;;;
-(js-operators
- ;;binary
- (< less) > <= >=
- ;;unary
- (++ 1+) (-- 1-))
+;;
+(trivial-op fixnum >)
+(trivial-op number >)
 
+(extended-number-op (> :nan nil)
+		    nil nil t nil
+		    t nil nil t)
+
+(defun !> (ls rs)
+  (cond
+    ((and (typep ls 'fixnum) (typep rs 'fixnum)) (>fixnum ls rs))
+    ((and (numberp ls) (numberp rs)) (>number ls rs))
+    ((and (js-number? ls) (js-number? rs)) (>number.ext ls rs))
+    ((and (js-number? ls) (js-string? rs))
+     (>number.ext ls (js-funcall number.ctor rs)))
+    ((and (js-string? ls) (js-number? rs))
+     (>number.ext (js-funcall number.ctor ls) rs))
+    (t (when (string> (to-string (value ls))
+		      (to-string (value rs))) t))))
+
+;;
+(defun !<= (ls rs)
+  (unless (or (eq ls :NaN) (eq rs :NaN))
+    (not (!> ls rs))))
+
+(defun !>= (ls rs)
+  (unless (or (eq ls :NaN) (eq rs :NaN))
+    (not (!< ls rs))))
+
+;;
+(defun !++ (arg)
+  (!+ (if (js-number? arg) arg
+	  (js-funcall number.ctor arg))
+      1))
+
+(defun !-- (arg)
+  (!- (if (js-number? arg) arg
+	  (js-funcall number.ctor arg))
+      1))
+
+;;
+(defmacro !&& (ls rs)
+  (let ((resls (gensym)))
+    `(let ((,resls ,ls))
+       (if (js->boolean ,resls) ,rs ,resls))))
+
+(defmacro |!\|\|| (ls rs)
+  (let ((resls (gensym)))
+    `(let ((,resls ,ls))
+       (if (js->boolean ,resls) ,resls ,rs))))
+
+(defmacro !! (exp)
+  `(not (js->boolean ,exp)))

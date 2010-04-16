@@ -123,7 +123,10 @@
       `(!setf ,place (!binary ,op ,place ,val))))
 
 (defmacro !unary-prefix (op place)
-  `(!setf ,place (,op ,place)))
+  (case op
+    ((!++ !--) `(!setf ,place (,op ,place)))
+    ((!- !+) `(!- 0 ,place))
+    (t `(,op ,place))))
 
 (defmacro !unary-postfix (op place)
   (let ((ret (gensym)))
@@ -236,9 +239,8 @@
 		  (macroexpand `(set-in-lexchain ,name ,val ,',lex-chain))))
        ,body)))
 
-(defmacro !binary (op-sym ls rs)
-  (let ((op (symbol-function op-sym)))
-    `(funcall ,op ,ls ,rs)))
+(defmacro !binary (op ls rs)
+  `(,op ,ls ,rs))
 
 (defmacro !if (exp then else)
   `(if (js->boolean ,exp) ,then ,else))
@@ -361,10 +363,11 @@
   (let ((rexp (gensym)))
     `(let ((,rexp ,exp))
        (not
-	(or (not ,exp)
-	    (undefined? ,exp)
-	    (eq ,exp :null)
-	    (eq ,exp :false)
+	(or (not ,rexp)
+	    (undefined? ,rexp)
+	    (eq ,rexp :null)
+	    (eq ,rexp :false)
+	    (eq ,rexp :NaN)
 	    (and (numberp ,rexp) (zerop ,rexp)))))))
 
 ;;

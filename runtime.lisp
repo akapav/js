@@ -207,7 +207,7 @@
 
 (defparameter string.ctor
   (js-function (obj)
-    (let ((str (if (stringp obj) obj (format nil "~A" obj))))
+    (let ((str (if (stringp obj) obj (to-string (value obj)))))
       (set-default js-user::this str)
       (the string str))))
 
@@ -225,14 +225,12 @@
 
 ;;
 (defun js-number? (o)
-  (or (numberp o)
-      (eq o :NaN)
-      (eq o :Inf)
-      (eq o :-Inf)))
-
-;;todo: there is an asymmetry between js-number? and js-string?
-;;predicates. js-string? checks for a default value within object too
-;;while js-number? doesn't. fix will affect comparison operators
+  (flet ((num? (o)
+	   (or (numberp o)
+	       (eq o :NaN)
+	       (eq o :Inf)
+	       (eq o :-Inf))))
+    (or (num? o) (num? (value o)))))
 
 (deftype js.number ()
   `(satisfies js-number?))
@@ -240,7 +238,7 @@
 (defparameter number.ctor
   (js-function (n)
     (let ((val (cond ((eq n :undefined-unset) 0)
-		     ((js-number? n) n)
+		     ((js-number? n) (value n))
 		     (t (with-input-from-string (s (to-string (value n)))
 			  (let ((n2 (read s)))
 			    (if (js-number? n2) n2 :NaN)))))))
