@@ -170,13 +170,18 @@
   ())
 
 (defmethod prop ((arr array-object) key &optional (default :undefined))
-  (if (integerp key) ;;todo: safe conversion to integer and boundary check
+  (if (integerp key) ;;todo: safe conversion to integer
       (aref (value arr) key)
       (call-next-method arr key default)))
 
 (defmethod (setf prop) (val (arr array-object) key)
   (if (integerp key) ;;todo: ... as above ...
-      (setf (aref (value arr) key) val)
+      (let* ((arr (value arr))
+	     (len (length arr)))
+	(when (>= key len)
+	  (loop for ndx from len to key do
+	       (vector-push-extend :undefined arr)))
+	(setf (aref (value arr) key) val))
       (call-next-method val arr key)))
 
 (defparameter array.ctor
