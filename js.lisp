@@ -156,6 +156,9 @@
 (defmacro !block (&optional form)
   `(progn ,@form))
 
+(defmacro !seq (form1 result)
+  `(prog2 ,form1 ,result))
+
 (defmacro !var (vars)
   `(progn ,@(mapcar (lambda (var)
 		      (when (cdr var)
