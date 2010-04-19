@@ -245,6 +245,9 @@
 (defmacro !binary (op ls rs)
   `(,op ,ls ,rs))
 
+(defmacro !conditional (exp then else)
+  `(!if ,exp ,then ,else))
+
 (defmacro !if (exp then else)
   `(if (js->boolean ,exp) ,then ,else))
 
