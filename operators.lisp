@@ -229,3 +229,35 @@
 
 (defmacro !! (exp)
   `(not (js->boolean ,exp)))
+
+;;
+(defun !instanceof (ls rs)
+  (and (typep ls 'native-hash)
+       (eq (prop ls "constructor") rs)))
+
+(defgeneric js.typeof (exp)
+  (:method (exp) "object"))
+
+(defmethod js.typeof ((exp native-function))
+  "function")
+
+(defmethod js.typeof ((exp string))
+  "string")
+
+(defmethod js.typeof ((exp number))
+  "number")
+
+(defmethod js.typeof ((exp (eql :undefined)))
+  "undefined")
+
+(defmethod js.typeof ((exp (eql :NaN)))
+  "number")
+
+(defmethod js.typeof ((exp (eql :Inf)))
+  "number")
+
+(defmethod js.typeof ((exp (eql :-Inf)))
+  "number")
+
+(defun !typeof (exp)
+  (js.typeof exp))
