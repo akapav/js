@@ -125,7 +125,7 @@
 (defmacro !unary-prefix (op place)
   (case op
     ((!++ !--) `(!setf ,place (,op ,place)))
-    ((!- !+) `(!- 0 ,place))
+    ((!- !+) `(,op 0 ,place))
     (t `(,op ,place))))
 
 (defmacro !unary-postfix (op place)
@@ -340,12 +340,9 @@
 			      (+ ,argument-cnt (length ,oth))))
        ,inst)))
 
-(defmacro !eval (str)
-  (process-ast (parse-js-string str)))
-
 ;;
 (defun js-funcall (func &rest args)
-  (apply (proc func) nil args))
+  (apply (the function (proc func)) nil args))
 
 (defmacro js-function (args &body body)
   `(with-ignored-style-warnings
@@ -357,26 +354,33 @@
 	 (ret (make-instance (placeholder-class func)
 			     :prototype proto
 			     :sealed (sealed proto))))
-    (apply (proc func) ret args)
+    (apply (the function (proc func)) ret args)
     (setf (prop ret "constructor") func)
     ret))
 
-(defun undefined? (exp)
-  (or (eq exp :undefined)
-      (eq exp :undefined-unset)))
+(defmacro undefined? (exp)
+  `(or (eq ,exp :undefined)
+       (eq ,exp :undefined-unset)))
 
-(defmacro js->boolean (exp)
-  (let ((rexp (gensym)))
-    `(let ((,rexp ,exp))
+(defun js->boolean (exp)
+  (when exp
+    (typecase exp
+      (fixnum (not (zerop exp)))
+      (number (not (zerop exp)))
+      (string (not (zerop (length exp))))
+      (symbol
        (not
-	(or (not ,rexp)
-	    (undefined? ,rexp)
-	    (eq ,rexp :null)
-	    (eq ,rexp :false)
-	    (eq ,rexp :NaN)
-	    (and (numberp ,rexp) (zerop ,rexp)))))))
+	(or
+	 (undefined? exp)
+	 (eq exp :null)
+	 (eq exp :false)
+	 (eq exp :NaN))))
+      (native-hash (js->boolean (value exp))))))
 
 ;;
+(defmacro !eval (str)
+  (process-ast (parse-js-string str)))
+
 (defun js-load-file (fname)
   (with-open-file (str fname)
     (eval (process-ast (parse-js str)))))

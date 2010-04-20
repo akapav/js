@@ -3,7 +3,10 @@
 (eval-when (:compile-toplevel :load-toplevel)
   (defun ctor (sym)
     (intern (concatenate 'string
-			 (symbol-name sym) "." (symbol-name 'ctor)))))
+			 (symbol-name sym) "." (symbol-name 'ctor))))
+  (defun ensure (sym)
+    (intern (concatenate 'string
+			 (symbol-name sym) "." (symbol-name 'ensure)))))
 
 (defmacro define-js-method (type name args &body body)
   (flet ((arg-names (args)
@@ -14,6 +17,7 @@
 	   (intern (concatenate 'string
 				(symbol-name type) "." name)))
 	  (ctor-name (ctor type))
+	  (ensure-name (ensure type))
 	  (prototype-name
 	   (intern (concatenate 'string (symbol-name type) ".PROTOTYPE")))
 	  (arg-names (arg-names args))
@@ -22,7 +26,7 @@
 	 (defparameter ,canonical-name
 	   (js-function ,arg-names
 	     (let ((,(car arg-names)
-		    (js-funcall ,ctor-name ,(car arg-names)))
+		    (js-funcall ,ensure-name ,(car arg-names)))
 		   ,@(mapcar
 		      (lambda (name val)
 			`(,name (if (undefined? ,name) ,val ,name)))
@@ -45,9 +49,6 @@
 ;;
 (setf value-of (js-function (obj) (value js-user::this)))
 
-(defgeneric to-string (obj)
-  (:method (obj) (format nil "~A" obj)))
-
 (defmethod to-string ((obj (eql *global*)))
   "[object global]")
 
@@ -63,13 +64,16 @@
   obj)
 
 (defmethod to-string ((obj vector))
-  (format nil "~{~A~^,~}" (coerce obj 'list)))
+  (declare (special |ARRAY.join|))
+  (js-funcall |ARRAY.join| obj ","))
 
 (setf to-string (js-function () (to-string (value js-user::this))))
 
 (mapc #'add-standard-properties (cons *global* *primitive-prototypes*))
 
 ;;
+(defparameter string.ensure string.ctor)
+
 (add-sealed-property string.prototype
 		     "length"
 		     (lambda (obj) (length (value obj))))
@@ -153,6 +157,12 @@
 		       'list))))
 
 ;;
+(defparameter array.ensure
+  (js-function (arg)
+    (let ((val (value arg)))
+      (if (typep val 'vector) val
+	  (js-funcall array.ctor arg)))))
+
 (add-sealed-property array.prototype
 		     "length"
 		     (lambda (obj) (length (value obj))))
@@ -168,21 +178,25 @@
 	   (arr (apply #'concatenate 'list
 		       (loop for i from 0 below len
 			  collect
-			    (let* ((arg (sub (!arguments) i))
-				   (val (value arg)))
-			      (if (typep val 'vector)
-				  val
-				  (js-funcall array.ctor arg)))))))
+			    (let ((arg (sub (!arguments) i)))
+			      (js-funcall array.ensure arg))))))
       (js-new array.ctor arr))))
 
 (setf (prop array.prototype "concat")
 	(js-function ()
-	  (js-funcall |ARRAY.concat| (value net.svrg.js-user::this))))
+	  (apply #'js-funcall |ARRAY.concat|
+		 (value net.svrg.js-user::this)
+		 (arguments-as-list (!arguments)))))
 
 (setf (prop array.ctor "concat") |ARRAY.concat|)
 
-#+nil (define-js-method array "join" (str)
-  (with-asserted-types ((str string))))
+(define-js-method array "join" (arr str)
+  (let ((str (if (undefined? str) "," str)))
+    (with-asserted-types ((str string))
+      (format nil
+	      (format nil "~~{~~A~~^~A~~}" str)
+	      (mapcar (lambda (val) (to-string (value val)))
+		      (coerce arr 'list))))))
 
 (defmacro with-asserted-array ((var) &body body)
   `(let ((,var (value (if (typep (value ,var) 'vector) ,var

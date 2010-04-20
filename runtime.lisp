@@ -23,6 +23,9 @@
 (defgeneric value (obj)
   (:method (obj) obj))
 
+(defgeneric to-string (obj)
+  (:method (obj) (format nil "~A" obj)))
+
 ;;
 (defparameter value-of nil) ;;function.prototype is not defined yet
 (defparameter to-string nil)
@@ -170,7 +173,8 @@
   ())
 
 (defmethod prop ((arr array-object) key &optional (default :undefined))
-  (if (integerp key) ;;todo: safe conversion to integer
+  (if (and (integerp key)
+	   (< key (length (value arr)))) ;;todo: safe conversion to integer
       (aref (value arr) key)
       (call-next-method arr key default)))
 
@@ -212,7 +216,7 @@
 
 (defparameter string.ctor
   (js-function (obj)
-    (let ((str (if (stringp obj) obj (to-string (value obj)))))
+    (let ((str (if (eq obj :undefined-unset) "" (to-string (value obj)))))
       (set-default js-user::this str)
       (the string str))))
 
