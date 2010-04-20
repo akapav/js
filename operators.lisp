@@ -207,14 +207,10 @@
 
 ;;
 (defun !++ (arg)
-  (!+ (if (js-number? arg) arg
-	  (js-funcall number.ctor arg))
-      1))
+  (!+ (js-funcall number.ensure arg) 1))
 
 (defun !-- (arg)
-  (!- (if (js-number? arg) arg
-	  (js-funcall number.ctor arg))
-      1))
+  (!- (js-funcall number.ensure arg) 1))
 
 ;;
 (defmacro !&& (ls rs)

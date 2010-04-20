@@ -277,6 +277,84 @@
 (setf (prop array.ctor "pop") |ARRAY.pop|)
 
 ;;
+(defparameter number.ensure
+  (js-function (arg)
+    (if (js-number? arg) arg
+	(js-funcall number.ctor arg))))
+
+(defmacro math-function ((arg &key (inf :NaN) (minf :-NaN) (nan :NaN)) &body body)
+  `(js-function (,arg)
+     (let ((,arg (js-funcall number.ensure ,arg)))
+       (case ,arg
+	 ((:NaN) ,nan)
+	 ((:Inf) ,inf)
+	 ((:-Inf) ,minf)
+	 (t (progn ,@body))))))
+	     
+
+(setf (prop math.obj "PI") pi)
+
+(setf (prop math.obj "abs")
+      (math-function (arg :minf :Inf :inf :Inf)
+	(abs arg)))
+
+(setf (prop math.obj "acos")
+      (math-function (arg)
+	(let ((res (acos arg)))
+	  (if (realp res) res :NaN))))
+
+(setf (prop math.obj "asin")
+      (math-function (arg)
+	(let ((res (asin arg)))
+	  (if (realp res) res :NaN))))
+
+(setf (prop math.obj "atan")
+      (math-function (arg :minf (- (/ pi 2)) :inf (/ pi 2))
+	(atan arg)))
+
+(setf (prop math.obj "ceil")
+      (math-function (arg :minf :-Inf :inf :Inf)
+	(ceiling arg)))
+
+(setf (prop math.obj "cos")
+      (math-function (arg)
+	(cos arg)))
+
+(setf (prop math.obj "exp")
+      (math-function (arg :minf 0 :inf :Inf)
+	(exp arg)))
+
+(setf (prop math.obj "floor")
+      (math-function (arg :minf :-Inf :inf :Inf)
+	(floor arg)))
+
+(setf (prop math.obj "log")
+      (math-function (arg :inf :Inf)
+	(cond ((zerop arg) :-Inf)
+	      ((minusp arg) :NaN)
+	      (t (log arg)))))
+
+(setf (prop math.obj "round")
+      (math-function (arg :minf :-Inf :inf :Inf)
+	(round arg)))
+
+(setf (prop math.obj "sin")
+      (math-function (arg)
+	(sin arg)))
+
+(setf (prop math.obj "sqrt")
+      (math-function (arg)
+	(let ((res (sqrt arg)))
+	  (if (realp res) res :NaN))))
+
+(setf (prop math.obj "tan")
+      (math-function (arg)
+	(sin arg)))
+
+
+
+
+;;
 #+nil (setf (prop *global* "Object")
       (js-function (arg) arg))
 

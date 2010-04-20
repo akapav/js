@@ -269,3 +269,11 @@
     (if action
 	(funcall action num)
 	(prop number.prototype key default))))
+
+;;
+(defclass math (native-hash)
+  ())
+
+(defparameter math.obj (make-instance 'math))
+
+(setf (prop *global* "Math") math.obj)
