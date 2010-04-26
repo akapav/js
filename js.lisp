@@ -375,7 +375,7 @@
 	 (eq exp :null)
 	 (eq exp :false)
 	 (eq exp :NaN))))
-      (native-hash (js->boolean (value exp))))))
+      (t t))))
 
 ;;
 (defmacro !eval (str)

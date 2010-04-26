@@ -264,18 +264,37 @@
 
 (setf (prop array.ctor "splice") |ARRAY.splice|)
 
-(defparameter |ARRAY.pop|
+(define-js-method array "pop" (arr)
+  (unless (zerop (length arr))
+    (vector-pop arr)))
+
+(defparameter |ARRAY.push|
   (js-function (arr)
     (with-asserted-array (arr)
-      (unless (zerop (length arr))
-	(vector-pop arr)))))
+      (let ((args (cdr (arguments-as-list (!arguments)))))
+	(mapc (lambda (el) (vector-push-extend el arr)) args)
+	(length arr)))))
 
-(setf (prop array.prototype "pop")
+(setf (prop array.ctor "push") |ARRAY.push|)
+
+(setf (prop array.prototype "push")
       (js-function ()
-	(js-funcall |ARRAY.pop| net.svrg.js-user::this)))
+	(apply #'js-funcall |ARRAY.push| net.svrg.js-user::this
+	       (arguments-as-list (!arguments)))))
 
-(setf (prop array.ctor "pop") |ARRAY.pop|)
+(define-js-method array "reverse" (arr)
+  (nreverse arr))
 
+(defparameter js.lexsort
+  (js-function (ls rs)
+    (!return
+     (string< (js-funcall string.ensure ls)
+	      (js-funcall string.ensure rs)))))
+
+(define-js-method array "sort" (arr (func js.lexsort))
+    (print func)
+    (sort arr (lambda (ls rs) (js-funcall func ls rs))))
+  
 ;;
 (defparameter number.ensure
   (js-function (arg)
