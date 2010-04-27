@@ -26,6 +26,8 @@
 (defgeneric to-string (obj)
   (:method (obj) (format nil "~A" obj)))
 
+(defgeneric prototype (obj)
+  (:method (obj) nil))
 ;;
 (defparameter value-of nil) ;;function.prototype is not defined yet
 (defparameter to-string nil)
@@ -211,8 +213,9 @@
 
 ;;
 (defun js-string? (o)
-  (or (stringp o)
-      (stringp (value o))))
+  (typecase o
+    (string t)
+    (t (eq (prototype o) string.prototype))))
 
 (defparameter string.ctor
   (js-function (obj)
@@ -234,12 +237,14 @@
 
 ;;
 (defun js-number? (o)
-  (flet ((num? (o)
-	   (or (numberp o)
-	       (eq o :NaN)
-	       (eq o :Inf)
-	       (eq o :-Inf))))
-    (or (num? o) (num? (value o)))))
+  (typecase o
+    (real t)
+    (symbol
+     (or (realp o)
+	 (eq o :NaN)
+	 (eq o :Inf)
+	 (eq o :-Inf)))
+    (t (eq (prototype o) number.prototype))))
 
 (deftype js.number ()
   `(satisfies js-number?))
