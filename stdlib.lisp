@@ -41,7 +41,7 @@
 (defmacro with-asserted-types ((&rest type-pairs) &body body)
   `(let (,@(mapcar (lambda (pair)
 		     `(,(first pair) (js-funcall
-				      ,(ctor (second pair)) ,(first pair))))
+				      ,(ensure (second pair)) ,(first pair))))
 		   type-pairs))
      ;;todo: type declarations
      ,@body))
@@ -72,8 +72,6 @@
 (mapc #'add-standard-properties (cons *global* *primitive-prototypes*))
 
 ;;
-(defparameter string.ensure string.ctor)
-
 (add-sealed-property string.prototype
 		     "length"
 		     (lambda (obj) (length (value obj))))
@@ -296,11 +294,16 @@
     (sort arr (lambda (ls rs) (js-funcall func ls rs))))
   
 ;;
-(defparameter number.ensure
-  (js-function (arg)
-    (if (js-number? arg) arg
-	(js-funcall number.ctor arg))))
+(setf (prop number.ctor "MAX_VALUE") most-positive-double-float)
+(setf (prop number.ctor "MIN_VALUE") most-negative-double-float)
+(setf (prop number.ctor "POSITIVE_INFINITY") :NaN)
+(setf (prop number.ctor "NEGATIVE_INFINITY") :-NaN)
 
+;toExponential
+;toFixed
+;toPrecision
+
+;;
 (defmacro math-function ((arg &key (inf :NaN) (minf :-NaN) (nan :NaN)) &body body)
   `(js-function (,arg)
      (let ((,arg (js-funcall number.ensure ,arg)))
@@ -308,9 +311,15 @@
 	 ((:NaN) ,nan)
 	 ((:Inf) ,inf)
 	 ((:-Inf) ,minf)
-	 (t (progn ,@body))))))
-	     
+	 (t (progn ,@body))))))	     
 
+(setf (prop math.obj "E") (exp 1))
+(setf (prop math.obj "LN2") (log 2))
+(setf (prop math.obj "LN10") (log 10))
+(setf (prop math.obj "LOG2E") (log (exp 1) 2))
+(setf (prop math.obj "LOG10E") (log (exp 1) 10))
+(setf (prop math.obj "SQRT1_2") (sqrt .5))
+(setf (prop math.obj "SQRT1_2") (sqrt 2))
 (setf (prop math.obj "PI") pi)
 
 (setf (prop math.obj "abs")
@@ -330,6 +339,11 @@
 (setf (prop math.obj "atan")
       (math-function (arg :minf (- (/ pi 2)) :inf (/ pi 2))
 	(atan arg)))
+
+(setf (prop math.obj "atan2")
+      (js-function (y x)
+	(!return
+	 (js-funcall (prop math.obj "atan") (!/ y x)))))
 
 (setf (prop math.obj "ceil")
       (math-function (arg :minf :-Inf :inf :Inf)
@@ -370,9 +384,50 @@
       (math-function (arg)
 	(sin arg)))
 
+(setf (prop math.obj "pow")
+      (js-function (base exp)
+	(with-asserted-types ((base number)
+			      (exp number))
+	  (cond ((or (eq base :NaN) (eq exp :NaN)) :NaN)
+		((eq exp :-Inf) 0)
+		((and (realp exp) (zerop exp)) 1)
+		((or (eq base :Inf) (eq exp :Inf)) :Inf)
+		((eq base :-Inf) :-Inf)
+		(t (coerce (expt base exp) 'double-float))))))
 
+(defmacro num-comparator (name (gt lt cmp))
+  (let ((ls (gensym))
+	(rs (gensym)))
+    `(defun ,name (,ls ,rs)
+       (let ((,ls (js-funcall number.ensure ,ls))
+	     (,rs (js-funcall number.ensure ,rs)))
+	 (cond ((or (eq ,ls :NaN) (eq ,rs :NaN)) :NaN)
+	       ((or (eq ,ls ,gt) (eq ,rs ,gt)) ,gt)
+	       ((eq ,ls ,lt) ,rs)
+	       ((eq ,rs ,lt) ,ls)
+	       (t (,cmp ,ls ,rs)))))))
 
+(num-comparator num.max (:Inf :-Inf max))
+(num-comparator num.min (:-Inf :Inf min))
 
+;;NaN breaks <number.ext (and >number.ext) invariant so num-comparator
+;;is implemented. should be fixed soon
+
+(setf (prop math.obj "max")
+      (js-function ()
+	(!return
+	 (let ((args (arguments-as-list (!arguments))))
+	   (reduce #'num.max args  :initial-value :-Inf)))))
+
+(setf (prop math.obj "min")
+      (js-function ()
+	(!return
+	 (let ((args (arguments-as-list (!arguments))))
+	   (reduce #'num.min args :initial-value :Inf)))))
+
+(setf (prop math.obj "random")
+      (js-function ()
+	(!return (random 1.0))))
 ;;
 #+nil (setf (prop *global* "Object")
       (js-function (arg) arg))

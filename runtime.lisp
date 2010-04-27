@@ -213,6 +213,7 @@
 
 ;;
 (defun js-string? (o)
+  (declare (special string.prototype))
   (typecase o
     (string t)
     (t (eq (prototype o) string.prototype))))
@@ -222,6 +223,8 @@
     (let ((str (if (eq obj :undefined-unset) "" (to-string (value obj)))))
       (set-default js-user::this str)
       (the string str))))
+
+(defparameter string.ensure string.ctor)
 
 (define-primitive-prototype string.prototype (js-new js::string.ctor '("")))
 
@@ -237,6 +240,7 @@
 
 ;;
 (defun js-number? (o)
+  (declare (special number.prototype))
   (typecase o
     (real t)
     (symbol
@@ -258,6 +262,11 @@
 			    (if (js-number? n2) n2 :NaN)))))))
       (set-default js-user::this val)
       (the js.number val))))
+
+(defparameter number.ensure
+  (js-function (arg)
+    (if (js-number? arg) arg
+	(js-funcall number.ctor arg))))
 
 (define-primitive-prototype number.prototype (js-new number.ctor '(0)))
 
