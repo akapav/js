@@ -150,6 +150,9 @@
 (defmacro !array (elems)
   `(js-new array.ctor (list ,@elems)))
 
+(defmacro !regexp (regexp flags)
+  `(make-regexp ,regexp ,flags))
+
 (defmacro !stat (form)
   `(progn ,form))
 
@@ -356,6 +359,7 @@
 			     :sealed (sealed proto))))
     (apply (the function (proc func)) ret args)
     (setf (prop ret "constructor") func)
+    ;;todo: put set-default here
     ret))
 
 (defmacro undefined? (exp)

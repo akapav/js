@@ -41,6 +41,11 @@
 	(mapcar (lambda (el)
 		  (list (car el) (transform-tree (cdr el)))) (second form))))
 
+(define-transform-rule (:regexp form)
+  (list (js-intern (car form))
+	(car (second form))  ;regexp
+	(cdr (second form)))) ;flags
+
 (defparameter *label-name* nil)
 
 (define-transform-rule (:label form)

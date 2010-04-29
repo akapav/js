@@ -139,7 +139,6 @@
 (setf (prop function.ctor "prototype") function.prototype)
 (setf (prop *global* "Function") function.ctor)
 
-(defparameter value-of (js-function () (print "kiki")))
 ;;
 (defclass arguments (native-hash)
   ((vlen :initarg :vlen :reader vlen)
@@ -291,3 +290,51 @@
 (defparameter math.obj (make-instance 'math))
 
 (setf (prop *global* "Math") math.obj)
+
+;;
+(defclass regexp (native-function)
+  ((expr :accessor expr :initarg :expr)
+   (scanner :accessor scanner :initarg :scanner)
+   (globalp :accessor globalp :initarg :global)
+   (case-sensitive-p :accessor case-sensitive-p :initarg :case-insensitive)))
+
+(defun check-flag (flag)
+  (or (car (member flag '("" "i" "g" "ig" "gi") :test #'string=))
+      (error (format nil "SyntaxError: invalid regular expression flag ~A" flag))))
+
+(defparameter regexp.ctor
+  (js-function (expr flags)
+    (let ((expr (if (eq expr :undefined-unset) "(?:)"
+		    (js-funcall string.ensure  expr)))
+	  (flags (if (eq flags :undefined-unset) ""
+		     (check-flag flags))))
+      ;(set-default js-user::this (format nil "/~A/~A" expr flags))
+      (let ((re (make-regexp expr flags)))
+	(set-default js-user::this re)
+	re))))
+
+(setf (prop *global* "RegExp") regexp.ctor)
+
+(defun make-regexp (expr flags)
+  (let* ((case-sens (search "i" flags))
+	 (scanner (ppcre:create-scanner expr
+					:case-insensitive-mode case-sens)))
+    (make-instance 'regexp
+		   :expr expr
+		   :scanner scanner
+		   :global (search "g" flags)
+		   :case-insensitive case-sens
+		   :proc (lambda (-- &optional str)
+			   (declare (ignore --))
+			   (let ((str (js-funcall string.ensure str)))
+			     (multiple-value-bind (from to) (ppcre:scan scanner str)
+			       (if from (subseq str from to) :null)))))))
+
+(define-primitive-prototype regexp.prototype
+    (make-regexp "(?:)" ""))
+
+(setf (prop regexp.prototype "constructor") regexp.ctor)
+
+(defmethod placeholder-class ((func (eql regexp.ctor))) 'native-function)
+
+(setf (prop regexp.ctor "prototype") regexp.prototype)
