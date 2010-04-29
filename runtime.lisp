@@ -28,6 +28,14 @@
 
 (defgeneric prototype (obj)
   (:method (obj) nil))
+
+(defun finish-class-construction (name ctor proto &key explicit-ctor)
+  (declare (special *global*))
+  (setf (prop ctor "prototype") proto)
+  (setf (prop *global* name) ctor)
+  (when explicit-ctor
+    (setf (prop proto "constructor") ctor)))
+
 ;;
 (defparameter value-of nil) ;;function.prototype is not defined yet
 (defparameter to-string nil)
@@ -132,12 +140,10 @@
       (set-default js-user::this func)
       func)))
 
-(setf (prop function.prototype "constructor") function.ctor)
-
 (defmethod placeholder-class ((func (eql function.ctor))) 'native-function)
 
-(setf (prop function.ctor "prototype") function.prototype)
-(setf (prop *global* "Function") function.ctor)
+(finish-class-construction "Function"
+			   function.ctor function.prototype :explicit-ctor t)
 
 ;;
 (defclass arguments (native-hash)
@@ -203,12 +209,10 @@
 
 (define-primitive-prototype array.prototype (js-new js::array.ctor ()))
 
-(setf (prop array.ctor "prototype") array.prototype)
-
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (shadow 'Array 'js-user)) ;;todo: ...
 
-(setf (prop *global* "Array") array.ctor)
+(finish-class-construction "Array" array.ctor array.prototype)
 
 ;;
 (defun js-string? (o)
@@ -227,15 +231,14 @@
 
 (define-primitive-prototype string.prototype (js-new js::string.ctor '("")))
 
-(setf (prop string.ctor "prototype") string.prototype)
-(setf (prop *global* "String") string.ctor)
-
 (defmethod prop ((str string) key &optional (default :undefined))
   (let* ((sealed (sealed string.prototype))
 	 (action (gethash key sealed)))
     (if action
 	(funcall action str)
 	(prop string.prototype key default))))
+
+(finish-class-construction "String" string.ctor string.prototype)
 
 ;;
 (defun js-number? (o)
@@ -269,12 +272,8 @@
 
 (define-primitive-prototype number.prototype (js-new number.ctor '(0)))
 
-(setf (prop number.ctor "prototype") number.prototype)
-
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (shadow 'Number 'js-user)) ;;todo: ...
-
-(setf (prop *global* "Number") number.ctor)
 
 (defmethod prop ((num number) key &optional (default :undefined))
   (let* ((sealed (sealed number.prototype))
@@ -282,6 +281,8 @@
     (if action
 	(funcall action num)
 	(prop number.prototype key default))))
+
+(finish-class-construction "Number" number.ctor number.prototype)
 
 ;;
 (defclass math (native-hash)
@@ -313,8 +314,6 @@
 	(set-default js-user::this re)
 	re))))
 
-(setf (prop *global* "RegExp") regexp.ctor)
-
 (defun make-regexp (expr flags)
   (let* ((case-sens (search "i" flags))
 	 (scanner (ppcre:create-scanner expr
@@ -333,8 +332,9 @@
 (define-primitive-prototype regexp.prototype
     (make-regexp "(?:)" ""))
 
-(setf (prop regexp.prototype "constructor") regexp.ctor)
+(defmethod placeholder-class ((func (eql regexp.ctor))) 'regexp)
 
-(defmethod placeholder-class ((func (eql regexp.ctor))) 'native-function)
+(finish-class-construction "RegExp"
+			   regexp.ctor regexp.prototype :explicit-ctor t)
 
-(setf (prop regexp.ctor "prototype") regexp.prototype)
+;;todo: regexp object constructed with // haven't valid prototype
