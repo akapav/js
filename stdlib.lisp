@@ -208,7 +208,7 @@
      while l
      finally (return (values l (reverse (cdr coll))))))
 
-(defun vector-splice (v ndx elements-to-remove &rest insert)
+(defun vector-slice (v ndx elements-to-remove &rest insert)
   (let* ((elems (coerce v 'list))
 	 (len (length v))
 	 (insert (copy-list insert))
@@ -238,9 +238,9 @@
 (defun apply-splicing (arr ndx howmany arguments)
   (let ((arguments (nthcdr 3 (arguments-as-list arguments))))
     (js-new array.ctor
-	    (apply #'vector-splice arr ndx howmany arguments))))
+	    (apply #'vector-slice arr ndx howmany arguments))))
 
-(defparameter |ARRAY.splice|
+(defparameter |ARRAY.slice|
   (js-function (arr ndx howmany)
     (with-asserted-array (arr)
       (cond ((and (undefined? ndx) (undefined? howmany))
@@ -255,12 +255,12 @@
 				     (howmany number))
 		 (apply-splicing arr ndx howmany (!arguments))))))))
 
-(setf (prop array.prototype "splice")
+(setf (prop array.prototype "slice")
       (js-function ()
-	(apply #'js-funcall |ARRAY.splice| net.svrg.js-user::this
+	(apply #'js-funcall |ARRAY.slice| net.svrg.js-user::this
 	       (arguments-as-list (!arguments)))))
 
-(setf (prop array.ctor "splice") |ARRAY.splice|)
+(setf (prop array.ctor "slice") |ARRAY.slice|)
 
 (define-js-method array "pop" (arr)
   (unless (zerop (length arr))
