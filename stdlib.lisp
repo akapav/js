@@ -299,10 +299,6 @@
 (setf (prop number.ctor "POSITIVE_INFINITY") :NaN)
 (setf (prop number.ctor "NEGATIVE_INFINITY") :-NaN)
 
-;toExponential
-;toFixed
-;toPrecision
-
 ;;
 (defmacro math-function ((arg &key (inf :NaN) (minf :-NaN) (nan :NaN)) &body body)
   `(js-function (,arg)
@@ -436,3 +432,7 @@
       (js-function (arg)
 	(if (undefined? arg) (format t "~%")
 	    (format t "~A~%" (js-funcall string.ctor arg)))))
+
+(setf (prop *global* "not_implemented")
+      (js-function ()
+	(error "Function not implemented")))
