@@ -19,7 +19,7 @@
 	  (ctor-name (ctor type))
 	  (ensure-name (ensure type))
 	  (prototype-name
-	   (intern (concatenate 'string (symbol-name type) ".PROTOTYPE")))
+	   (intern (concatenate 'string (symbol-name type) "." (symbol-name 'prototype))))
 	  (arg-names (arg-names args))
 	  (arg-defaults (arg-defaults args)))
       `(progn
