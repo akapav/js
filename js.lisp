@@ -126,6 +126,7 @@
   (case op
     ((!++ !--) `(!setf ,place (,op ,place)))
     ((!- !+) `(,op 0 ,place))
+    ((!void) :undefined)
     (t `(,op ,place))))
 
 (defmacro !unary-postfix (op place)
