@@ -1,4 +1,7 @@
+(asdf:oos 'asdf:load-op :ptester)
+
 (in-package :js-user) ;;todo: make separate package
+(use-package :ptester)
 
 (defmacro no-warn (&body body)
   `(locally #+sbcl (declare (sb-ext:muffle-conditions warning))

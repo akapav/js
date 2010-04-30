@@ -2,7 +2,7 @@
 (in-package :net.svrg.js-system)
 
 (defsystem :js
-  :depends-on (:ptester :parse-js)
+  :depends-on (:parse-js :cl-ppcre)
   :serial t
   :components
   ((:file "packages")

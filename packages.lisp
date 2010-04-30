@@ -8,8 +8,7 @@
 (defpackage :net.svrg.javascript
   (:nicknames :js)
   (:shadow :array)
-  (:use :cl :parse-js :net.svrg.reader-macro
-	:ptester) ;;todo: remove ptester eventually
+  (:use :cl :parse-js :net.svrg.reader-macro)
   (:export native-hash
 	   native-function
 	   global-object
@@ -19,5 +18,4 @@
 
 (defpackage :net.svrg.js-user
   (:nicknames :js-user)
-  (:use :cl :js :net.svrg.reader-macro :parse-js
-	:ptester))
+  (:use :cl :js :net.svrg.reader-macro :parse-js))
