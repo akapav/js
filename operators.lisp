@@ -12,9 +12,9 @@
 (defmacro extended-number-op ((op &key var (nan :NaN))
 			      inf-inf inf-minf minf-inf minf-minf
 			      num-inf num-minf inf-num minf-num)
-  (let* ((namestr (concatenate 'string (symbol-name op) "NUMBER"))
+  (let* ((namestr (concatenate 'string (symbol-name op) (symbol-name 'number)))
 	 (name (intern namestr))
-	 (nameext (intern (concatenate 'string namestr ".EXT")))
+	 (nameext (intern (concatenate 'string namestr "." (symbol-name 'ext))))
 	 (ls (or var (gensym)))
 	 (rs (gensym)))
     `(defun ,nameext (,ls ,rs)
