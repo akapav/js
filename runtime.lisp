@@ -27,7 +27,7 @@
   (:method (obj) (format nil "~A" obj)))
 
 (defgeneric prototype (obj)
-  (:method (obj) nil))
+  (:method (obj) (declare (ignore obj)) nil))
 
 (defun finish-class-construction (name ctor proto &key explicit-ctor)
   (declare (special *global*))
@@ -107,7 +107,7 @@
 (defclass native-function (native-hash)
   ((name :accessor name :initarg :name)
    (proc :accessor proc :initarg :proc)
-   (env :accessor env :initarg :env)))
+   #+(or)(env :accessor env :initarg :env)))
 
 (defmethod initialize-instance :after ((f native-function) &rest args)
   (declare (ignore args))
@@ -123,7 +123,7 @@
 				 ;;so we propagate it via identity
 				 ;;lambda
   (eval
-   (process-ast
+   (translate
     (parse-js-string
      (if args
 	 (format nil "(function(val) {return val;})(function (~{~a~^, ~}) {~A});"

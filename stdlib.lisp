@@ -69,7 +69,7 @@
 
 (setf to-string (js-function () (to-string (value js-user::this))))
 
-(mapc #'add-standard-properties (cons *global* *primitive-prototypes*))
+(mapc 'add-standard-properties (cons *global* *primitive-prototypes*))
 
 ;;
 (add-sealed-property string.prototype
@@ -285,9 +285,8 @@
 
 (defparameter js.lexsort
   (js-function (ls rs)
-    (!return
-     (string< (js-funcall string.ensure ls)
-	      (js-funcall string.ensure rs)))))
+    (string< (js-funcall string.ensure ls)
+             (js-funcall string.ensure rs))))
 
 (define-js-method array "sort" (arr (func js.lexsort))
     (print func)
@@ -338,8 +337,7 @@
 
 (setf (prop math.obj "atan2")
       (js-function (y x)
-	(!return
-	 (js-funcall (prop math.obj "atan") (!/ y x)))))
+        (js-funcall (prop math.obj "atan") (!/ y x))))
 
 (setf (prop math.obj "ceil")
       (math-function (arg :minf :-Inf :inf :Inf)
@@ -411,19 +409,17 @@
 
 (setf (prop math.obj "max")
       (js-function ()
-	(!return
-	 (let ((args (arguments-as-list (!arguments))))
-	   (reduce #'num.max args  :initial-value :-Inf)))))
+        (let ((args (arguments-as-list (!arguments))))
+          (reduce #'num.max args  :initial-value :-Inf))))
 
 (setf (prop math.obj "min")
       (js-function ()
-	(!return
-	 (let ((args (arguments-as-list (!arguments))))
-	   (reduce #'num.min args :initial-value :Inf)))))
+        (let ((args (arguments-as-list (!arguments))))
+          (reduce #'num.min args :initial-value :Inf))))
 
 (setf (prop math.obj "random")
       (js-function ()
-	(!return (random 1.0))))
+	(random 1.0)))
 ;;
 (setf (prop *global* "print")
       (js-function (arg)
