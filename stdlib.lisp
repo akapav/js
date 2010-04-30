@@ -425,14 +425,30 @@
       (js-function ()
 	(!return (random 1.0))))
 ;;
-#+nil (setf (prop *global* "Object")
-      (js-function (arg) arg))
-
 (setf (prop *global* "print")
       (js-function (arg)
-	(if (undefined? arg) (format t "~%")
+	(if (eq arg :undefined-unset) (format t "~%")
 	    (format t "~A~%" (js-funcall string.ctor arg)))))
 
+(setf (prop *global* "parseInt")
+      (js-function (arg)
+	(let ((arg (value arg)))
+	  (cond ((integerp  arg) arg)
+		((or (eq arg :NaN) (eq arg :-Inf) (eq arg :Inf)) arg)
+		(t (with-asserted-types ((arg string))
+		     (or (parse-integer arg :junk-allowed t) :NaN)))))))
+
+(setf (prop *global* "parseFloat")          ;todo: e.g.'123xx' returns :NaN ...
+      (js-function (arg)                    ;instead of 123. replace with regexp
+	(if (js-number? arg) (value arg)
+	    (js-funcall number.ensure arg)))) 
+
+(setf (prop *global* "isNaN")
+      (js-function (arg)
+	(!return
+	 (or (eq arg :NaN) (undefined? arg)))))
+
+;;
 (setf (prop *global* "not_implemented")
       (js-function ()
 	(error "Function not implemented")))

@@ -29,10 +29,6 @@ function declare_unimplemented(class, fname)
   class[fname] = class.prototype[fname] = not_implemented;
 }
 
-parseInt = not_implemented
-parseFloat = not_implemented
-isNaN = not_implemented
-
 declare_unimplemented(Number, "toExponential")
 declare_unimplemented(Number, "toFixed")
 declare_unimplemented(Number, "toPrecision")
