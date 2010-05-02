@@ -140,8 +140,8 @@
 
 ;;
 (setf (prop function.prototype "call")
-      (js-function (context)
-	(let ((arguments (cdr (arguments-as-list (!arguments)))))
+      (js-function/arguments (context)
+	(let ((arguments (cdr (arguments-as-list js-user::arguments))))
 	  (apply (proc js-user::this) context arguments))))
 
 (setf (prop function.prototype "apply")
@@ -171,20 +171,20 @@
 ;; concat can't use standard define-js-method macro because it takes
 ;; variable number of arguments
 (defparameter |ARRAY.concat|
-  (js-function ()
-    (let* ((len (arg-length (!arguments)))
+  (js-function/arguments ()
+    (let* ((len (arg-length js-user::arguments))
 	   (arr (apply #'concatenate 'list
 		       (loop for i from 0 below len
 			  collect
-			    (let ((arg (sub (!arguments) i)))
+			    (let ((arg (sub js-user::arguments i)))
 			      (js-funcall array.ensure arg))))))
       (js-new array.ctor arr))))
 
 (setf (prop array.prototype "concat")
-	(js-function ()
+	(js-function/arguments ()
 	  (apply #'js-funcall |ARRAY.concat|
 		 (value net.svrg.js-user::this)
-		 (arguments-as-list (!arguments)))))
+		 (arguments-as-list js-user::arguments))))
 
 (setf (prop array.ctor "concat") |ARRAY.concat|)
 
@@ -241,24 +241,24 @@
 	    (apply #'vector-splice arr ndx howmany arguments))))
 
 (defparameter |ARRAY.splice|
-  (js-function (arr ndx howmany)
+  (js-function/arguments (arr ndx howmany)
     (with-asserted-array (arr)
       (cond ((and (undefined? ndx) (undefined? howmany))
-	     (apply-splicing arr 0 0 (!arguments)))
+	     (apply-splicing arr 0 0 js-user::arguments))
 	    ((undefined? ndx)
 	     (with-asserted-types ((howmany number))
-	       (apply-splicing arr 0 howmany (!arguments))))
+	       (apply-splicing arr 0 howmany js-user::arguments)))
 	    ((undefined? howmany)
 	     (with-asserted-types ((ndx number))
-	       (apply-splicing arr ndx (length arr) (!arguments))))
+	       (apply-splicing arr ndx (length arr) js-user::arguments)))
 	    (t (with-asserted-types ((ndx number)
 				     (howmany number))
-		 (apply-splicing arr ndx howmany (!arguments))))))))
+		 (apply-splicing arr ndx howmany js-user::arguments)))))))
 
 (setf (prop array.prototype "splice")
-      (js-function ()
-	(apply #'js-funcall |ARRAY.splice| net.svrg.js-user::this
-	       (arguments-as-list (!arguments)))))
+      (js-function/arguments ()
+	(apply #'js-funcall |ARRAY.slice| net.svrg.js-user::this
+	       (arguments-as-list js-user::arguments))))
 
 (setf (prop array.ctor "splice") |ARRAY.splice|)
 
@@ -267,18 +267,18 @@
     (vector-pop arr)))
 
 (defparameter |ARRAY.push|
-  (js-function (arr)
+  (js-function/arguments (arr)
     (with-asserted-array (arr)
-      (let ((args (cdr (arguments-as-list (!arguments)))))
+      (let ((args (cdr (arguments-as-list js-user::arguments))))
 	(mapc (lambda (el) (vector-push-extend el arr)) args)
 	(length arr)))))
 
 (setf (prop array.ctor "push") |ARRAY.push|)
 
 (setf (prop array.prototype "push")
-      (js-function ()
+      (js-function/arguments ()
 	(apply #'js-funcall |ARRAY.push| net.svrg.js-user::this
-	       (arguments-as-list (!arguments)))))
+	       (arguments-as-list js-user::arguments))))
 
 (define-js-method array "reverse" (arr)
   (nreverse arr))
@@ -408,13 +408,13 @@
 ;;is implemented. should be fixed soon
 
 (setf (prop math.obj "max")
-      (js-function ()
-        (let ((args (arguments-as-list (!arguments))))
-          (reduce #'num.max args  :initial-value :-Inf))))
+      (js-function/arguments ()
+        (let ((args (arguments-as-list js-user::arguments)))
+          (reduce #'num.max args :initial-value :-Inf))))
 
 (setf (prop math.obj "min")
-      (js-function ()
-        (let ((args (arguments-as-list (!arguments))))
+      (js-function/arguments ()
+        (let ((args (arguments-as-list js-user::arguments)))
           (reduce #'num.min args :initial-value :Inf))))
 
 (setf (prop math.obj "random")
@@ -423,7 +423,7 @@
 ;;
 (setf (prop *global* "print")
       (js-function (arg)
-	(if (eq arg :undefined-unset) (format t "~%")
+	(if (eq arg :undefined) (format t "~%")
 	    (format t "~A~%" (js-funcall string.ctor arg)))))
 
 (setf (prop *global* "parseInt")
@@ -441,8 +441,7 @@
 
 (setf (prop *global* "isNaN")
       (js-function (arg)
-	(!return
-	 (or (eq arg :NaN) (undefined? arg)))))
+        (or (eq arg :NaN) (undefined? arg))))
 
 ;;
 (setf (prop *global* "not_implemented")

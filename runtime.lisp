@@ -119,7 +119,7 @@
 
 (defun new-function (&rest args) ;;due to parser error it is
 				 ;;impossible to use anonymous
-				 ;;function as a atandalone expression
+				 ;;function as a standalone expression
 				 ;;so we propagate it via identity
 				 ;;lambda
   (eval
@@ -137,8 +137,8 @@
   (call-next-method func val))
 
 (defparameter function.ctor
-  (js-function ()
-    (let ((func (apply #'new-function (arguments-as-list (!arguments)))))
+  (js-function/arguments ()
+    (let ((func (apply #'new-function (arguments-as-list js-user::arguments))))
       (set-default js-user::this func)
       func)))
 
@@ -155,14 +155,16 @@
    (set-arr :initarg :set-arr :reader set-arr)))
 
 (defmethod sub ((args arguments) key)
-  (if (and (integerp key) (>= key 0))
-      (if (< key (vlen args)) (funcall (aref (get-arr args) key) key)
+  (if (and (integerp key) (>= key 0) (< key (arg-length args)))
+      (if (< key (vlen args))
+          (funcall (aref (get-arr args) key))
 	  (funcall (aref (get-arr args) (vlen args)) key))
       (call-next-method args key)))
 
 (defmethod (setf sub) (val (args arguments) key)
-  (if (and (integerp key) (>= key 0))
-      (if (< key (vlen args)) (funcall (aref (set-arr args) key) key val)
+  (if (and (integerp key) (>= key 0) (< key (arg-length args)))
+      (if (< key (vlen args))
+          (funcall (aref (set-arr args) key) val)
 	  (funcall (aref (set-arr args) (vlen args)) key val))
       (call-next-method val args key)))
 
@@ -198,12 +200,12 @@
       (call-next-method val arr key)))
 
 (defparameter array.ctor
-  (js-function ()
-    (let* ((len (js::arg-length (!arguments)))
+  (js-function/arguments ()
+    (let* ((len (js::arg-length js-user::arguments))
 	   (arr (make-array len
 			    :fill-pointer len
 			    :initial-contents
-			    (arguments-as-list (!arguments)))))
+			    (arguments-as-list js-user::arguments))))
       (set-default js-user::this arr)
       arr)))
 
@@ -225,7 +227,7 @@
 
 (defparameter string.ctor
   (js-function (obj)
-    (let ((str (if (eq obj :undefined-unset) "" (to-string (value obj)))))
+    (let ((str (if (eq obj :undefined) "" (to-string (value obj)))))
       (set-default js-user::this str)
       (the string str))))
 
@@ -259,7 +261,7 @@
 
 (defparameter number.ctor
   (js-function (n)
-    (let ((val (cond ((eq n :undefined-unset) 0)
+    (let ((val (cond ((eq n :undefined) 0)
 		     ((js-number? n) (value n))
 		     (t (with-input-from-string (s (to-string (value n)))
 			  (let ((n2 (read s)))
@@ -307,9 +309,9 @@
 
 (defparameter regexp.ctor
   (js-function (expr flags)
-    (let ((expr (if (eq expr :undefined-unset) "(?:)"
+    (let ((expr (if (eq expr :undefined) "(?:)"
 		    (js-funcall string.ensure  expr)))
-	  (flags (if (eq flags :undefined-unset) ""
+	  (flags (if (eq flags :undefined) ""
 		     (check-flag flags))))
       ;(set-default js-user::this (format nil "/~A/~A" expr flags))
       (let ((re (make-regexp expr flags)))

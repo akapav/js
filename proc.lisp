@@ -1,7 +1,6 @@
 (in-package :js)
 
 (defvar *scope* ())
-(defvar *arguments* ())
 (defparameter *label-name* nil)
 
 (defun lookup-variable (name)
@@ -13,14 +12,13 @@
                      ((symbolp (car scope))
                       `(or (prop ,(car scope) ,name nil)
                            ,(lookup (cdr scope))))
-                     (t (cond ((equal name "arguments")
-                               `(or arguments (setf arguments ,(make-args *arguments*))))
-                              ((member sym (car scope)) sym)
-                              (t (lookup (cdr scope))))))))
+                     (t (if (member sym (car scope))
+                            sym
+                            (lookup (cdr scope)))))))
       (lookup *scope*))))
 
 (defmacro !arguments ()
-  (make-args ())) ;; TODO make this work again
+  'js-user::arguments)
 
 (defun set-variable (name value)
   (let ((sym (->usersym name))
@@ -171,14 +169,30 @@
               :unless (member name others) :collect name :into internal
               :finally (return (values all internal)))))))
 
+(defun references-arguments (body)
+  (labels ((scan (expr)
+             (when (and (consp expr) (not (member (car expr) '(:function :defun)))) ;; Don't enter inner functions
+               (when (and (eq (car expr) :name) (string= (second expr) "arguments"))
+                 (return-from references-arguments t))
+               (mapc #'scan expr))))
+    (scan body)
+    nil))
+
+;; Note: this does not handle myEval = eval; myEval("...");
+(defun directly-calls-eval (body)
+  (labels ((scan (expr)
+             (when (consp expr)
+               (when (and (eq (car expr) :call) (equal (second expr) '(:name "eval")))
+                 (return-from directly-calls-eval t))
+               (mapc #'scan expr))))
+    (scan body)
+    nil))
+
 (defun lift-defuns (forms)
   (loop :for form :in forms
         :when (eq (car form) :defun) :collect form :into defuns
         :else :collect form :into other
         :finally (return (append defuns other))))
-
-(defmacro with-arguments (args &body body)
-  `(let ((*arguments* ,args)) ,@body))
 
 (defun translate-function (name args body)
   (multiple-value-bind (locals internal) (find-locals body (cons "arguments" (if name (cons name args) args)))
@@ -186,22 +200,34 @@
       `(let ,(and name `(,(->usersym name)))
          (make-instance
           'native-function :prototype function.prototype :name ,name
-          :proc ,(wrap-function
-                  args
-                  (with-arguments args
-                    `((let ,(loop :for var :in internal :collect `(,var :undefined))
-                        ,@(mapcar 'translate (lift-defuns body))
-                        :undefined)))))))))
+          :proc ,(let ((body1 `((let ,(loop :for var :in internal :collect `(,var :undefined))
+                                  ,@(mapcar 'translate (lift-defuns body))
+                                  :undefined))))
+                   (if (references-arguments body)
+                       (wrap-function/arguments args body1)
+                       (wrap-function args body1))))))))
 
 ;; TODO arguments fetching
 (defun wrap-function (args body)
   `(lambda (js-user::this
             &optional ,@(loop :for arg :in args :collect
-                           `(,(->usersym arg) :undefined-unset))
-            &rest extra-args
-            &aux arguments)
-     (declare (ignorable arguments extra-args js-user::this ,@(mapc '->usersym args)))
+                           `(,(->usersym arg) :undefined))
+            &rest extra-args)
+     (declare (ignore exra-args)
+              (ignorable js-user::this ,@(mapc '->usersym args)))
      (block function ,@body)))
+
+(defun wrap-function/arguments (args body)
+  (let ((arguments-given (gensym "arguments"))
+        (arguments-left (gensym)))
+    `(lambda (js-user::this &rest ,arguments-given)
+       (let* ((,arguments-left ,arguments-given)
+              ,@(loop :for arg :in args :collect
+                   `(,(->usersym arg) (if ,arguments-left (pop ,arguments-left) :undefined)))
+              (js-user::arguments ,(make-args args arguments-given)))
+         (declare (ignorable js-user::this js-user::arguments ,@(mapc '->usersym args)
+                             ,arguments-left))
+         (block function ,@body)))))
 
 (deftranslate (:return value)
   (unless (some 'listp *scope*) (error "return outside of function"))

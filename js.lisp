@@ -1,51 +1,35 @@
 (in-package :js)
 
-(defmacro eval-function (lex-chain)
-  `(!function nil nil (str) nil
-	      ((let ((form (translate (parse-js-string str) ',lex-chain)))
-		 (return-from function
-		  (eval-in-lexenv ,lex-chain -object-env-stack- form))))))
-
-(defun make-args (var-names)
+(defun make-args (var-names all-arguments)
   (let* ((vars (mapcar (lambda (var) (->usersym var)) var-names))
-	 (get-arr (gensym))
-	 (set-arr (gensym))
+         (extra-args (gensym)) (arg-count (gensym))
+	 (get-arr (gensym)) (set-arr (gensym))
 	 (inst (gensym))
-	 (argument-cnt (gensym))
-	 (var (gensym))
 	 (len (length vars)))
-    `(let* ((,argument-cnt(loop for ,var in (list ,@vars)
-			     until (eq ,var :undefined-unset)
-			     count t))
-	   (,get-arr
-	    (make-array ,(1+ len)
-			:element-type 'function
-			:initial-contents
-			(list
-			 ,@(mapcar (lambda (var)
-				     `(lambda (n) (declare (ignore n)) ,var))
-				   vars)
-			 (lambda (n) (nth (- n ,len) extra-args)))))
-	   (,set-arr
-	    (make-array ,(1+ len)
-			:element-type 'function
-			:initial-contents
-			(list
-			 ,@(mapcar (lambda (var)
-				     `(lambda (n val)
-					(declare (ignore n))
-					(setf ,var val)))
-				   vars)
-			 (lambda (n val) (setf (nth (- n ,len) extra-args) val)))))
+    `(let* ((,arg-count (length ,all-arguments))
+            (,extra-args (concatenate 'vector (nthcdr ,len ,all-arguments)))
+            (,get-arr
+             (make-array ,(1+ len)
+                         :element-type 'function
+                         :initial-contents
+                         (list
+                          ,@(loop :for var :in vars :collect `(lambda () ,var))
+                          (lambda (n) (aref ,extra-args (- n ,len))))))
+            (,set-arr
+             (make-array ,(1+ len)
+                         :element-type 'function
+                         :initial-contents
+                         (list
+                          ,@(loop :for var :in vars :collect
+                               `(lambda (val) (setf ,var val)))
+                          (lambda (n val) (setf (aref ,extra-args (- n ,len)) val)))))
 	    (,inst (make-instance 'arguments
-				   :vlen ,len
-				   :length (+ ,argument-cnt (length extra-args))
-				   :get-arr ,get-arr :set-arr ,set-arr)))
+                                  :vlen ,len
+                                  :length ,arg-count
+                                  :get-arr ,get-arr :set-arr ,set-arr)))
        (add-sealed-property ,inst
 			    "length"
-			    (lambda (-)
-			      (declare (ignore -))
-			      (+ ,argument-cnt (length extra-args))))
+			    (lambda (-) (declare (ignore -)) ,arg-count))
        ,inst)))
 
 ;;
@@ -55,7 +39,12 @@
 (defmacro js-function (args &body body)
   `(make-instance
     'native-function :prototype function.prototype
-    :proc ,(with-arguments args (wrap-function args body))))
+    :proc ,(wrap-function args body)))
+
+(defmacro js-function/arguments (args &body body)
+  `(make-instance
+    'native-function :prototype function.prototype
+    :proc ,(wrap-function/arguments args body)))
 
 (defun js-new (func args)
   (let* ((proto (prop func "prototype"))
@@ -68,8 +57,7 @@
     ret))
 
 (defmacro undefined? (exp)
-  `(or (eq ,exp :undefined)
-       (eq ,exp :undefined-unset)))
+  `(eq ,exp :undefined))
 
 (defun js->boolean (exp)
   (when exp
