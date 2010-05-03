@@ -29,7 +29,7 @@
                                   :get-arr ,get-arr :set-arr ,set-arr)))
        (add-sealed-property ,inst
 			    "length"
-			    (lambda (-) (declare (ignore -)) ,arg-count))
+			    (lambda (ignore) (declare (ignore ignore)) ,arg-count))
        ,inst)))
 
 ;;

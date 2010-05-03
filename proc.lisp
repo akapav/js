@@ -213,20 +213,20 @@
             &optional ,@(loop :for arg :in args :collect
                            `(,(->usersym arg) :undefined))
             &rest extra-args)
-     (declare (ignore exra-args)
-              (ignorable js-user::this ,@(mapc '->usersym args)))
+     (declare (ignore extra-args)
+              (ignorable js-user::this ,@(mapcar '->usersym args)))
      (block function ,@body)))
 
 (defun wrap-function/arguments (args body)
   (let ((arguments-given (gensym "arguments"))
         (arguments-left (gensym)))
     `(lambda (js-user::this &rest ,arguments-given)
+       (declare (ignorable js-user::this))
        (let* ((,arguments-left ,arguments-given)
               ,@(loop :for arg :in args :collect
                    `(,(->usersym arg) (if ,arguments-left (pop ,arguments-left) :undefined)))
               (js-user::arguments ,(make-args args arguments-given)))
-         (declare (ignorable js-user::this js-user::arguments ,@(mapc '->usersym args)
-                             ,arguments-left))
+         (declare (ignorable js-user::arguments ,@(mapcar '->usersym args) ,arguments-left))
          (block function ,@body)))))
 
 (deftranslate (:return value)
