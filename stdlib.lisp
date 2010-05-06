@@ -1,25 +1,24 @@
 (in-package :js)
 
 (eval-when (:compile-toplevel :load-toplevel)
-  (defun ctor (sym)
-    (intern (concatenate 'string
-			 (symbol-name sym) "." (symbol-name 'ctor))))
-  (defun ensure (sym)
-    (intern (concatenate 'string
-			 (symbol-name sym) "." (symbol-name 'ensure)))))
+  (defun symconc (&rest args)
+    (intern (apply 'concatenate 'string
+                   (loop :for arg :in args :collect
+                      (typecase arg
+                        (string arg) (symbol (symbol-name arg))
+                        (t (princ-to-string arg)))))))
+  (defun ctor (sym) (symconc sym "." 'ctor))
+  (defun ensure (sym) (symconc sym "." 'ensure)))
 
 (defmacro define-js-method (type name args &body body)
   (flet ((arg-names (args)
 	   (mapcar (lambda (arg) (if (consp arg) (first arg) arg)) args))
 	 (arg-defaults (args)
 	   (mapcar (lambda (arg) (if (consp arg) (second arg) :undefined)) args)))
-    (let ((canonical-name
-	   (intern (concatenate 'string
-				(symbol-name type) "." name)))
+    (let ((canonical-name (symconc type "." name))
 	  (ctor-name (ctor type))
 	  (ensure-name (ensure type))
-	  (prototype-name
-	   (intern (concatenate 'string (symbol-name type) "." (symbol-name 'prototype))))
+	  (prototype-name (symconc type "." 'prototype))
 	  (arg-names (arg-names args))
 	  (arg-defaults (arg-defaults args)))
       `(progn
@@ -35,7 +34,7 @@
 	 (setf (prop ,prototype-name ,name)
 	       (js-function ,(cdr arg-names)
 		 (js-funcall
-		  ,canonical-name (value js-user::this) ,@(cdr arg-names))))
+		  ,canonical-name (value (!this)) ,@(cdr arg-names))))
 	 (setf (prop ,ctor-name ,name) ,canonical-name)))))
 
 (defmacro with-asserted-types ((&rest type-pairs) &body body)
@@ -47,7 +46,7 @@
      ,@body))
 
 ;;
-(setf value-of (js-function (obj) (value js-user::this)))
+(setf value-of (js-function (obj) (value (!this))))
 
 (defmethod to-string ((obj (eql *global*)))
   "[object global]")
@@ -64,10 +63,10 @@
   obj)
 
 (defmethod to-string ((obj vector))
-  (declare (special |ARRAY.join|))
-  (js-funcall |ARRAY.join| obj ","))
+  (declare (special #.(symconc 'array ".join")))
+  (js-funcall #.(symconc 'array ".join") obj ","))
 
-(setf to-string (js-function () (to-string (value js-user::this))))
+(setf to-string (js-function () (to-string (value (!this)))))
 
 (mapc 'add-standard-properties (cons *global* *primitive-prototypes*))
 
@@ -112,11 +111,11 @@
 ;todo: maybe rewrite it to javascript (see Array.shift)
 (define-js-method string "substr" (str (from 0) to)
   (if (undefined? to)
-      (js-funcall |STRING.substring| str from)
+      (js-funcall #.(symconc 'string ".substring") str from)
       (with-asserted-types ((from number)
 			    (to number))
 	(let ((from (clip-index from)))
-	  (js-funcall |STRING.substring| str from (+ from (clip-index to)))))))
+	  (js-funcall #.(symconc 'string ".substring") str from (+ from (clip-index to)))))))
 
 (define-js-method string "toUpperCase" (str)
   (string-upcase str))
@@ -141,12 +140,12 @@
 ;;
 (setf (prop function.prototype "call")
       (js-function/arguments (context)
-	(let ((arguments (cdr (arguments-as-list js-user::arguments))))
-	  (apply (proc js-user::this) context arguments))))
+	(let ((arguments (cdr (arguments-as-list (!arguments)))))
+	  (apply (proc (!this)) context arguments))))
 
 (setf (prop function.prototype "apply")
       (js-function (context argarr)
-	(apply (proc js-user::this) context
+	(apply (proc (!this)) context
 	       (coerce (typecase argarr
 			 (vector argarr)
 			 (array-object (value argarr))
@@ -170,23 +169,23 @@
 
 ;; concat can't use standard define-js-method macro because it takes
 ;; variable number of arguments
-(defparameter |ARRAY.concat|
+(defparameter #.(symconc 'array ".concat")
   (js-function/arguments ()
-    (let* ((len (arg-length js-user::arguments))
+    (let* ((len (arg-length (!arguments)))
 	   (arr (apply #'concatenate 'list
 		       (loop for i from 0 below len
 			  collect
-			    (let ((arg (sub js-user::arguments i)))
+			    (let ((arg (sub (!arguments) i)))
 			      (js-funcall array.ensure arg))))))
       (js-new array.ctor arr))))
 
 (setf (prop array.prototype "concat")
 	(js-function/arguments ()
-	  (apply #'js-funcall |ARRAY.concat|
-		 (value net.svrg.js-user::this)
-		 (arguments-as-list js-user::arguments))))
+	  (apply #'js-funcall #.(symconc 'array ".concat")
+		 (value (!this))
+		 (arguments-as-list (!arguments)))))
 
-(setf (prop array.ctor "concat") |ARRAY.concat|)
+(setf (prop array.ctor "concat") #.(symconc 'array ".concat"))
 
 (define-js-method array "join" (arr str)
   (let ((str (if (undefined? str) "," str)))
@@ -240,45 +239,45 @@
     (js-new array.ctor
 	    (apply #'vector-splice arr ndx howmany arguments))))
 
-(defparameter |ARRAY.splice|
+(defparameter #.(symconc 'array ".splice")
   (js-function/arguments (arr ndx howmany)
     (with-asserted-array (arr)
       (cond ((and (undefined? ndx) (undefined? howmany))
-	     (apply-splicing arr 0 0 js-user::arguments))
+	     (apply-splicing arr 0 0 (!arguments)))
 	    ((undefined? ndx)
 	     (with-asserted-types ((howmany number))
-	       (apply-splicing arr 0 howmany js-user::arguments)))
+	       (apply-splicing arr 0 howmany (!arguments))))
 	    ((undefined? howmany)
 	     (with-asserted-types ((ndx number))
-	       (apply-splicing arr ndx (length arr) js-user::arguments)))
+	       (apply-splicing arr ndx (length arr) (!arguments))))
 	    (t (with-asserted-types ((ndx number)
 				     (howmany number))
-		 (apply-splicing arr ndx howmany js-user::arguments)))))))
+		 (apply-splicing arr ndx howmany (!arguments))))))))
 
 (setf (prop array.prototype "splice")
       (js-function/arguments ()
-	(apply #'js-funcall |ARRAY.slice| net.svrg.js-user::this
-	       (arguments-as-list js-user::arguments))))
+	(apply #'js-funcall #.(symconc 'array ".splice") (!this)
+	       (arguments-as-list (!arguments)))))
 
-(setf (prop array.ctor "splice") |ARRAY.splice|)
+(setf (prop array.ctor "splice") #.(symconc 'array ".splice"))
 
 (define-js-method array "pop" (arr)
   (unless (zerop (length arr))
     (vector-pop arr)))
 
-(defparameter |ARRAY.push|
+(defparameter #.(symconc 'array ".push")
   (js-function/arguments (arr)
     (with-asserted-array (arr)
-      (let ((args (cdr (arguments-as-list js-user::arguments))))
+      (let ((args (cdr (arguments-as-list (!arguments)))))
 	(mapc (lambda (el) (vector-push-extend el arr)) args)
 	(length arr)))))
 
-(setf (prop array.ctor "push") |ARRAY.push|)
+(setf (prop array.ctor "push") #.(symconc 'array ".push"))
 
 (setf (prop array.prototype "push")
       (js-function/arguments ()
-	(apply #'js-funcall |ARRAY.push| net.svrg.js-user::this
-	       (arguments-as-list js-user::arguments))))
+	(apply #'js-funcall #.(symconc 'array ".push") (!this)
+	       (arguments-as-list (!arguments)))))
 
 (define-js-method array "reverse" (arr)
   (nreverse arr))
@@ -409,12 +408,12 @@
 
 (setf (prop math.obj "max")
       (js-function/arguments ()
-        (let ((args (arguments-as-list js-user::arguments)))
+        (let ((args (arguments-as-list (!arguments))))
           (reduce #'num.max args :initial-value :-Inf))))
 
 (setf (prop math.obj "min")
       (js-function/arguments ()
-        (let ((args (arguments-as-list js-user::arguments)))
+        (let ((args (arguments-as-list (!arguments))))
           (reduce #'num.min args :initial-value :Inf))))
 
 (setf (prop math.obj "random")
@@ -447,3 +446,13 @@
 (setf (prop *global* "not_implemented")
       (js-function ()
 	(error "Function not implemented")))
+
+(setf (prop *global* "eval")
+      (js-function (str)
+        (with-asserted-types ((str string))
+          (eval (translate (parse-js:parse-js-string str))))))
+
+(defun lexical-eval (str scope)
+  (with-asserted-types ((str string))
+    (let ((*scope* (list scope)))
+      (eval (translate (parse-js:parse-js-string str))))))

@@ -6,11 +6,13 @@
     (string (intern obj :js-user))
     (t (error "invalid variable identifier"))))
 
-#+mil (defun ->sym (str)
-  (intern (string-upcase str) :js-user))
-
 (defun js-intern (sym)
   (intern (concatenate 'string "!" (symbol-name sym)) :js))
+
+(defun to-default-case (name)
+  (if (eq (readtable-case *readtable*) :upcase)
+      (string-upcase name)
+      name))
 
 ;;
 (defmacro with-ignored-style-warnings (&body body)

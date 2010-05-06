@@ -14,6 +14,9 @@
 (defgeneric (setf sub) (val hash key)
   (:method (val hash key) (setf (prop hash key) val)))
 
+(defgeneric list-props (hash)
+  (:method (hash) (declare (ignore hash)) ()))
+
 (defgeneric placeholder-class (func)
   (:method (func) (declare (ignore func)) 'native-hash))
 
@@ -87,19 +90,23 @@
 (defmethod (setf prop) (val (hash native-hash) key)
   (setf (gethash key (dict hash)) val))
 
+(defmethod list-props ((hash native-hash))
+  (loop :for prop :being :the :hash-keys :in (dict hash) :collect prop))
+
 ;;
 (defclass global-object (native-hash)
   ())
 
-(defmethod (setf prop) (val (hash global-object) key)
-  (set (if (stringp key) (intern (string-upcase key) :js-user) key) val);;todo:
-  (call-next-method val hash key))
+;(defmethod (setf prop) (val (hash global-object) key)
+;  (set (if (stringp key) (intern (to-default-case key) :js-user) key) val);;todo:
+;  (call-next-method val hash key))
 
 (defmethod set-default ((hash global-object) val)
   val)
 
 (defparameter *global* (make-instance 'global-object))
-(defparameter js-user::this *global*)
+(setf (prop *global* "this") *global*)
+(setf (prop *global* "undefined") :undefined)
 
 (setf (prop *global* "undefined") :undefined)
 
@@ -108,6 +115,9 @@
   ((name :accessor name :initarg :name)
    (proc :accessor proc :initarg :proc)
    #+(or)(env :accessor env :initarg :env)))
+
+(defmethod proc (arg) ;; TODO make proper Error objects
+  (error "~a is not a function." arg))
 
 (defmethod initialize-instance :after ((f native-function) &rest args)
   (declare (ignore args))
@@ -138,14 +148,23 @@
 
 (defparameter function.ctor
   (js-function/arguments ()
-    (let ((func (apply #'new-function (arguments-as-list js-user::arguments))))
-      (set-default js-user::this func)
+    (let ((func (apply #'new-function (arguments-as-list (!arguments)))))
+      (set-default (!this) func)
       func)))
 
 (defmethod placeholder-class ((func (eql function.ctor))) 'native-function)
 
 (finish-class-construction "Function"
 			   function.ctor function.prototype :explicit-ctor t)
+
+(defparameter object.ctor
+  (js-function (val)
+    (set-default (!this) val)
+    val))
+
+(define-primitive-prototype object.prototype (js-new object.ctor (list (make-instance 'native-hash))))
+
+(finish-class-construction "Object" object.ctor object.prototype)
 
 ;;
 (defclass arguments (native-hash)
@@ -201,12 +220,12 @@
 
 (defparameter array.ctor
   (js-function/arguments ()
-    (let* ((len (js::arg-length js-user::arguments))
-	   (arr (make-array len
+    (let* ((len (js::arg-length (!arguments)))
+	   (arr (make-array len :adjustable t
 			    :fill-pointer len
 			    :initial-contents
-			    (arguments-as-list js-user::arguments))))
-      (set-default js-user::this arr)
+			    (arguments-as-list (!arguments)))))
+      (set-default (!this) arr)
       arr)))
 
 (defmethod placeholder-class ((func (eql array.ctor))) 'array-object)
@@ -228,7 +247,7 @@
 (defparameter string.ctor
   (js-function (obj)
     (let ((str (if (eq obj :undefined) "" (to-string (value obj)))))
-      (set-default js-user::this str)
+      (set-default (!this) str)
       (the string str))))
 
 (defparameter string.ensure string.ctor)
@@ -266,7 +285,7 @@
 		     (t (with-input-from-string (s (to-string (value n)))
 			  (let ((n2 (read s)))
 			    (if (js-number? n2) n2 :NaN)))))))
-      (set-default js-user::this val)
+      (set-default (!this) val)
       (the js.number val))))
 
 (defparameter number.ensure
@@ -313,9 +332,9 @@
 		    (js-funcall string.ensure  expr)))
 	  (flags (if (eq flags :undefined) ""
 		     (check-flag flags))))
-      ;(set-default js-user::this (format nil "/~A/~A" expr flags))
+      ;(set-default (!this) (format nil "/~A/~A" expr flags))
       (let ((re (make-regexp expr flags)))
-	(set-default js-user::this re)
+	(set-default (!this) re)
 	re))))
 
 (defun make-regexp (expr flags)
