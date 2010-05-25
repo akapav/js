@@ -464,44 +464,44 @@ r20_8 = s2.substring (0, 100)
 
 (defun test21 ()
 #{javascript}
-function test_slice()
+function test_splice()
 {
   var a = new Array(1,2,3)
-  r21_1 =  [a.slice(0, 0), a]
+  r21_1 =  [a.splice(0, 0), a]
 
   var a = new Array(1,2,3)
-  r21_2 =  [a.slice(0, 0, 100, 200), a]
+  r21_2 =  [a.splice(0, 0, 100, 200), a]
 
   var a = new Array(1,2,3)
-  r21_3 =  [a.slice(1, 1000), a]
+  r21_3 =  [a.splice(1, 1000), a]
 
   var a = new Array(1,2,3)
-  r21_4 =  [a.slice(0, 1), a]
+  r21_4 =  [a.splice(0, 1), a]
 
   var a = new Array(1,2,3)
-  r21_5 =  [a.slice(0, 2, 10, 11, 12), a]
+  r21_5 =  [a.splice(0, 2, 10, 11, 12), a]
 
   var a = new Array(1,2,3)
-  r21_6 =  [a.slice(0, 3, 10, 11, 12), a]
+  r21_6 =  [a.splice(0, 3, 10, 11, 12), a]
 
   var a = new Array(1,2,3)
-  r21_7 =  [a.slice(2, 2), a]
+  r21_7 =  [a.splice(2, 2), a]
 
   var a = new Array(1,2,3)
-  r21_8 =  [a.slice(2, 2, 10, 12), a]
+  r21_8 =  [a.splice(2, 2, 10, 12), a]
 
   var a = new Array(1,2,3)
-  r21_9 =  [a.slice(1, 1, 10, 12), a]
+  r21_9 =  [a.splice(1, 1, 10, 12), a]
 
   var a = new Array(1,2,3)
-  r21_10 =  [a.slice(100, 100, 10, 12), a]
+  r21_10 =  [a.splice(100, 100, 10, 12), a]
 
   var a = new Array(1,2,3)
-  r21_11 =  [a.slice(1, 1, 7, 8, 9), a]
+  r21_11 =  [a.splice(1, 1, 7, 8, 9), a]
 
 }
 
-test_slice()
+test_splice()
 .
 
 (defun dump-r21 (val arr1 arr2)
@@ -621,7 +621,7 @@ function f26_1()
 r26_3 = f26_1(1,2,3,4)
 
 v26=[7,8,9];
-[1,2,3].slice.apply(v26, [0,2,100,101])
+[1,2,3].splice.apply(v26, [0,2,100,101])
 for(var i = 0; i < v26.length; ++i)
   eval("r26_arr" + i + "=v26[i];")
 .
