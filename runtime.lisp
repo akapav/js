@@ -101,6 +101,8 @@
 (defparameter *global* (make-instance 'global-object))
 (defparameter js-user::this *global*)
 
+(setf (prop *global* "undefined") :undefined)
+
 ;;
 (defclass native-function (native-hash)
   ((name :accessor name :initarg :name)

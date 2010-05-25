@@ -285,6 +285,15 @@
 		,body
 		(go ,lbl))))))))
 
+;; provisionary (incomplete) for-in, to make test.js run.
+;; I have a better version in my fork -marijn
+(defmacro !for-in (var name obj body)
+  (declare (ignore var))
+  (let ((props (gensym)))
+    `(loop :for ,props :being :the :hash-key :of (dict ,obj) :do
+        (!assign t (!name ,name) ,props)
+        ,body)))
+
 (defmacro !try (lex-chain body var catch finally)
   `(unwind-protect
 	(handler-case ,body
