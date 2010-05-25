@@ -105,9 +105,8 @@
   val)
 
 (defparameter *global* (make-instance 'global-object))
-(setf (prop *global* "this") *global*)
-(setf (prop *global* "undefined") :undefined)
 
+(setf (prop *global* "this") *global*)
 (setf (prop *global* "undefined") :undefined)
 
 ;;
@@ -147,8 +146,8 @@
   (call-next-method func val))
 
 (defparameter function.ctor
-  (js-function/arguments ()
-    (let ((func (apply #'new-function (arguments-as-list (!arguments)))))
+  (js-function (&rest args)
+    (let ((func (apply #'new-function args)))
       (set-default (!this) func)
       func)))
 
@@ -168,29 +167,28 @@
 
 ;;
 (defclass arguments (native-hash)
-  ((vlen :initarg :vlen :reader vlen)
-   (length :initarg :length :reader arg-length)
-   (get-arr :initarg :get-arr :reader get-arr)
-   (set-arr :initarg :set-arr :reader set-arr)))
+  ((argument-vector :initarg :vector :reader argument-vector)))
+(defun make-args (arguments)
+  (let* ((vec (coerce arguments 'vector))
+         (obj (make-instance 'arguments :vector vec)))
+    (add-sealed-property obj "length"
+                         (lambda (ignore) (declare (ignore ignore)) (length vec)))
+    obj))
 
 (defmethod sub ((args arguments) key)
-  (if (and (integerp key) (>= key 0) (< key (arg-length args)))
-      (if (< key (vlen args))
-          (funcall (aref (get-arr args) key))
-	  (funcall (aref (get-arr args) (vlen args)) key))
-      (call-next-method args key)))
+  (let ((vec (argument-vector args)))
+    (if (and (integerp key) (>= key 0) (< key (length vec)))
+        (svref vec key)
+        (call-next-method args key))))
 
 (defmethod (setf sub) (val (args arguments) key)
-  (if (and (integerp key) (>= key 0) (< key (arg-length args)))
-      (if (< key (vlen args))
-          (funcall (aref (set-arr args) key) val)
-	  (funcall (aref (set-arr args) (vlen args)) key val))
-      (call-next-method val args key)))
+  (let ((vec (argument-vector args)))
+    (if (and (integerp key) (>= key 0) (< key (length vec)))
+        (setf (svref vec key) val)
+        (call-next-method val args key))))
 
-(defun arguments-as-list (args)
-  (loop for i from 0 below (arg-length args)
-     collecting (sub args i)))
-
+(defun arguments-as-list (args) ;; TODO drop, access vector
+  (coerce (argument-vector args) 'list))
 
 ;;; todo: array differs from string (according to spidermonkey) in
 ;;; respect of calling constructor without operator new. string
@@ -219,12 +217,11 @@
       (call-next-method val arr key)))
 
 (defparameter array.ctor
-  (js-function/arguments ()
-    (let* ((len (js::arg-length (!arguments)))
+  (js-function (&rest args)
+    (let* ((len (length args))
 	   (arr (make-array len :adjustable t
 			    :fill-pointer len
-			    :initial-contents
-			    (arguments-as-list (!arguments)))))
+			    :initial-contents args)))
       (set-default (!this) arr)
       arr)))
 

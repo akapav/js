@@ -35,6 +35,20 @@
         `(setf ,sym ,valname)
         (set-variable name valname (car rest) (cdr rest)))))
 
+(defstruct (arguments-scope (:include simple-scope)) args)
+(defmethod lookup-variable (name (scope arguments-scope) rest)
+  (declare (ignore rest))
+  (let ((arg-pos (position (->usersym name) (arguments-scope-args scope))))
+    (if arg-pos
+        `(svref (argument-vector js-user::|arguments|) ,arg-pos)
+        (call-next-method))))
+(defmethod set-variable (name valname (scope arguments-scope) rest)
+  (declare (ignore rest))
+  (let ((arg-pos (position (->usersym name) (arguments-scope-args scope))))
+    (if arg-pos
+        `(setf (svref (argument-vector js-user::|arguments|) ,arg-pos) ,valname)
+        (call-next-method))))
+
 (defstruct captured-scope vars objs next)
 (defun capture-scope ()
   (let ((varnames ())
@@ -85,12 +99,6 @@
         (scopes (if is-defun (remove-if (lambda (s) (typep s 'with-scope)) *scope*) *scope*)))
     `(let ((,valname ,value))
        ,(set-variable name valname (car scopes) (cdr scopes)))))
-
-(defmacro !arguments ()
-  'js-user::|arguments|)
-
-(defmacro !this ()
-  'js-user::|this|)
 
 (defmacro with-scope (local &body body)
   `(let ((*scope* (cons ,local *scope*))) ,@body))
@@ -214,7 +222,7 @@
      ,(if catch
           (with-scope (make-simple-scope :vars (list (->usersym (car catch))))
             `(handler-case ,(translate body)
-               (t (,(->usersym (car catch)))
+               (error (,(->usersym (car catch)))
                  (when (typep ,(->usersym (car catch)) 'js-condition)
                    (setf ,(->usersym (car catch)) (js-condition-value ,(->usersym (car catch)))))
                  ,(translate (cdr catch)))))
@@ -273,23 +281,30 @@
         :finally (return (append defuns other))))
 
 (defun translate-function (name args body)
-  (multiple-value-bind (locals internal) (find-locals body (list* "this" "arguments" (if name (cons name args) args)))
-    (with-scope (make-simple-scope :vars locals)
-      (let ((funcval
-             `(make-instance
-               'native-function :prototype function.prototype :name ,name
-               :proc ,(let ((body1 `((let ,(loop :for var :in internal :collect `(,var :undefined))
-                                       ,@(mapcar 'translate (lift-defuns body))
-                                       :undefined))))
-                           (if (references-arguments body)
-                               (wrap-function/arguments args body1)
-                               (wrap-function args body1))))))
-        (if name
-            `(let (,(->usersym name))
-               (setf ,(->usersym name) ,funcval))
-            funcval)))))
+  (let ((uses-args (references-arguments body))
+        (base-locals (cons "this" args)))
+    (when name (push name base-locals))
+    (when uses-args (push "arguments" base-locals))
+    (multiple-value-bind (locals internal) (find-locals body base-locals)
+      (with-scope (if uses-args
+                      (make-arguments-scope :vars locals :args (mapcar '->usersym args))
+                      (make-simple-scope :vars locals))
+        (let ((funcval
+               `(make-instance
+                 'native-function :prototype function.prototype :name ,name
+                 :proc ,(let ((body1 `((let ,(loop :for var :in internal :collect `(,var :undefined))
+                                         (declare (ignorable ,@internal))
+                                         ,@(mapcar 'translate (lift-defuns body))
+                                         :undefined))))
+                             (if uses-args
+                                 (wrap-function/arguments body1)
+                                 (wrap-function args body1))))))
+          (if name
+              `(let (,(->usersym name))
+                 (declare (ignorable ,(->usersym name)))
+                 (setf ,(->usersym name) ,funcval))
+              funcval))))))
 
-;; TODO arguments fetching
 (defun wrap-function (args body)
   `(lambda (js-user::|this|
             &optional ,@(loop :for arg :in args :collect
@@ -299,16 +314,12 @@
               (ignorable js-user::|this| ,@(mapcar '->usersym args)))
      (block function ,@body)))
 
-(defun wrap-function/arguments (args body)
-  (let ((arguments-given (gensym "arguments"))
-        (arguments-left (gensym)))
-    `(lambda (js-user::|this| &rest ,arguments-given)
+(defun wrap-function/arguments (body)
+  (let ((argument-list (gensym "arguments")))
+    `(lambda (js-user::|this| &rest ,argument-list)
        (declare (ignorable js-user::|this|))
-       (let* ((,arguments-left ,arguments-given)
-              ,@(loop :for arg :in args :collect
-                   `(,(->usersym arg) (if ,arguments-left (pop ,arguments-left) :undefined)))
-              (js-user::|arguments| ,(make-args args arguments-given)))
-         (declare (ignorable js-user::|arguments| ,@(mapcar '->usersym args) ,arguments-left))
+       (let* ((js-user::|arguments| (make-args ,argument-list)))
+         (declare (ignorable js-user::|arguments|))
          (block function ,@body)))))
 
 (deftranslate (:return value)

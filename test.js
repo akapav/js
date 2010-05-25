@@ -75,8 +75,7 @@ function test_3() {
 }
 
 function test_4() {
-  function afun(a)
-  {
+  function afun(a) {
     from_inside = 1;
     arguments[0] = a + 1;
     $eq(a + 1, 102);
@@ -384,8 +383,8 @@ function runTests() {
     }
   }
   if (failures.length) {
-    print(failures.length + " failures:\n  ");
-    print(failures.join("\n  "));
+    print(failures.length + " failures:");
+    print("  " + failures.join("\n  "));
   }
   else {
     print("All passed!");

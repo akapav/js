@@ -46,7 +46,7 @@
      ,@body))
 
 ;;
-(setf value-of (js-function (obj) (value (!this))))
+(setf value-of (js-function () (value (!this))))
 
 (defmethod to-string ((obj (eql *global*)))
   "[object global]")
@@ -139,9 +139,8 @@
 
 ;;
 (setf (prop function.prototype "call")
-      (js-function/arguments (context)
-	(let ((arguments (cdr (arguments-as-list (!arguments)))))
-	  (apply (proc (!this)) context arguments))))
+      (js-function (context &rest args)
+        (apply (proc (!this)) context args)))
 
 (setf (prop function.prototype "apply")
       (js-function (context argarr)
@@ -170,20 +169,16 @@
 ;; concat can't use standard define-js-method macro because it takes
 ;; variable number of arguments
 (defparameter #.(symconc 'array ".concat")
-  (js-function/arguments ()
-    (let* ((len (arg-length (!arguments)))
-	   (arr (apply #'concatenate 'list
-		       (loop for i from 0 below len
-			  collect
-			    (let ((arg (sub (!arguments) i)))
-			      (js-funcall array.ensure arg))))))
+  (js-function (&rest args)
+    (let ((arr (apply #'concatenate 'list
+                      (loop :for arg :in args :collect
+                         (js-funcall array.ensure arg)))))
       (js-new array.ctor arr))))
 
 (setf (prop array.prototype "concat")
-	(js-function/arguments ()
+	(js-function (&rest args)
 	  (apply #'js-funcall #.(symconc 'array ".concat")
-		 (value (!this))
-		 (arguments-as-list (!arguments)))))
+		 (value (!this)) args)))
 
 (setf (prop array.ctor "concat") #.(symconc 'array ".concat"))
 
@@ -234,30 +229,29 @@
 		    :initial-contents elems))
     removed))
 
-(defun apply-splicing (arr ndx howmany arguments)
-  (let ((arguments (nthcdr 3 (arguments-as-list arguments))))
-    (js-new array.ctor
-	    (apply #'vector-splice arr ndx howmany arguments))))
+(defun apply-splicing (arr ndx howmany new-elts)
+  (js-new array.ctor
+          (apply #'vector-splice arr ndx howmany new-elts)))
 
 (defparameter #.(symconc 'array ".splice")
-  (js-function/arguments (arr ndx howmany)
+  (js-function (arr ndx howmany &rest args)
     (with-asserted-array (arr)
       (cond ((and (undefined? ndx) (undefined? howmany))
-	     (apply-splicing arr 0 0 (!arguments)))
+	     (apply-splicing arr 0 0 args))
 	    ((undefined? ndx)
 	     (with-asserted-types ((howmany number))
-	       (apply-splicing arr 0 howmany (!arguments))))
+	       (apply-splicing arr 0 howmany args)))
 	    ((undefined? howmany)
 	     (with-asserted-types ((ndx number))
-	       (apply-splicing arr ndx (length arr) (!arguments))))
+	       (apply-splicing arr ndx (length arr) args)))
 	    (t (with-asserted-types ((ndx number)
 				     (howmany number))
-		 (apply-splicing arr ndx howmany (!arguments))))))))
+		 (apply-splicing arr ndx howmany args)))))))
 
 (setf (prop array.prototype "splice")
-      (js-function/arguments ()
+      (js-function (&rest args)
 	(apply #'js-funcall #.(symconc 'array ".splice") (!this)
-	       (arguments-as-list (!arguments)))))
+	       args)))
 
 (setf (prop array.ctor "splice") #.(symconc 'array ".splice"))
 
@@ -266,18 +260,16 @@
     (vector-pop arr)))
 
 (defparameter #.(symconc 'array ".push")
-  (js-function/arguments (arr)
+  (js-function (arr &rest args)
     (with-asserted-array (arr)
-      (let ((args (cdr (arguments-as-list (!arguments)))))
-	(mapc (lambda (el) (vector-push-extend el arr)) args)
-	(length arr)))))
+      (mapc (lambda (el) (vector-push-extend el arr)) args)
+      (length arr))))
 
 (setf (prop array.ctor "push") #.(symconc 'array ".push"))
 
 (setf (prop array.prototype "push")
-      (js-function/arguments ()
-	(apply #'js-funcall #.(symconc 'array ".push") (!this)
-	       (arguments-as-list (!arguments)))))
+      (js-function (&rest args)
+	(apply #'js-funcall #.(symconc 'array ".push") (!this) args)))
 
 (define-js-method array "reverse" (arr)
   (nreverse arr))
@@ -407,14 +399,12 @@
 ;;is implemented. should be fixed soon
 
 (setf (prop math.obj "max")
-      (js-function/arguments ()
-        (let ((args (arguments-as-list (!arguments))))
-          (reduce #'num.max args :initial-value :-Inf))))
+      (js-function (&rest args)
+        (reduce #'num.max args :initial-value :-Inf)))
 
 (setf (prop math.obj "min")
-      (js-function/arguments ()
-        (let ((args (arguments-as-list (!arguments))))
-          (reduce #'num.min args :initial-value :Inf))))
+      (js-function (&rest args)
+        (reduce #'num.min args :initial-value :Inf)))
 
 (setf (prop math.obj "random")
       (js-function ()
@@ -450,9 +440,9 @@
 (setf (prop *global* "eval")
       (js-function (str)
         (with-asserted-types ((str string))
-          (eval (translate (parse-js:parse-js-string str))))))
+          (compile-eval (translate (parse-js:parse-js-string str))))))
 
 (defun lexical-eval (str scope)
   (with-asserted-types ((str string))
     (let ((*scope* (list scope)))
-      (eval (translate (parse-js:parse-js-string str))))))
+      (compile-eval (translate (parse-js:parse-js-string str))))))
