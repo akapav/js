@@ -49,22 +49,25 @@
         `(setf (svref (argument-vector js-user::|arguments|) ,arg-pos) ,valname)
         (call-next-method))))
 
-(defstruct captured-scope vars objs next)
+(defstruct captured-scope vars local-vars objs next)
 (defun capture-scope ()
   (let ((varnames ())
         (val-arg (gensym))
+        (locals :null)
         (objs ())
         (next nil))
     (dolist (level *scope*)
       (typecase level
-        (simple-scope (setf varnames (union varnames (simple-scope-vars level))))
+        (simple-scope
+         (setf varnames (union varnames (simple-scope-vars level)))
+         (when (eq locals :null) (setf locals (simple-scope-vars level))))
         (with-scope (push (with-scope-var level) objs))
         (captured-scope (setf next level))))
     `(make-captured-scope
       :vars (list ,@(loop :for var :in varnames :collect
                        `(list ',var (lambda () ,(lookup var))
                               (lambda (,val-arg) ,(set-in-scope var val-arg)))))
-      :objs (list ,@(nreverse objs)) :next ,next)))
+      :local-vars ',locals :objs (list ,@(nreverse objs)) :next ,next)))
 (defun lookup-in-captured-scope (name scope)
   (let ((var (assoc (->usersym name) (captured-scope-vars scope))))
     (if var
@@ -103,6 +106,8 @@
 (defmacro with-scope (local &body body)
   `(let ((*scope* (cons ,local *scope*))) ,@body))
 
+(defun in-function-scope-p ()
+  (some (lambda (s) (typep s 'simple-scope)) *scope*))
 
 (defun translate (form)
   (apply-translate-rule (car form) (cdr form)))
@@ -242,7 +247,6 @@
        ,(with-scope (make-with-scope :var obj-var) (translate body)))))
 
 (defun find-locals (body &optional others)
-  ;; TODO spot lexical eval calls?
   (let ((found (make-hash-table)))
     (labels ((add (name)
                (setf (gethash (->usersym name) found) t))
@@ -273,6 +277,14 @@
                (mapc #'scan expr))))
     (scan body)
     nil))
+(defun uses-lexical-eval (body)
+  (labels ((scan (expr)
+             (when (and (consp expr) (not (member (car expr) '(:function :defun)))) ;; Don't enter inner functions
+               (when (and (eq (car expr) :call) (equal (second expr) '(:name "eval")))
+                 (return-from uses-lexical-eval t))
+               (mapc #'scan expr))))
+    (scan body)
+    nil))
 
 (defun lift-defuns (forms)
   (loop :for form :in forms
@@ -282,6 +294,8 @@
 
 (defun translate-function (name args body)
   (let ((uses-args (references-arguments body))
+        (uses-eval (uses-lexical-eval body))
+        (eval-scope (gensym "eval-scope"))
         (base-locals (cons "this" args)))
     (when name (push name base-locals))
     (when uses-args (push "arguments" base-locals))
@@ -289,11 +303,15 @@
       (with-scope (if uses-args
                       (make-arguments-scope :vars locals :args (mapcar '->usersym args))
                       (make-simple-scope :vars locals))
+        (when uses-eval
+          (push (make-with-scope :var eval-scope) *scope*))
         (let ((funcval
                `(make-instance
                  'native-function :prototype function.prototype :name ,name
-                 :proc ,(let ((body1 `((let ,(loop :for var :in internal :collect `(,var :undefined))
-                                         (declare (ignorable ,@internal))
+                 :proc ,(let ((body1 `((let* (,@(loop :for var :in internal :collect `(,var :undefined))
+                                              ,@(and uses-eval `((,eval-scope (js-new object.ctor ()))
+                                                                 (eval-env ,(capture-scope)))))
+                                         (declare (ignorable ,@internal ,@(and uses-eval (list eval-scope))))
                                          ,@(mapcar 'translate (lift-defuns body))
                                          :undefined))))
                              (if uses-args
@@ -323,7 +341,7 @@
          (block function ,@body)))))
 
 (deftranslate (:return value)
-  (unless (some (lambda (s) (typep s 'simple-scope)) *scope*)
+  (unless (in-function-scope-p)
     (error "return outside of function"))
   `(return-from function ,(if value (translate value) :undefined)))
 
@@ -341,7 +359,8 @@
 
 (deftranslate (:call func args)
   (cond ((equal func '(:name "eval"))
-         `(lexical-eval ,(translate (or (car args) :undefined)) ,(capture-scope)))
+         `(lexical-eval ,(translate (or (car args) :undefined))
+                        ,(if (in-function-scope-p) 'eval-env (capture-scope))))
         ((member (car func) '(:sub :dot))
          (let ((obj (gensym)))
            `(let ((,obj ,(translate (second func))))
