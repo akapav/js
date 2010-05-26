@@ -3,9 +3,9 @@
 (defvar *scope* ())
 (defparameter *label-name* nil)
 
-(defun lookup-global (name)
-  (or (prop* *global* name nil)
-      (error "Undefined variable: ~a" name)))
+(defmacro lookup-global (name)
+  `(or (prop* *global* ,name nil)
+      (error "Undefined variable: ~a" ,name)))
 
 (defgeneric lookup-variable (name scope rest))
 (defgeneric set-variable (name valname scope rest))
