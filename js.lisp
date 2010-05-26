@@ -21,16 +21,6 @@
               (declare (ignorable js-user::|this| ,@(and other '(other-args))))
               ,@body))))
 
-(defun js-new (func args)
-  (let* ((proto (prop func "prototype"))
-	 (ret (make-instance (placeholder-class func)
-			     :prototype proto
-			     :sealed (sealed proto))))
-    (apply (the function (proc func)) ret args)
-    (setf (prop ret "constructor") func)
-    ;;todo: put set-default here
-    ret))
-
 (defmacro undefined? (exp)
   `(eq ,exp :undefined))
 

@@ -4,8 +4,11 @@
 (defparameter *label-name* nil)
 
 (defun lookup-global (name)
-  (or (prop *global* name nil)
+  (or (prop* *global* name nil)
       (error "Undefined variable: ~a" name)))
+
+(defgeneric lookup-variable (name scope rest))
+(defgeneric set-variable (name valname scope rest))
 
 (defmethod lookup-variable (name (scope null) rest)
   (declare (ignore rest))
@@ -16,10 +19,10 @@
 
 (defstruct with-scope var)
 (defmethod lookup-variable (name (scope with-scope) rest)
-  `(or (prop ,(with-scope-var scope) ,name nil)
+  `(or (prop* ,(with-scope-var scope) ,name nil)
        ,(lookup-variable name (car rest) (cdr rest))))
 (defmethod set-variable (name valname (scope with-scope) rest)
-  `(if (prop ,(with-scope-var scope) ,name nil)
+  `(if (prop* ,(with-scope-var scope) ,name nil)
        (setf (prop ,(with-scope-var scope) ,name) ,valname)
        ,(set-variable name valname (car rest) (cdr rest))))
 
@@ -70,7 +73,7 @@
     (if var
         (funcall (second var))
         (loop :for obj :in (captured-scope-objs scope) :do
-           (let ((val (prop obj name nil)))
+           (let ((val (prop* obj name nil)))
              (when val (return val)))
            :finally (return (if (captured-scope-next scope)
                                 (lookup-in-captured-scope name (captured-scope-next scope))
@@ -83,7 +86,7 @@
     (if var
         (funcall (third var) value)
         (loop :for obj :in (captured-scope-objs scope) :do
-           (when (prop obj name nil)
+           (when (prop* obj name nil)
              (return (setf (prop obj name) value)))
            :finally (if (captured-scope-next scope)
                         (set-in-captured-scope name value (captured-scope-next scope))

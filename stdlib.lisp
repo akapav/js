@@ -71,11 +71,11 @@
 (mapc 'add-standard-properties (cons *global* *primitive-prototypes*))
 
 ;;
-(add-sealed-property string.prototype
+(js-add-sealed-property string.prototype
 		     "length"
 		     (lambda (obj) (length (value obj))))
 
-(add-sealed-property string.ctor "length" (constantly 1))
+(js-add-sealed-property string.ctor "length" (constantly 1))
 ;;not sure what is the meaning of that property. recheck the spec
 
 (defun clip-index (n)
@@ -159,11 +159,11 @@
       (if (typep val 'vector) val
 	  (js-funcall array.ctor arg)))))
 
-(add-sealed-property array.prototype
+(js-add-sealed-property array.prototype
 		     "length"
 		     (lambda (obj) (length (value obj))))
 
-(add-sealed-property array.ctor "length" (constantly 1))
+(js-add-sealed-property array.ctor "length" (constantly 1))
 ;;not sure what is the meaning of that property. recheck the spec
 
 ;; concat can't use standard define-js-method macro because it takes

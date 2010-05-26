@@ -1,11 +1,200 @@
 (in-package :js)
 
+;;;;;
+
+(eval-when (:compile-toplevel :load-toplevel :execute)
+
+(defun stringify (name)
+  (if (stringp name) name
+      (format nil "~a" name)))
+
+(defun generic-getter-name (name)
+  (->usersym (concatenate 'string (symbol-name 'generic-getter-) (stringify name))))
+
+(defun generic-setter-name (name)
+  (->usersym (concatenate 'string (symbol-name 'generic-setter-) (stringify name))))
+
+(defun slot-name->initarg (slot-name)
+  (list :name (->usersym (stringify slot-name))
+	:initform :%unset
+	:initfunction (lambda () :%unset)
+	:readers `(,(generic-getter-name slot-name))
+	:writers `(,(generic-setter-name slot-name))))
+
+(defun ensure-getter (key)
+  (let ((name (generic-getter-name key)))
+    (if (fboundp name)
+	(symbol-function name)
+	(let ((gf (ensure-generic-function name)))
+	  (add-method
+	   gf
+	   (make-instance
+	    'standard-method
+	    :specializers (list (find-class 'js-object))
+	    :lambda-list '(obj)
+	    :function (lambda (args nm)
+			(declare (ignore nm))
+			(let ((obj (car args)))
+			  (%ensure-getter obj key)
+			  (funcall gf obj)))))))))
+
+(defun ensure-setter (key)
+  (let ((name (generic-setter-name key)))
+    (if (fboundp name)
+	(symbol-function name)
+	(let ((gf (ensure-generic-function name)))
+	  (add-method
+	   gf
+	   (make-instance
+	    'standard-method
+	    :specializers (list (find-class t) (find-class 'js-object))
+	    :lambda-list '(val obj)
+	    :function (lambda (args nm)
+			(declare (ignore nm))
+			(setf (prop (second args) key) (first args)))))))))
+
+
+(define-compiler-macro prop (&whole form obj key)
+  (if (stringp key)
+      (progn
+	(ensure-getter key)
+	`(get-using-getter (function ,(generic-getter-name key)) ,obj))
+      `,form))
+
+(define-compiler-macro (setf prop) (&whole form val obj key)
+  (if (stringp key)
+      (progn
+	(ensure-setter key)
+	`(,(generic-setter-name key) ,val ,obj))
+      `,form))
+
 ;;
-(defgeneric prop (hash key &optional default)
+(defclass js-class (standard-class)
+  ((slot-class-mappings
+    :accessor slot-class-mappings
+    :initform (make-hash-table :test 'equal))))
+
+(defmethod validate-superclass
+    ((clss js-class) (base standard-class)) t)
+
+(defmethod validate-superclass
+    ((clss js-class) (base js-class)) t)
+
+(defmethod validate-superclass
+    ((clss standard-class) (base js-class)) t)
+
+;;
+(defclass js-object ()
+  ((prototype :accessor prototype :initarg :prototype :initform nil)
+   (sealed :accessor sealed :initform nil))
+  (:metaclass js-class))
+
+;;
+(defgeneric js-add-property (obj property-name))
+
+(defun %inherit-with-property (cls property-name)
+  (let ((new-class-name (gensym "jsos")))
+    (ensure-class new-class-name
+		  :direct-superclasses (list cls)
+		  :direct-slots (list (slot-name->initarg property-name))
+		  :metaclass 'js-class)
+    (setf (gethash property-name (slot-class-mappings cls)) new-class-name)
+    new-class-name))
+
+(defmethod js-add-property ((obj js-object) property-name)
+  (let* ((cls (class-of obj))
+	 (to-class (gethash property-name (slot-class-mappings cls))))
+    (ensure-getter property-name)
+    (ensure-setter property-name)
+    (change-class obj
+		  (or to-class
+		      (%inherit-with-property cls property-name)))))
+
+(defgeneric js-add-sealed-property (obj property-name proc))
+
+(defmethod js-add-sealed-property ((obj js-object) property-name proc)
+  (let* ((get-generic (ensure-getter property-name))
+	 (set-generic (ensure-setter property-name))
+	 (prop-getter
+	  (make-instance
+	   'standard-method
+	   :specializers (list (class-of obj))
+	   :lambda-list '(obj)
+	   :function (lambda (args nm)
+		       (declare (ignore nm))
+		       (funcall proc (car args)))))
+	 (prop-setter
+	  (make-instance
+	   'standard-method
+	   :specializers (list (find-class t) (class-of obj))
+	   :lambda-list '(val obj)
+	   :function (lambda (args nm)
+		       (declare (ignore nm))
+		       (car args)))))
+    (pushnew property-name (sealed obj) :test #'string=)
+    (add-method set-generic prop-setter)
+    (add-method get-generic prop-getter)))
+
+(defun sealed-property? (obj property-name)
+  (or (member property-name (sealed obj) :test #'string=)
+      (and (prototype obj) (sealed-property? (prototype obj) property-name))))
+
+;;
+(defun get-using-getter (getter obj)
+  (declare (function getter))
+  (let ((ret (funcall getter obj)))
+    (if (eq ret :%unset)
+	(let ((prototype (prototype obj)))
+	  (if prototype
+	      (get-using-getter getter prototype)
+	      (values :undefined nil)))
+	(values ret t))))
+
+(defun %ensure-getter (obj key)
+  (let* ((key (stringify key))
+	 (key-sym (->usersym key))
+	 #+nil (getter (ensure-getter key)))
+    (unless (or (slot-exists-p obj key-sym) (sealed-property? obj key))
+      (js-add-property obj key))
+    #+nil (funcall getter obj)))
+
+(defgeneric prop (obj key)
+  (:method (obj key)
+;    (%ensure-getter obj key)
+    (get-using-getter (ensure-getter key) obj)))
+
+(defgeneric (setf prop) (val obj key)
+  (:method (val obj key)
+    (let* ((key (stringify key))
+	   (key-sym (->usersym key))
+	   (setter (ensure-setter key)))
+      (unless (or (slot-exists-p obj key-sym) (sealed-property? obj key))
+	(js-add-property obj key))
+      (funcall setter val obj))))
+
+;;
+(defun js-clone (&optional prototype)
+  (if prototype
+      (let* ((proto-class (class-of prototype))
+	     (obj (make-instance (class-name proto-class) :prototype prototype)))
+	obj)
+      (make-instance 'js-object))))
+
+;;
+
+(defmacro prop* (obj key default)
+  (let ((val (gensym))
+	(found (gensym)))
+    `(multiple-value-bind (,val ,found) (prop ,obj ,key)
+       (if ,found ,val ,default))))
+
+;;;;
+;;
+#+nil (defgeneric prop (hash key &optional default)
   (:method (hash key &optional default)
     (declare (ignore hash key default)) :undefined))
 
-(defgeneric (setf prop) (val hash key)
+#+nil (defgeneric (setf prop) (val hash key)
   (:method (val hash key) (declare (ignore hash key)) val))
 
 (defgeneric sub (hash key)
@@ -56,11 +245,9 @@
      (push ,name *primitive-prototypes*)))
 
 ;;
-(defclass native-hash ()
-  ((default-value :accessor value :initform nil :initarg :value)
-   (dict :accessor dict :initform (make-hash-table :test 'equal))
-   (sealed :accessor sealed :initform nil :initarg :sealed)
-   (prototype :accessor prototype :initform nil :initarg :prototype)))
+(defclass native-hash (js-object)
+  ((default-value :accessor value :initform nil :initarg :value))
+  (:metaclass js-class))
 
 (defmethod initialize-instance :after ((obj native-hash) &rest args)
   (declare (ignore args))
@@ -69,37 +256,21 @@
 (defmethod set-default ((hash native-hash) val)
   (setf (value hash) val))
 
-(defun add-sealed-property (hash key proc)
-  (flet ((ensure-sealed-table (hash)
-	   (or (sealed hash)
-	       (setf (sealed hash) (make-hash-table :test 'equal)))))
-    (let ((sealed-table (ensure-sealed-table hash)))
-      (setf (gethash key sealed-table) proc))))
-
-(defmethod prop ((hash native-hash) key &optional (default :undefined))
-  (let* ((sealed (sealed hash))
-	 (action (and sealed (gethash key sealed))))
-    (if action (funcall action hash)
-	(multiple-value-bind (val exists)
-	    (gethash key (dict hash))
-	  (if exists val
-	      (or (and (prototype hash)
-		       (prop (prototype hash) key default))
-		  default))))))
-
-(defmethod (setf prop) (val (hash native-hash) key)
-  (setf (gethash key (dict hash)) val))
-
 (defmethod list-props ((hash native-hash))
-  (loop :for prop :being :the :hash-keys :in (dict hash) :collect prop))
+  #+nil(loop :for prop :being :the :hash-keys :in (dict hash) :collect prop) nil)
+
+(defun js-new (func args)
+  (let* ((proto (prop* func "prototype" nil))
+	 (ret (js-clone proto)))
+    (apply (the function (proc func)) ret args)
+    (setf (prop ret "constructor") func)
+    ;;todo: put set-default here
+    ret))
 
 ;;
 (defclass global-object (native-hash)
-  ())
-
-;(defmethod (setf prop) (val (hash global-object) key)
-;  (set (if (stringp key) (intern (to-default-case key) :js-user) key) val);;todo:
-;  (call-next-method val hash key))
+  ()
+  (:metaclass js-class))
 
 (defmethod set-default ((hash global-object) val)
   val)
@@ -112,8 +283,8 @@
 ;;
 (defclass native-function (native-hash)
   ((name :accessor name :initarg :name)
-   (proc :accessor proc :initarg :proc)
-   #+(or)(env :accessor env :initarg :env)))
+   (proc :accessor proc :initarg :proc))
+  (:metaclass js-class))
 
 (defmethod proc (arg) ;; TODO make proper Error objects
   (error "~a is not a function." arg))
@@ -126,18 +297,14 @@
     (make-instance 'native-function
 		   :proc (lambda (&rest args) (declare (ignore args)) :undefined)))
 
-(defun new-function (&rest args) ;;due to parser error it is
-				 ;;impossible to use anonymous
-				 ;;function as a standalone expression
-				 ;;so we propagate it via identity
-				 ;;lambda
+(defun new-function (&rest args)
   (eval
    (translate
     (parse-js-string
      (if args
-	 (format nil "(function(val) {return val;})(function (~{~a~^, ~}) {~A});"
+	 (format nil "(function (~{~a~^, ~}) {~A});"
 		 (butlast args) (car (last args)))
-	 "(function(val) {return val;})(function () {});")))))
+	 "(function () {});")))))
 
 (defmethod set-default ((func native-function) val)
   (setf (prototype func) function.prototype)
@@ -167,11 +334,13 @@
 
 ;;
 (defclass arguments (native-hash)
-  ((argument-vector :initarg :vector :reader argument-vector)))
+  ((argument-vector :initarg :vector :reader argument-vector))
+  (:metaclass js-class))
+
 (defun make-args (arguments)
   (let* ((vec (coerce arguments 'vector))
          (obj (make-instance 'arguments :vector vec)))
-    (add-sealed-property obj "length"
+    (js-add-sealed-property obj "length"
                          (lambda (ignore) (declare (ignore ignore)) (length vec)))
     obj))
 
@@ -198,13 +367,14 @@
 ;;; like string. recheck the spec
 ;;
 (defclass array-object (native-hash)
-  ())
+  ()
+  (:metaclass js-class))
 
-(defmethod prop ((arr array-object) key &optional (default :undefined))
+(defmethod prop ((arr array-object) key)
   (if (and (integerp key)
 	   (< key (length (value arr)))) ;;todo: safe conversion to integer
       (aref (value arr) key)
-      (call-next-method arr key default)))
+      (call-next-method arr key)))
 
 (defmethod (setf prop) (val (arr array-object) key)
   (if (integerp key) ;;todo: ... as above ...
@@ -251,12 +421,12 @@
 
 (define-primitive-prototype string.prototype (js-new js::string.ctor '("")))
 
-(defmethod prop ((str string) key &optional (default :undefined))
+(defmethod prop ((str string) key)
   (let* ((sealed (sealed string.prototype))
 	 (action (gethash key sealed)))
     (if action
 	(funcall action str)
-	(prop string.prototype key default))))
+	(prop string.prototype key))))
 
 (finish-class-construction "String" string.ctor string.prototype)
 
@@ -295,18 +465,19 @@
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (shadow 'Number 'js-user)) ;;todo: ...
 
-(defmethod prop ((num number) key &optional (default :undefined))
+(defmethod prop ((num number) key)
   (let* ((sealed (sealed number.prototype))
 	 (action (and sealed (gethash key sealed)))) ;todo: not sure yet wether nums have sealed props
     (if action
 	(funcall action num)
-	(prop number.prototype key default))))
+	(prop number.prototype key))))
 
 (finish-class-construction "Number" number.ctor number.prototype)
 
 ;;
 (defclass math (native-hash)
-  ())
+  ()
+  (:metaclass js-class))
 
 (defparameter math.obj (make-instance 'math))
 
@@ -317,7 +488,8 @@
   ((expr :accessor expr :initarg :expr)
    (scanner :accessor scanner :initarg :scanner)
    (globalp :accessor globalp :initarg :global)
-   (case-sensitive-p :accessor case-sensitive-p :initarg :case-insensitive)))
+   (case-sensitive-p :accessor case-sensitive-p :initarg :case-insensitive))
+  (:metaclass js-class))
 
 (defun check-flag (flag)
   (or (car (member flag '("" "i" "g" "ig" "gi") :test #'string=))
