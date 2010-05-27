@@ -221,20 +221,29 @@
 (defgeneric prototype (obj)
   (:method (obj) (declare (ignore obj)) nil))
 
+(defun ensure-accessors (key)
+  (ensure-getter key)
+  (ensure-setter key))
+
+(defmacro set-ensured (obj key val)
+  `(progn
+     (ensure-accessors ,key)
+     (setf (prop ,obj ,key) ,val)))
+
 (defun finish-class-construction (name ctor proto &key explicit-ctor)
   (declare (special *global*))
-  (setf (prop ctor "prototype") proto)
-  (setf (prop *global* name) ctor)
+  (set-ensured ctor "prototype" proto)
+  (set-ensured *global* name ctor)
   (when explicit-ctor
-    (setf (prop proto "constructor") ctor)))
+    (set-ensured proto "constructor" ctor)))
 
 ;;
 (defparameter value-of nil) ;;function.prototype is not defined yet
 (defparameter to-string nil)
 
 (defun add-standard-properties (obj)
-  (setf (prop obj "valueOf") value-of)
-  (setf (prop obj "toString") to-string)
+  (set-ensured obj "valueOf" value-of)
+  (set-ensured obj "toString" to-string)
   obj)
 
 (defparameter *primitive-prototypes* nil)
@@ -259,6 +268,9 @@
 (defmethod list-props ((hash native-hash))
   #+nil(loop :for prop :being :the :hash-keys :in (dict hash) :collect prop) nil)
 
+(mapc #'ensure-accessors
+      '("prototype" "constructor"))
+
 (defun js-new (func args)
   (let* ((proto (prop* func "prototype" nil))
 	 (ret (js-clone proto)))
@@ -277,8 +289,8 @@
 
 (defparameter *global* (make-instance 'global-object))
 
-(setf (prop *global* "this") *global*)
-(setf (prop *global* "undefined") :undefined)
+(set-ensured *global* "this" *global*)
+(set-ensured *global* "undefined" :undefined)
 
 ;;
 (defclass native-function (native-hash)
@@ -481,7 +493,7 @@
 
 (defparameter math.obj (make-instance 'math))
 
-(setf (prop *global* "Math") math.obj)
+(set-ensured *global* "Math" math.obj)
 
 ;;
 (defclass regexp (native-function)

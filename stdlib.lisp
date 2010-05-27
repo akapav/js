@@ -31,11 +31,11 @@
 			`(,name (if (undefined? ,name) ,val ,name)))
 		      (cdr arg-names) (cdr arg-defaults)))
 	       ,@body)))
-	 (setf (prop ,prototype-name ,name)
+	 (set-ensured ,prototype-name ,name
 	       (js-function ,(cdr arg-names)
 		 (js-funcall
 		  ,canonical-name (value (!this)) ,@(cdr arg-names))))
-	 (setf (prop ,ctor-name ,name) ,canonical-name)))))
+	 (set-ensured ,ctor-name ,name ,canonical-name)))))
 
 (defmacro with-asserted-types ((&rest type-pairs) &body body)
   `(let (,@(mapcar (lambda (pair)
@@ -138,20 +138,21 @@
     (js-new array.ctor (string-split str delimiter))))
 
 ;;
-(setf (prop function.prototype "call")
-      (js-function (context &rest args)
-        (apply (proc (!this)) context args)))
+(set-ensured
+ function.prototype "call"
+ (js-function (context &rest args)
+   (apply (proc (!this)) context args)))
 
-(setf (prop function.prototype "apply")
-      (js-function (context argarr)
-	(apply (proc (!this)) context
-	       (coerce (typecase argarr
-			 (vector argarr)
-			 (array-object (value argarr))
-			 (arguments (arguments-as-list argarr))
-			 (t (error "second argument to apply must be an array")))
-		       'list))))
-
+(set-ensured
+ function.prototype "apply"
+ (js-function (context argarr)
+   (apply (proc (!this)) context
+	  (coerce (typecase argarr
+		    (vector argarr)
+		    (array-object (value argarr))
+		    (arguments (arguments-as-list argarr))
+		    (t (error "second argument to apply must be an array")))
+		  'list))))
 ;;
 (defparameter array.ensure
   (js-function (arg)
@@ -175,12 +176,13 @@
                          (js-funcall array.ensure arg)))))
       (js-new array.ctor arr))))
 
-(setf (prop array.prototype "concat")
-	(js-function (&rest args)
-	  (apply #'js-funcall #.(symconc 'array ".concat")
-		 (value (!this)) args)))
+(set-ensured
+ array.prototype "concat"
+ (js-function (&rest args)
+   (apply #'js-funcall #.(symconc 'array ".concat")
+	  (value (!this)) args)))
 
-(setf (prop array.ctor "concat") #.(symconc 'array ".concat"))
+(set-ensured array.ctor "concat" #.(symconc 'array ".concat"))
 
 (define-js-method array "join" (arr str)
   (let ((str (if (undefined? str) "," str)))
@@ -248,12 +250,13 @@
 				     (howmany number))
 		 (apply-splicing arr ndx howmany args)))))))
 
-(setf (prop array.prototype "splice")
-      (js-function (&rest args)
-	(apply #'js-funcall #.(symconc 'array ".splice") (!this)
-	       args)))
+(set-ensured
+ array.prototype "splice"
+ (js-function (&rest args)
+   (apply #'js-funcall #.(symconc 'array ".splice") (!this)
+	  args)))
 
-(setf (prop array.ctor "splice") #.(symconc 'array ".splice"))
+(set-ensured array.ctor "splice" #.(symconc 'array ".splice"))
 
 (define-js-method array "pop" (arr)
   (unless (zerop (length arr))
@@ -265,11 +268,12 @@
       (mapc (lambda (el) (vector-push-extend el arr)) args)
       (length arr))))
 
-(setf (prop array.ctor "push") #.(symconc 'array ".push"))
+(set-ensured array.ctor "push" #.(symconc 'array ".push"))
 
-(setf (prop array.prototype "push")
-      (js-function (&rest args)
-	(apply #'js-funcall #.(symconc 'array ".push") (!this) args)))
+(set-ensured
+ array.prototype "push"
+ (js-function (&rest args)
+   (apply #'js-funcall #.(symconc 'array ".push") (!this) args)))
 
 (define-js-method array "reverse" (arr)
   (nreverse arr))
@@ -284,10 +288,10 @@
     (sort arr (lambda (ls rs) (js-funcall func ls rs))))
   
 ;;
-(setf (prop number.ctor "MAX_VALUE") most-positive-double-float)
-(setf (prop number.ctor "MIN_VALUE") most-negative-double-float)
-(setf (prop number.ctor "POSITIVE_INFINITY") :NaN)
-(setf (prop number.ctor "NEGATIVE_INFINITY") :-NaN)
+(set-ensured number.ctor "MAX_VALUE" most-positive-double-float)
+(set-ensured number.ctor "MIN_VALUE" most-negative-double-float)
+(set-ensured number.ctor "POSITIVE_INFINITY" :NaN)
+(set-ensured number.ctor "NEGATIVE_INFINITY" :-NaN)
 
 ;;
 (defmacro math-function ((arg &key (inf :NaN) (minf :-NaN) (nan :NaN)) &body body)
@@ -299,86 +303,101 @@
 	 ((:-Inf) ,minf)
 	 (t (progn ,@body))))))	     
 
-(setf (prop math.obj "E") (exp 1))
-(setf (prop math.obj "LN2") (log 2))
-(setf (prop math.obj "LN10") (log 10))
-(setf (prop math.obj "LOG2E") (log (exp 1) 2))
-(setf (prop math.obj "LOG10E") (log (exp 1) 10))
-(setf (prop math.obj "SQRT1_2") (sqrt .5))
-(setf (prop math.obj "SQRT1_2") (sqrt 2))
-(setf (prop math.obj "PI") pi)
+(set-ensured math.obj "E" (exp 1))
+(set-ensured math.obj "LN2" (log 2))
+(set-ensured math.obj "LN10" (log 10))
+(set-ensured math.obj "LOG2E" (log (exp 1) 2))
+(set-ensured math.obj "LOG10E" (log (exp 1) 10))
+(set-ensured math.obj "SQRT1_2" (sqrt .5))
+(set-ensured math.obj "SQRT1_2" (sqrt 2))
+(set-ensured math.obj "PI" pi)
 
-(setf (prop math.obj "abs")
-      (math-function (arg :minf :Inf :inf :Inf)
-	(abs arg)))
+(set-ensured
+ math.obj "abs"
+ (math-function (arg :minf :Inf :inf :Inf)
+   (abs arg)))
 
-(setf (prop math.obj "acos")
-      (math-function (arg)
-	(let ((res (acos arg)))
-	  (if (realp res) res :NaN))))
+(set-ensured
+ math.obj "acos"
+ (math-function (arg)
+   (let ((res (acos arg)))
+     (if (realp res) res :NaN))))
 
-(setf (prop math.obj "asin")
-      (math-function (arg)
-	(let ((res (asin arg)))
-	  (if (realp res) res :NaN))))
+(set-ensured
+ math.obj "asin"
+ (math-function (arg)
+   (let ((res (asin arg)))
+     (if (realp res) res :NaN))))
 
-(setf (prop math.obj "atan")
-      (math-function (arg :minf (- (/ pi 2)) :inf (/ pi 2))
-	(atan arg)))
+(set-ensured
+ math.obj "atan"
+ (math-function (arg :minf (- (/ pi 2)) :inf (/ pi 2))
+   (atan arg)))
 
-(setf (prop math.obj "atan2")
-      (js-function (y x)
-        (js-funcall (prop math.obj "atan") (!/ y x))))
+(set-ensured
+ math.obj "atan2"
+ (js-function (y x)
+   (js-funcall (prop math.obj "atan") (!/ y x))))
 
-(setf (prop math.obj "ceil")
-      (math-function (arg :minf :-Inf :inf :Inf)
-	(ceiling arg)))
+(set-ensured
+ math.obj "ceil"
+ (math-function (arg :minf :-Inf :inf :Inf)
+   (ceiling arg)))
 
-(setf (prop math.obj "cos")
-      (math-function (arg)
-	(cos arg)))
+(set-ensured
+ math.obj "cos"
+ (math-function (arg)
+   (cos arg)))
 
-(setf (prop math.obj "exp")
-      (math-function (arg :minf 0 :inf :Inf)
-	(exp arg)))
+(set-ensured
+ math.obj "exp"
+ (math-function (arg :minf 0 :inf :Inf)
+   (exp arg)))
 
-(setf (prop math.obj "floor")
-      (math-function (arg :minf :-Inf :inf :Inf)
-	(floor arg)))
+(set-ensured
+ math.obj "floor"
+ (math-function (arg :minf :-Inf :inf :Inf)
+   (floor arg)))
 
-(setf (prop math.obj "log")
-      (math-function (arg :inf :Inf)
-	(cond ((zerop arg) :-Inf)
-	      ((minusp arg) :NaN)
-	      (t (log arg)))))
+(set-ensured
+ math.obj "log"
+ (math-function (arg :inf :Inf)
+   (cond ((zerop arg) :-Inf)
+	 ((minusp arg) :NaN)
+	 (t (log arg)))))
 
-(setf (prop math.obj "round")
-      (math-function (arg :minf :-Inf :inf :Inf)
-	(round arg)))
+(set-ensured
+ math.obj "round"
+ (math-function (arg :minf :-Inf :inf :Inf)
+   (round arg)))
 
-(setf (prop math.obj "sin")
-      (math-function (arg)
-	(sin arg)))
+(set-ensured
+ math.obj "sin"
+ (math-function (arg)
+   (sin arg)))
 
-(setf (prop math.obj "sqrt")
-      (math-function (arg)
-	(let ((res (sqrt arg)))
-	  (if (realp res) res :NaN))))
+(set-ensured
+ math.obj "sqrt"
+ (math-function (arg)
+   (let ((res (sqrt arg)))
+     (if (realp res) res :NaN))))
 
-(setf (prop math.obj "tan")
-      (math-function (arg)
-	(sin arg)))
+(set-ensured
+ math.obj "tan"
+ (math-function (arg)
+   (sin arg)))
 
-(setf (prop math.obj "pow")
-      (js-function (base exp)
-	(with-asserted-types ((base number)
-			      (exp number))
-	  (cond ((or (eq base :NaN) (eq exp :NaN)) :NaN)
-		((eq exp :-Inf) 0)
-		((and (realp exp) (zerop exp)) 1)
-		((or (eq base :Inf) (eq exp :Inf)) :Inf)
-		((eq base :-Inf) :-Inf)
-		(t (coerce (expt base exp) 'double-float))))))
+(set-ensured
+ math.obj "pow"
+ (js-function (base exp)
+   (with-asserted-types ((base number)
+			 (exp number))
+     (cond ((or (eq base :NaN) (eq exp :NaN)) :NaN)
+	   ((eq exp :-Inf) 0)
+	   ((and (realp exp) (zerop exp)) 1)
+	   ((or (eq base :Inf) (eq exp :Inf)) :Inf)
+	   ((eq base :-Inf) :-Inf)
+	   (t (coerce (expt base exp) 'double-float))))))
 
 (defmacro num-comparator (name (gt lt cmp))
   (let ((ls (gensym))
@@ -398,49 +417,58 @@
 ;;NaN breaks <number.ext (and >number.ext) invariant so num-comparator
 ;;is implemented. should be fixed soon
 
-(setf (prop math.obj "max")
-      (js-function (&rest args)
-        (reduce #'num.max args :initial-value :-Inf)))
+(set-ensured
+ math.obj "max"
+ (js-function (&rest args)
+   (reduce #'num.max args :initial-value :-Inf)))
 
-(setf (prop math.obj "min")
-      (js-function (&rest args)
-        (reduce #'num.min args :initial-value :Inf)))
+(set-ensured
+ math.obj "min"
+ (js-function (&rest args)
+   (reduce #'num.min args :initial-value :Inf)))
 
-(setf (prop math.obj "random")
-      (js-function ()
-	(random 1.0)))
+(set-ensured
+ math.obj "random"
+ (js-function ()
+   (random 1.0)))
 ;;
-(setf (prop *global* "print")
-      (js-function (arg)
-	(if (eq arg :undefined) (format t "~%")
-	    (format t "~A~%" (js-funcall string.ctor arg)))))
+(set-ensured
+ *global* "print"
+ (js-function (arg)
+   (if (eq arg :undefined) (format t "~%")
+       (format t "~A~%" (js-funcall string.ctor arg)))))
 
-(setf (prop *global* "parseInt")
-      (js-function (arg)
-	(let ((arg (value arg)))
-	  (cond ((integerp  arg) arg)
-		((or (eq arg :NaN) (eq arg :-Inf) (eq arg :Inf)) arg)
-		(t (with-asserted-types ((arg string))
-		     (or (parse-integer arg :junk-allowed t) :NaN)))))))
+(set-ensured
+ *global* "parseInt"
+ (js-function (arg)
+   (let ((arg (value arg)))
+     (cond ((integerp  arg) arg)
+	   ((or (eq arg :NaN) (eq arg :-Inf) (eq arg :Inf)) arg)
+	   (t (with-asserted-types ((arg string))
+		(or (parse-integer arg :junk-allowed t) :NaN)))))))
 
-(setf (prop *global* "parseFloat")          ;todo: e.g.'123xx' returns :NaN ...
-      (js-function (arg)                    ;instead of 123. replace with regexp
-	(if (js-number? arg) (value arg)
-	    (js-funcall number.ensure arg)))) 
+(set-ensured
+ *global* "parseFloat"     ;todo: e.g.'123xx' returns :NaN ...
+ (js-function (arg)        ;instead of 123. replace with regexp
+   (if (js-number? arg) (value arg)
+       (js-funcall number.ensure arg)))) 
 
-(setf (prop *global* "isNaN")
-      (js-function (arg)
-        (or (eq arg :NaN) (undefined? arg))))
+(set-ensured
+ *global* "isNaN"
+ (js-function (arg)
+   (or (eq arg :NaN) (undefined? arg))))
 
 ;;
-(setf (prop *global* "not_implemented")
-      (js-function ()
-	(error "Function not implemented")))
+(set-ensured
+ *global* "not_implemented"
+ (js-function ()
+   (error "Function not implemented")))
 
-(setf (prop *global* "eval")
-      (js-function (str)
-        (with-asserted-types ((str string))
-          (compile-eval (translate (parse-js:parse-js-string str))))))
+(set-ensured
+ *global* "eval"
+ (js-function (str)
+   (with-asserted-types ((str string))
+     (compile-eval (translate (parse-js:parse-js-string str))))))
 
 (defun lexical-eval (str scope)
   (with-asserted-types ((str string))
