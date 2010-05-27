@@ -74,4 +74,4 @@ function spectralnorm(n) {
      :report :graph
      :reset t
      :loop nil)
-  (fib 20))
+(js::js-funcall  (!eval "fib;") 30))
