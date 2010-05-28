@@ -215,6 +215,10 @@
 (defgeneric value (obj)
   (:method (obj) obj))
 
+(defgeneric proc (arg)
+  (:method (arg)
+    (error "~a is not a function." arg)))
+
 (defgeneric to-string (obj)
   (:method (obj) (format nil "~A" obj)))
 
@@ -293,13 +297,11 @@
 (set-ensured *global* "undefined" :undefined)
 
 ;;
+
 (defclass native-function (native-hash)
   ((name :accessor name :initarg :name)
    (proc :accessor proc :initarg :proc))
   (:metaclass js-class))
-
-(defmethod proc (arg) ;; TODO make proper Error objects
-  (error "~a is not a function." arg))
 
 (defmethod initialize-instance :after ((f native-function) &rest args)
   (declare (ignore args))
