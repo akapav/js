@@ -1,12 +1,6 @@
 (in-package :js)
 
 (eval-when (:compile-toplevel :load-toplevel)
-  (defun symconc (&rest args)
-    (intern (apply 'concatenate 'string
-                   (loop :for arg :in args :collect
-                      (typecase arg
-                        (string arg) (symbol (symbol-name arg))
-                        (t (princ-to-string arg)))))))
   (defun ctor (sym) (symconc sym "." 'ctor))
   (defun ensure (sym) (symconc sym "." 'ensure)))
 
