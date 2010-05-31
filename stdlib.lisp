@@ -466,5 +466,11 @@
 
 (defun lexical-eval (str scope)
   (with-asserted-types ((str string))
-    (let ((*scope* (list scope)))
-      (compile-eval (translate (parse-js:parse-js-string str))))))
+    (let* ((parsed (parse-js:parse-js-string str))
+           (*scope* (list scope))
+           (env-obj (car (captured-scope-objs scope)))
+           (captured-locals (captured-scope-local-vars scope))
+           (new-locals (and (not (eq captured-locals :null))
+                            (set-difference (find-locals (second parsed)) captured-locals))))
+      (dolist (local new-locals) (setf (prop env-obj (symbol-name local)) :undefined))
+      (compile-eval (translate parsed)))))
