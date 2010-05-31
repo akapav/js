@@ -8,6 +8,7 @@
   ((:file "packages")
    (:file "utils")
    (:file "reader")
+   (:file "jsos")
    (:file "js")
    (:file "runtime")
    (:file "translate")
