@@ -16,8 +16,8 @@
 (defgeneric placeholder-class (func)
   (:method (func) (declare (ignore func)) 'native-hash))
 
-(defgeneric set-default (hash val) ;;todo: put it as a slot writer
-  (:method (hash val) (declare (ignore hash)) val))
+(defgeneric (setf value) (obj val)
+  (:method (obj val) (declare (ignore obj)) val))
 
 (defgeneric value (obj)
   (:method (obj) obj))
@@ -32,16 +32,12 @@
 (defgeneric prototype (obj)
   (:method (obj) (declare (ignore obj)) nil))
 
-(defun ensure-accessors (key)
-  (ensure-getter key)
-  (ensure-setter key))
-
 (defmacro set-ensured (obj key val)
   `(progn
      (ensure-accessors ,key)
      (setf (prop ,obj ,key) ,val)))
 
-(defun finish-class-construction (name ctor proto &key explicit-ctor)
+(defun finalize-class-construction (name ctor proto &key explicit-ctor)
   (declare (special *global*))
   (set-ensured ctor "prototype" proto)
   (set-ensured *global* name ctor)
@@ -73,29 +69,16 @@
   (declare (ignore args))
   (setf (value obj) obj))
 
-(defmethod set-default ((hash native-hash) val)
-  (setf (value hash) val))
-
 (defmethod list-props ((hash native-hash))
   #+nil(loop :for prop :being :the :hash-keys :in (dict hash) :collect prop) nil)
-
-(mapc #'ensure-accessors
-      '("prototype" "constructor"))
-
-(defun js-new (func args)
-  (let* ((proto (prop* func "prototype" nil))
-	 (ret (js-clone proto)))
-    (apply (the function (proc func)) ret args)
-    (setf (prop ret "constructor") func)
-    ;;todo: put set-default here
-    ret))
 
 ;;
 (defclass global-object (native-hash)
   ()
   (:metaclass js-class))
 
-(defmethod set-default ((hash global-object) val)
+(defmethod (setf value) (val (hash global-object))
+  (declare (ignore hash))
   val)
 
 (defparameter *global* (make-instance 'global-object))
@@ -104,7 +87,6 @@
 (set-ensured *global* "undefined" :undefined)
 
 ;;
-
 (defclass native-function (native-hash)
   ((name :accessor name :initarg :name)
    (proc :accessor proc :initarg :proc))
@@ -127,7 +109,7 @@
 		 (butlast args) (car (last args)))
 	 "(function () {});")))))
 
-(defmethod set-default ((func native-function) val)
+(defmethod (setf value) (val (func native-function))
   (setf (prototype func) function.prototype)
   (setf (proc func) (proc val))
   (setf (name func) nil)
@@ -136,22 +118,27 @@
 (defparameter function.ctor
   (js-function (&rest args)
     (let ((func (apply #'new-function args)))
-      (set-default (!this) func)
+      (setf (value (!this)) func)
       func)))
 
 (defmethod placeholder-class ((func (eql function.ctor))) 'native-function)
 
-(finish-class-construction "Function"
-			   function.ctor function.prototype :explicit-ctor t)
+(finalize-class-construction
+ "Function" function.ctor function.prototype :explicit-ctor t)
 
+;;
 (defparameter object.ctor
   (js-function (val)
-    (set-default (!this) val)
+    (setf (value (!this)) val)
     val))
 
-(define-primitive-prototype object.prototype (js-new object.ctor (list (make-instance 'native-hash))))
+(define-primitive-prototype
+    object.prototype
+    (js-new-ignore-prototype
+     object.ctor (list (make-instance 'native-hash))))
 
-(finish-class-construction "Object" object.ctor object.prototype)
+(finalize-class-construction
+ "Object" object.ctor object.prototype)
 
 ;;
 (defclass arguments (native-hash)
@@ -213,17 +200,20 @@
 	   (arr (make-array len :adjustable t
 			    :fill-pointer len
 			    :initial-contents args)))
-      (set-default (!this) arr)
+      (setf (value (!this)) arr)
       arr)))
 
 (defmethod placeholder-class ((func (eql array.ctor))) 'array-object)
 
-(define-primitive-prototype array.prototype (js-new js::array.ctor ()))
+(define-primitive-prototype
+    array.prototype
+    (js-new-ignore-prototype js::array.ctor () 'array-object))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (shadow 'Array 'js-user)) ;;todo: ...
 
-(finish-class-construction "Array" array.ctor array.prototype)
+(finalize-class-construction
+ "Array" array.ctor array.prototype)
 
 ;;
 (defun js-string? (o)
@@ -235,21 +225,20 @@
 (defparameter string.ctor
   (js-function (obj)
     (let ((str (if (eq obj :undefined) "" (to-string (value obj)))))
-      (set-default (!this) str)
+      (setf (value (!this)) str)
       (the string str))))
 
 (defparameter string.ensure string.ctor)
 
-(define-primitive-prototype string.prototype (js-new js::string.ctor '("")))
+(define-primitive-prototype
+    string.prototype
+    (js-new-ignore-prototype js::string.ctor '("")))
 
-(defmethod prop ((str string) key)
-  (let* ((sealed (sealed string.prototype))
-	 (action (gethash key sealed)))
-    (if action
-	(funcall action str)
-	(prop string.prototype key))))
+#+nil (defmethod prop ((str string) key)
+  (prop string.prototype key))
 
-(finish-class-construction "String" string.ctor string.prototype)
+(finalize-class-construction
+ "String" string.ctor string.prototype)
 
 ;;
 (defun js-number? (o)
@@ -273,7 +262,7 @@
 		     (t (with-input-from-string (s (to-string (value n)))
 			  (let ((n2 (read s)))
 			    (if (js-number? n2) n2 :NaN)))))))
-      (set-default (!this) val)
+      (setf (value (!this)) val)
       (the js.number val))))
 
 (defparameter number.ensure
@@ -281,19 +270,18 @@
     (if (js-number? arg) arg
 	(js-funcall number.ctor arg))))
 
-(define-primitive-prototype number.prototype (js-new number.ctor '(0)))
+(define-primitive-prototype
+    number.prototype
+    (js-new-ignore-prototype number.ctor '(0)))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (shadow 'Number 'js-user)) ;;todo: ...
 
 (defmethod prop ((num number) key)
-  (let* ((sealed (sealed number.prototype))
-	 (action (and sealed (gethash key sealed)))) ;todo: not sure yet wether nums have sealed props
-    (if action
-	(funcall action num)
-	(prop number.prototype key))))
+  (prop number.prototype key))
 
-(finish-class-construction "Number" number.ctor number.prototype)
+(finalize-class-construction
+ "Number" number.ctor number.prototype)
 
 ;;
 (defclass math (native-hash)
@@ -322,9 +310,8 @@
 		    (js-funcall string.ensure  expr)))
 	  (flags (if (eq flags :undefined) ""
 		     (check-flag flags))))
-      ;(set-default (!this) (format nil "/~A/~A" expr flags))
       (let ((re (make-regexp expr flags)))
-	(set-default (!this) re)
+	(setf (value (!this)) re)
 	re))))
 
 (defun make-regexp (expr flags)
@@ -347,7 +334,7 @@
 
 (defmethod placeholder-class ((func (eql regexp.ctor))) 'regexp)
 
-(finish-class-construction "RegExp"
-			   regexp.ctor regexp.prototype :explicit-ctor t)
+(finalize-class-construction
+"RegExp" regexp.ctor regexp.prototype :explicit-ctor t)
 
 ;;todo: regexp object constructed with // haven't valid prototype

@@ -3,6 +3,25 @@
 (defmacro !this () 'js-user::|this|)
 
 ;;
+(mapc #'ensure-accessors
+      '("prototype" "constructor"))
+
+(defun %finalize-new-protocol (obj func args)
+    (apply (the function (proc func)) obj args)
+    (setf (prop obj "constructor") func)
+    ;;todo: move set-default here
+    obj)
+
+(defun js-new-ignore-prototype (func args &optional (class-name 'native-hash))
+  (let ((new-object (make-instance class-name)))
+    (%finalize-new-protocol new-object func args)))
+
+(defun js-new (func args)
+  (let* ((proto (prop* func "prototype" nil))
+	 (new-object (js-clone proto)))
+    (%finalize-new-protocol new-object func args)))
+
+;;
 (defun js-funcall (func &rest args)
   (apply (the function (proc func)) nil args))
 
