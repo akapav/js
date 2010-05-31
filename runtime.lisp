@@ -13,9 +13,6 @@
 (defgeneric list-props (hash)
   (:method (hash) (declare (ignore hash)) ()))
 
-(defgeneric placeholder-class (func)
-  (:method (func) (declare (ignore func)) 'native-hash))
-
 (defgeneric (setf value) (obj val)
   (:method (obj val) (declare (ignore obj)) val))
 
@@ -121,8 +118,6 @@
       (setf (value (!this)) func)
       func)))
 
-(defmethod placeholder-class ((func (eql function.ctor))) 'native-function)
-
 (finalize-class-construction
  "Function" function.ctor function.prototype :explicit-ctor t)
 
@@ -202,8 +197,6 @@
 			    :initial-contents args)))
       (setf (value (!this)) arr)
       arr)))
-
-(defmethod placeholder-class ((func (eql array.ctor))) 'array-object)
 
 (define-primitive-prototype
     array.prototype
@@ -331,8 +324,6 @@
 
 (define-primitive-prototype regexp.prototype
     (make-regexp "(?:)" ""))
-
-(defmethod placeholder-class ((func (eql regexp.ctor))) 'regexp)
 
 (finalize-class-construction
 "RegExp" regexp.ctor regexp.prototype :explicit-ctor t)
