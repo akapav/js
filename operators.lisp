@@ -9,7 +9,7 @@
        (declare (,type ,ls ,rs))
        (,op ,ls ,rs))))
 
-(defmacro extended-number-op ((op &key var (nan :NaN))
+(defmacro extended-number-op ((op &key var (nan (nan)))
 			      inf-inf inf-minf minf-inf minf-minf
 			      num-inf num-minf inf-num minf-num)
   (let* ((namestr (concatenate 'string (symbol-name op) (symbol-name 'number)))
@@ -17,21 +17,25 @@
 	 (nameext (intern (concatenate 'string namestr "." (symbol-name 'ext))))
 	 (ls (or var (gensym)))
 	 (rs (gensym)))
-    `(defun ,nameext (,ls ,rs)
-       (declare (js.number ,ls ,rs))
-       (cond
-	 ((and (numberp (value ,ls)) (numberp (value ,rs)))
-	  (,name (value ,ls) (value ,rs)))
-	 ((or (eq ,ls :NaN) (eq ,rs :NaN)) ,nan)
-	 ((and (eq ,ls :Inf) (eq ,rs :Inf)) ,inf-inf)
-	 ((and (eq ,ls :Inf) (eq ,rs :-Inf)) ,inf-minf)
-	 ((and (eq ,ls :-Inf) (eq ,rs :Inf)) ,minf-inf)
-	 ((and (eq ,ls :-Inf) (eq ,rs :-Inf)) ,minf-minf)
-	 ((eq ,rs :Inf) ,num-inf)
-	 ((eq ,rs :-Inf) ,num-minf)
-	 ((eq ,ls :Inf) ,inf-num)
-	 ((eq ,ls :-Inf) ,minf-num)
-	 (t (error (format nil "internal error in ~A~%" ',op)))))))
+    (if *float-traps*
+        `(defun ,nameext (,ls ,rs)
+           (declare (js.number ,ls ,rs))
+           (cond
+             ((and (numberp (value ,ls)) (numberp (value ,rs)))
+              (,name (value ,ls) (value ,rs)))
+             ((or (is-nan ,ls) (is-nan ,rs)) ,nan)
+             ((and (eq ,ls ,(positive-infinity)) (eq ,rs ,(positive-infinity))) ,inf-inf)
+             ((and (eq ,ls ,(positive-infinity)) (eq ,rs ,(negative-infinity))) ,inf-minf)
+             ((and (eq ,ls ,(negative-infinity)) (eq ,rs ,(positive-infinity))) ,minf-inf)
+             ((and (eq ,ls ,(negative-infinity)) (eq ,rs ,(negative-infinity))) ,minf-minf)
+             ((eq ,rs ,(positive-infinity)) ,num-inf)
+             ((eq ,rs ,(negative-infinity)) ,num-minf)
+             ((eq ,ls ,(positive-infinity)) ,inf-num)
+             ((eq ,ls ,(negative-infinity)) ,minf-num)
+             (t (error (format nil "internal error in ~A~%" ',op)))))
+        `(defun ,nameext (,ls ,rs)
+           (declare (number ,ls ,rs))
+           (,name (value ,ls) (value ,rs))))))
 
 ;;
 
@@ -39,8 +43,9 @@
 (trivial-op number +)
 
 (extended-number-op (+)
-		    :Inf :NaN :NaN :-Inf
-		    :Inf :-Inf :Inf :-Inf)
+		    (positive-infinity) (nan) (nan) (negative-infinity)
+		    (positive-infinity) (negative-infinity) (positive-infinity)
+                    (negative-infinity))
 
 (defun +string (ls rs)
   (let ((ls (js-funcall string.ctor ls))
@@ -54,9 +59,9 @@
      ((and (numberp ls) (numberp rs)) #'+number)
      ;;;todo: fast string concat when both are strings
      ((and (js-number? ls) (js-number? rs)) #'+number.ext)
-     ((and (js-number? ls) (undefined? rs)) (constantly :NaN))
-     ((and (undefined? ls) (js-number? rs)) (constantly :NaN))
-     ((and (undefined? ls) (undefined? rs)) (constantly :NaN))
+     ((and (js-number? ls) (undefined? rs)) (constantly (nan)))
+     ((and (undefined? ls) (js-number? rs)) (constantly (nan)))
+     ((and (undefined? ls) (undefined? rs)) (constantly (nan)))
      (t #'+string)) ls rs))
 
 ;;
@@ -64,8 +69,9 @@
 (trivial-op number -)
 
 (extended-number-op (-)
-		    :NaN :Inf :-Inf :-NaN
-		    :-Inf :Inf :Inf :-Inf)
+		    (nan) (positive-infinity) (negative-infinity) (nan)
+		    (negative-infinity) (positive-infinity) (positive-infinity)
+                    (negative-infinity))
 
 (defun !- (ls rs)
   (funcall 
@@ -73,15 +79,16 @@
      ((and (typep ls 'fixnum) (typep rs 'fixnum)) #'-fixnum)
      ((and (numberp ls) (numberp rs)) #'-number)
      ((and (js-number? ls) (js-number? rs)) #'-number.ext)
-     (t (constantly :NaN))) ls rs))
+     (t (constantly (nan)))) ls rs))
 
 ;;
 (trivial-op fixnum *)
 (trivial-op number *)
 
 (extended-number-op (*)
-		    :Inf :-Inf :-Inf :Inf
-		    :Inf :-Inf :Inf :-Inf)
+		    (positive-infinity) (negative-infinity) (negative-infinity)
+                    (positive-infinity) (positive-infinity) (negative-infinity)
+                    (positive-infinity) (negative-infinity))
 
 (defun !* (ls rs)
   (funcall
@@ -89,45 +96,45 @@
      ((and (typep ls 'fixnum) (typep rs 'fixnum)) #'*fixnum)
      ((and (numberp ls) (numberp rs)) #'*number)
      ((and (js-number? ls) (js-number? rs)) #'*number.ext)
-     (t (constantly :NaN))) ls rs))     
+     (t (constantly (nan)))) ls rs))     
 
 ;;
 (defun /number (ls rs)
   (declare (number ls rs))
   (if (zerop rs)
-      (cond ((zerop ls) :NaN)
-	    ((minusp ls) :-Inf)
-	    (t :Inf))
+      (cond ((zerop ls) (nan))
+	    ((minusp ls) (negative-infinity))
+	    (t (positive-infinity)))
       (coerce (/ ls rs) 'double-float)))
 
 (extended-number-op (/)
-		    :NaN :NaN :NaN :NaN
-		    0 0 :Inf :-Inf)
+		    (nan) (nan) (nan) (nan)
+		    0 0 (positive-infinity) (negative-infinity))
 
 (defun !/ (ls rs)
   (funcall
    (cond
      ((and (numberp ls) (numberp rs)) #'/number)
      ((and (js-number? ls) (js-number? rs)) #'/number.ext)
-     (t (constantly :NaN))) ls rs))
+     (t (constantly (nan)))) ls rs))
 
 ;;
 (defun %number (ls rs) (mod ls rs))
 
 (extended-number-op (% :var num)
-		    :NaN :NaN :NaN :NaN
-		    num num :NaN :NaN)
+		    (nan) (nan) (nan) (nan)
+		    num num (nan) (nan))
 
 (defun !% (ls rs)
   (funcall
    (cond
      ((and (numberp ls) (numberp rs)) #'mod)
      ((and (js-number? ls) (js-number? rs)) #'%number.ext)
-     (t (constantly :NaN))) ls rs))
+     (t (constantly (nan)))) ls rs))
 
 ;;
 (defun !=== (ls rs)
-  (unless (or (eq ls :NaN) (eq rs :NaN))
+  (unless (or (eq ls (nan)) (eq rs (nan)))
     (equal ls rs)))
 
 (defun !!== (ls rs)
@@ -146,10 +153,10 @@
 	((or
 	  (and (undefined? ls) (eq rs :null))
 	  (and (eq ls :null) (undefined? rs))) t)
-	((eq ls :true) (!== 1 rs))
-	((eq ls :false) (!== 0 rs))
-	((eq rs :true) (!== ls 1))
-	((eq rs :false) (!== ls 0))
+	((eq ls t) (!== 1 rs))
+	((eq ls nil) (!== 0 rs))
+	((eq rs t) (!== ls 1))
+	((eq rs nil) (!== ls 0))
 	(t (!=== (to-string (value ls))
 		 (to-string (value rs)))))))
 
@@ -198,11 +205,11 @@
 
 ;;
 (defun !<= (ls rs)
-  (unless (or (eq ls :NaN) (eq rs :NaN))
+  (unless (or (is-nan ls) (is-nan rs))
     (not (!> ls rs))))
 
 (defun !>= (ls rs)
-  (unless (or (eq ls :NaN) (eq rs :NaN))
+  (unless (or (is-nan ls) (is-nan rs))
     (not (!< ls rs))))
 
 ;;
@@ -211,20 +218,6 @@
 
 (defun !-- (arg)
   (!- (js-funcall number.ensure arg) 1))
-
-;;
-(defmacro !&& (ls rs)
-  (let ((resls (gensym)))
-    `(let ((,resls ,ls))
-       (if (js->boolean ,resls) ,rs ,resls))))
-
-(defmacro |!\|\|| (ls rs)
-  (let ((resls (gensym)))
-    `(let ((,resls ,ls))
-       (if (js->boolean ,resls) ,resls ,rs))))
-
-(defmacro !! (exp)
-  `(not (js->boolean ,exp)))
 
 ;;
 (defun !instanceof (ls rs)
@@ -237,6 +230,5 @@
     ((undefined? exp) "undefined")
     ((stringp exp) "string")
     ((typep exp 'native-function) "function")
-    ((or (eq exp t) (eq exp nil)
-	 (eq exp :true) (eq exp :false)) "boolean")
+    ((or (eq exp t) (eq exp nil)) "boolean")
     (t "object")))

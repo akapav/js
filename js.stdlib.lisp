@@ -16,7 +16,6 @@ Array.unshift = function(arr, el)
 
 Array.prototype.unshift = function(el)
 {
-  print(arguments.length)
   if(arguments.length) return Array.unshift(this, el);
   return this.length;
 }

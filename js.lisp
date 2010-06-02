@@ -2,6 +2,37 @@
 
 (defmacro !this () 'js-user::|this|)
 
+;; Float special values
+#+sbcl-no-float-traps
+(sb-int:set-floating-point-modes :traps ())
+#+sbcl-no-float-traps
+(defparameter *nan*
+  (- sb-ext:double-float-positive-infinity sb-ext:double-float-positive-infinity))
+
+(defparameter *float-traps*
+  #+(or allegro sbcl-no-float-traps) nil
+  #-(or allegro sbcl-no-float-traps) t)
+
+(defmacro positive-infinity ()
+  #+allegro #.excl:*infinity-double*
+  #+sbcl-no-float-traps sb-ext:double-float-positive-infinity
+  #-(or allegro sbcl-no-float-traps) :Inf)
+(defmacro negative-infinity ()
+  #+allegro #.excl:*negative-infinity-double*
+  #+sbcl-no-float-traps sb-ext:double-float-negative-infinity
+  #-(or allegro sbcl-no-float-traps) :-Inf)
+(defmacro nan ()
+  #+allegro #.excl:*nan-double*
+  #+sbcl-no-float-traps '*nan*
+  #-(or allegro sbcl-no-float-traps) :NaN)
+(defmacro is-nan (val)
+  #+allegro `(excl::nan-p ,val)
+  #+sbcl-no-float-traps (let ((name (gensym)))
+                          `(let ((,name ,val))
+                             (and (floatp ,name) (sb-ext:float-nan-p ,name))))
+  #-(or allegro sbcl-no-float-traps) `(eq ,val :NaN))
+  
+
 ;;
 (defun js-funcall (func &rest args)
   (apply (the function (proc func)) nil args))
@@ -45,20 +76,20 @@
 	(or
 	 (undefined? exp)
 	 (eq exp :null)
-	 (eq exp :false)
-	 (eq exp :NaN))))
+	 (eq exp nil)
+         (is-nan exp))))
       (t t))))
 
 ;;
 (defmacro !eval (str)
-  (translate (parse-js-string str)))
+  (translate-ast (parse-js-string str)))
 
 (defun compile-eval (code)
   (funcall (compile nil `(lambda () ,code))))
 
 (defun js-load-file (fname)
   (with-open-file (str fname)
-    (compile-eval (translate (parse-js str)))))
+    (compile-eval (translate-ast (parse-js str)))))
 
 (defun js-reader (stream)
   `(!eval ,(read-line-stream stream)))

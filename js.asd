@@ -10,6 +10,8 @@
    (:file "reader")
    (:file "js")
    (:file "runtime")
+   (:file "infer")
+   (:file "inline-op")
    (:file "translate")
    (:file "stdlib")
    (:file "operators"))

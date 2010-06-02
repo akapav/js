@@ -4,8 +4,10 @@
 (defparameter *label-name* nil)
 
 (defun lookup-global (name)
-  (or (prop *global* name nil)
-      (error "Undefined variable: ~a" name)))
+  (let ((found (prop *global* name :not-found)))
+    (if (eq found :not-found)
+        (error "Undefined variable: ~a" name)
+        found)))
 
 (defmethod lookup-variable (name (scope null) rest)
   (declare (ignore rest))
@@ -16,12 +18,16 @@
 
 (defstruct with-scope var)
 (defmethod lookup-variable (name (scope with-scope) rest)
-  `(or (prop ,(with-scope-var scope) ,name nil)
-       ,(lookup-variable name (car rest) (cdr rest))))
+  (let ((temp (gensym)))
+    `(let ((,temp (prop ,(with-scope-var scope) ,name :not-found)))
+       (if (eq ,temp :not-found)
+           ,(lookup-variable name (car rest) (cdr rest))
+           ,temp))))
+       
 (defmethod set-variable (name valname (scope with-scope) rest)
-  `(if (prop ,(with-scope-var scope) ,name nil)
-       (setf (prop ,(with-scope-var scope) ,name) ,valname)
-       ,(set-variable name valname (car rest) (cdr rest))))
+  `(if (eq (prop ,(with-scope-var scope) ,name :not-found) :not-found)
+       ,(set-variable name valname (car rest) (cdr rest))
+       (setf (prop ,(with-scope-var scope) ,name) ,valname)))
 
 (defstruct simple-scope vars)
 (defmethod lookup-variable (name (scope simple-scope) rest)
@@ -65,16 +71,16 @@
         (captured-scope (setf next level))))
     `(make-captured-scope
       :vars (list ,@(loop :for var :in varnames :collect
-                       `(list ',var (lambda () ,(lookup var))
-                              (lambda (,val-arg) ,(set-in-scope var val-arg)))))
+                       `(list ',var (lambda () ,(lookup (symbol-name var)))
+                              (lambda (,val-arg) ,(set-in-scope (symbol-name var) val-arg)))))
       :local-vars ',locals :objs (list ,@(nreverse objs)) :next ,next)))
 (defun lookup-in-captured-scope (name scope)
   (let ((var (assoc (->usersym name) (captured-scope-vars scope))))
     (if var
         (funcall (second var))
         (loop :for obj :in (captured-scope-objs scope) :do
-           (let ((val (prop obj name nil)))
-             (when val (return val)))
+           (let ((val (prop obj name :not-found)))
+             (unless (eq val :not-found) (return val)))
            :finally (return (if (captured-scope-next scope)
                                 (lookup-in-captured-scope name (captured-scope-next scope))
                                 (lookup-global name)))))))
@@ -86,7 +92,7 @@
     (if var
         (funcall (third var) value)
         (loop :for obj :in (captured-scope-objs scope) :do
-           (when (prop obj name nil)
+           (unless (eq (prop obj name :not-found) :not-found)
              (return (setf (prop obj name) value)))
            :finally (if (captured-scope-next scope)
                         (set-in-captured-scope name value (captured-scope-next scope))
@@ -109,13 +115,28 @@
 (defun in-function-scope-p ()
   (some (lambda (s) (typep s 'simple-scope)) *scope*))
 
+(let ((integers-are-fixnums
+       (and (>= most-positive-fixnum (1- (expt 2 53)))
+            (<= most-negative-fixnum (- (expt 2 53))))))
+  (defun inferred-type-to-lisp-type (type)
+    (case type
+      (:integer (if integers-are-fixnums 'fixnum 'integer))
+      (:number 'number))))
+
 (defun translate (form)
-  (apply-translate-rule (car form) (cdr form)))
+  (let ((result (apply-translate-rule (car form) (cdr form)))
+        (typing (ast-type form)))
+    (if (and typing (setf typing (inferred-type-to-lisp-type typing)))
+        `(the ,typing ,result)
+        result)))
+(defun translate-ast (ast)
+  (translate (infer-types ast)))
 
 (defmacro deftranslate ((type &rest arguments) &body body)
   (let ((form-arg (gensym)))
     `(defmethod apply-translate-rule ((,(gensym) (eql ,type)) ,form-arg)
-       (destructuring-bind ,arguments ,form-arg ,@body))))
+       (destructuring-bind (,@arguments &rest rest) ,form-arg
+         (declare (ignore rest)) ,@body))))
 
 (defgeneric apply-translate-rule (keyword form)
   (:method (keyword form)
@@ -125,7 +146,10 @@
 (deftranslate (nil) nil)
 
 (deftranslate (:atom atom)
-  atom)
+  (case atom
+    (:true t)
+    (:false nil)
+    (t atom)))
 
 (deftranslate (:dot obj attr)
   `(prop ,(translate obj) ,attr))
@@ -167,7 +191,9 @@
         loop-start
         ,@(and label (list label))
           ,@(translate@ step)
-          (unless (js->boolean ,(or (translate cond) t))
+          (unless ,(if cond
+                       (js->boolean-typed (translate cond) (ast-type cond))
+                       t)
             (go loop-end))
           ,@(translate@ body)
           (go loop-start)
@@ -187,7 +213,7 @@
         loop-start
         ,@(and label (list label))
           ,@(translate@ body)
-          (when (js->boolean ,(translate cond))
+          (when ,(js->boolean-typed (translate cond) (ast-type cond))
             (go loop-start))
         loop-end))))
 
@@ -214,8 +240,13 @@
             (go loop-start)
           loop-end)))))
 
-(deftranslate (:if test then else)
-  `(if (js->boolean ,(translate test)) ,(translate then) ,(translate else)))
+(flet ((expand-if (test then else)
+         `(if ,(js->boolean-typed (translate test) (ast-type test))
+              ,(translate then) ,(translate else))))
+  (deftranslate (:if test then else)
+    (expand-if test then else))
+  (deftranslate (:conditional test then else)
+    (expand-if test then else)))
 
 (define-condition js-condition (error)
   ((value :initarg :value :reader js-condition-value))
@@ -247,9 +278,9 @@
        ,(with-scope (make-with-scope :var obj-var) (translate body)))))
 
 (defun find-locals (body &optional others)
-  (let ((found (make-hash-table)))
+  (let ((found (make-hash-table :test 'equal)))
     (labels ((add (name)
-               (setf (gethash (->usersym name) found) t))
+               (setf (gethash name found) t))
              (scan (ast)
                (case (car ast)
                  (:block (mapc #'scan (second ast)))
@@ -263,43 +294,48 @@
                  (:try (scan (second ast)) (scan (cdr (third ast))) (scan (fourth ast))))))
       (mapc #'add others)
       (mapc #'scan body)
-      (let ((others (mapcar '->usersym others)))
-        (loop :for name :being :the :hash-key :of found
-              :collect name :into all
-              :unless (member name others) :collect name :into internal
-              :finally (return (values all internal)))))))
+      (loop :for name :being :the :hash-key :of found
+            :collect name :into all
+            :unless (member name others :test #'string=) :collect name :into internal
+            :finally (return (values all internal))))))
 
 (defun references-arguments (body)
   (labels ((scan (expr)
-             (when (and (consp expr) (not (member (car expr) '(:function :defun)))) ;; Don't enter inner functions
+             ;; Don't enter inner functions
+             (when (and (consp expr) (not (member (car expr) '(:function :defun))))
                (when (and (eq (car expr) :name) (string= (second expr) "arguments"))
                  (return-from references-arguments t))
                (mapc #'scan expr))))
     (scan body)
     nil))
+(defun ast-is-eval-var (ast)
+  (and (eq (car ast) :name) (equal (second ast) "eval")))
 (defun uses-lexical-eval (body)
   (labels ((scan (expr)
              (when (and (consp expr) (not (member (car expr) '(:function :defun)))) ;; Don't enter inner functions
-               (when (and (eq (car expr) :call) (equal (second expr) '(:name "eval")))
+               (when (and (eq (car expr) :call) (ast-is-eval-var (second expr)))
                  (return-from uses-lexical-eval t))
                (mapc #'scan expr))))
     (scan body)
     nil))
 
-(defun lift-defuns (forms)
+(defun split-out-defuns (forms)
   (loop :for form :in forms
         :when (eq (car form) :defun) :collect form :into defuns
         :else :collect form :into other
-        :finally (return (append defuns other))))
+        :finally (return (values defuns other))))
+(defun lift-defuns (forms)
+  (multiple-value-call #'append (split-out-defuns forms)))
 
 (defun translate-function (name args body)
-  (let ((uses-args (references-arguments body))
-        (uses-eval (uses-lexical-eval body))
-        (eval-scope (gensym "eval-scope"))
-        (base-locals (cons "this" args)))
+  (let* ((uses-eval (uses-lexical-eval body))
+         (uses-args (or uses-eval (references-arguments body)))
+         (eval-scope (gensym "eval-scope"))
+         (base-locals (cons "this" args)))
     (when name (push name base-locals))
     (when uses-args (push "arguments" base-locals))
     (multiple-value-bind (locals internal) (find-locals body base-locals)
+      (setf locals (mapcar '->usersym locals) internal (mapcar '->usersym internal))
       (with-scope (if uses-args
                       (make-arguments-scope :vars locals :args (mapcar '->usersym args))
                       (make-simple-scope :vars locals))
@@ -358,7 +394,7 @@
   `(js-new ,(translate func) (list ,@(mapcar 'translate args))))
 
 (deftranslate (:call func args)
-  (cond ((equal func '(:name "eval"))
+  (cond ((ast-is-eval-var func)
          `(lexical-eval ,(translate (or (car args) :undefined))
                         ,(if (in-function-scope-p) 'eval-env (capture-scope))))
         ((member (car func) '(:sub :dot))
@@ -380,18 +416,6 @@
 (deftranslate (:assign op place val)
   (translate-assign place (translate (if (eq op t) val (list :binary op place val)))))
 
-(deftranslate (:unary-prefix op place)
-  (case op
-    ((:++ :--) (translate-assign place `(,(js-intern op) ,(translate place))))
-    ((:- :+) `(,(js-intern op) 0 ,(translate place)))
-    (t `(,(js-intern op) ,(translate place)))))
-
-(deftranslate (:unary-postfix op place)
-  (let ((ret (gensym)))
-    `(let ((,ret ,(translate place)))
-       ,(translate-assign place `(,(js-intern op) ,ret))
-       ,ret)))
-
 (deftranslate (:num num)
   (if (integerp num) num (coerce num 'double-float)))
 
@@ -410,6 +434,27 @@
   `(prog2 ,(translate form1) ,(translate result)))
 
 (deftranslate (:binary op lhs rhs)
-  `(,(js-intern op) ,(translate lhs) ,(translate rhs)))
+  (let ((lhs1 (translate lhs)) (rhs1 (translate rhs)))
+    (or (expand op (ast-type lhs) (ast-type rhs) lhs1 rhs1)
+        `(,(js-intern op) ,lhs1 ,rhs1))))
+
+(deftranslate (:unary-prefix op place)
+  (let ((rhs (translate place))
+        (type (ast-type place)))
+    (case op
+      ((:++ :--) (translate-assign
+                  place `(,(cond ((not (num-type type)) (js-intern op))
+                                 ((eq op :--) '1-) ((eq op :++) '1+)) ,rhs)))
+      ((:+ :-) (or (expand op nil type nil rhs)
+                   `(,(js-intern op) 0 ,rhs)))
+      (t (or (expand op nil type nil rhs)
+             `(,(js-intern op) ,rhs))))))
+
+(deftranslate (:unary-postfix op place)
+  (let ((ret (gensym)) (type (ast-type place)))
+    `(let ((,ret ,(translate place)))
+       ,(translate-assign place `(,(cond ((not (num-type type)) (js-intern op))
+                                         ((eq op :--) '1-) ((eq op :++) '1+)) ,ret))
+       ,ret)))
 
 (defun see (js) (translate (parse-js:parse-js-string js)))

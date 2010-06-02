@@ -14,6 +14,7 @@
 	   global-object
 	   !eval
 	   javascript js
+           js-load-file
 	   define-js-function))
 
 (defpackage :net.svrg.js-user
