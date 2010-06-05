@@ -140,13 +140,16 @@
     (:and a) ;; used by link-tc
     (:+ ;; the interesting effects of the + operator
      (cond ((or (eq a :string) (eq b :string)) :string)
-           ((or (member a '(:string t :object))
-                (member b '(:string t :object))) t)
+           ((or (member a '(t :object)) (member b '(t :object))) t)
            ((and (eq a :integer) (eq b :integer)) :integer)
+           ((or (not a) (not b)) nil) ;; Will be recomputed later
            (t :number)))
     (:either (combine-types a b))
     (:maybe-int ;; result of other numeric operations
-     (if (and (eq a :integer) (or (not b) (eq b :integer))) :integer :number))))
+     (cond ((eq b :none) (case a (:integer :integer) ((nil) nil) (t :number)))
+           ((and (eq a :integer) (eq b :integer)) :integer)
+           ((or (not a) (not b)) nil)
+           (t :number)))))
 
 ;; 'Resolve' a type-cell, computing its final type from its current
 ;; type and its relations. Done in a second pass after inference has
@@ -157,7 +160,7 @@
   ;; stricter, this terminates.
   (labels ((apply-rel (tc rel)
              (let* ((result (compute-rel (car rel) (resolve-tc (second rel))
-                                         (and (third rel) (resolve-tc (third rel)))))
+                                         (if (third rel) (resolve-tc (third rel)) :none)))
                     (combined (combine-types result (tc-tp tc))))
                (unless (eq combined (tc-tp tc))
                  (setf (tc-tp tc) combined)
@@ -230,22 +233,26 @@
 ;; since some of the methods need direct access to those.
 (defparameter *function-tcs* nil)
 
+;; See if a function may fall off its end without returning, since
+;; that is relevant for the return type we assign to it. This isn't
+;; always correct (there are many complicated ways in which a function
+;; can guarantee returning), but works for basic cases.
 (defun may-fall-off (fbody)
   (labels ((see-body (stats)
              (see (car (last stats))))
            (see (stat)
              (case (car stat)
-               ((nil :for :for-in :do :while :throw :stat :break
+               ((nil :for :for-in :do :while :stat :break
                      :continue :defun :var :switch) t)
-               (:return nil)
-               (:if (or (see (second stat)) (see (third stat))))
+               ((:return :throw) nil)
+               (:if (or (not (fourth stat)) (see (third stat)) (see (fourth stat))))
                (:with (see (third stat)))
                (:block (see-body (second stat)))
-               (:try (if (fourth stat)
-                         (see (fourth stat))
-                         (or (see (second stat)) (see (third stat))))))))
+               (:try (and (or (not (fourth stat)) (see (fourth stat)))
+                          (or (not (third stat)) (see (second stat)) (see (third stat))))))))
     (see-body fbody)))
 
+;; Sets up the scope for a function, and infers it in this scope.
 (defun infer-func (name args body env)
   (let ((locals (find-locals body `("this" "arguments" ,@args
                                     ,@(and name (list name)))))
@@ -255,12 +262,17 @@
       (when (may-fall-off body) (add-type ret-tc :undefined))
       (let* ((*function-tcs* (cons arg-tcs ret-tc))
              tmp
+             ;; The new scope list
              (sc (loop :for name :in locals :collect
                     (cond ((string= name "this") (list t nil name (tc :object)))
+                          ;; defuns get some magic to store them as delayed functions,
+                          ;; and to be able to keep their ftype
                           ((setf tmp (find name defuns :key #'second :test #'string=))
                            (list (list nil) (cons :function (cdr tmp)) name (tc :object)))
+                          ;; arguments
                           ((setf tmp (position name args :test #'string=))
                            (list t nil name (nth tmp arg-tcs)))
+                          ((string= name "arguments") (list t nil name (tc :object)))
                           (t (list nil nil name (tc ()))))))
              (env (cons sc env)))
         (dolist (stat body) (setf env (infer stat env)))
