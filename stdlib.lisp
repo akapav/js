@@ -289,7 +289,7 @@
 (setf (prop number.ctor "NEGATIVE_INFINITY") (negative-infinity))
 
 ;;
-(defmacro math-function ((arg &key (inf (nan)) (minf (nan)) (nan (nan))) &body body)
+(defmacro math-function ((arg &key (inf '(nan)) (minf '(nan)) (nan '(nan))) &body body)
   `(js-function (,arg)
      (let ((,arg (js-funcall number.ensure ,arg)))
        (cond ((is-nan ,arg) ,nan)

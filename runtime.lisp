@@ -108,6 +108,8 @@
 
 (setf (prop *global* "this") *global*)
 (setf (prop *global* "undefined") :undefined)
+(setf (prop *global* "Infinity") (positive-infinity))
+(setf (prop *global* "NaN") (nan))
 
 ;;
 (defclass native-function (native-hash)
