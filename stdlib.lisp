@@ -69,6 +69,10 @@
 		     "length"
 		     (lambda (obj) (length (value obj))))
 
+(js-add-sealed-property (value string.prototype)
+		     "length"
+		     (lambda (obj) (length  obj)))
+
 (js-add-sealed-property string.ctor "length" (constantly 1))
 ;;not sure what is the meaning of that property. recheck the spec
 

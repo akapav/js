@@ -227,8 +227,11 @@
     string.prototype
     (js-new-ignore-prototype js::string.ctor '("")))
 
-#+nil (defmethod prop ((str string) key)
-  (prop string.prototype key))
+(defmethod prop ((str string) key)
+  (let ((getter (ensure-getter key)))
+    (if (sealed-property? string.prototype key)
+	(funcall getter str)
+	(funcall getter string.prototype))))
 
 (finalize-class-construction
  "String" string.ctor string.prototype)

@@ -34,7 +34,17 @@
 			(declare (ignore nm))
 			(let ((obj (car args)))
 			  (%ensure-getter obj key)
-			  (funcall gf obj)))))))))
+			  (funcall gf obj)))))
+	  (add-method
+	   gf
+	   (make-instance
+	    'standard-method
+	    :specializers (list (find-class t))
+	    :lambda-list '(obj)
+	    :function (lambda (args nm)
+			(declare (ignore nm))
+			(let ((obj (car args)))
+			  (prop obj key)))))))))
 
 (defun ensure-setter (key)
   (let ((name (generic-setter-name key)))
@@ -49,7 +59,16 @@
 	    :lambda-list '(val obj)
 	    :function (lambda (args nm)
 			(declare (ignore nm))
-			(setf (prop (second args) key) (first args)))))))))
+			(setf (prop (second args) key) (first args)))))
+	  (add-method
+	   gf
+	   (make-instance
+	    'standard-method
+	    :specializers (list (find-class t) (find-class t))
+	    :lambda-list '(val obj)
+	    :function (lambda (args nm)
+			(declare (ignore nm))
+			(first args))))))))
 
 (defun ensure-accessors (key)
   (ensure-getter key)
@@ -114,8 +133,10 @@
 (defgeneric js-add-sealed-property (obj property-name proc))
 
 (defmethod js-add-sealed-property ((obj t) property-name proc)
-  (let* ((get-generic (ensure-getter property-name))
-	 (set-generic (ensure-setter property-name))
+  (let* ((get-generic (ensure-generic-function
+		       (generic-getter-name property-name)))
+	 (set-generic (ensure-generic-function
+		       (generic-setter-name property-name)))
 	 (prop-getter
 	  (make-instance
 	   'standard-method
