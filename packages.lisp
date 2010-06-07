@@ -8,7 +8,7 @@
 (defpackage :net.svrg.javascript
   (:nicknames :js)
   (:shadow :array)
-  (:use :cl :parse-js :net.svrg.reader-macro :sb-mop)
+  (:use :cl :parse-js :net.svrg.reader-macro #+sbcl :sb-mop)
   (:export native-hash
 	   native-function
 	   global-object
