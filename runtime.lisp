@@ -29,11 +29,6 @@
 (defgeneric prototype (obj)
   (:method (obj) (declare (ignore obj)) nil))
 
-(defmacro set-ensured (obj key val)
-  `(progn
-     (ensure-accessors ,key)
-     (setf (prop ,obj ,key) ,val)))
-
 (defun finalize-class-construction (name ctor proto &key explicit-ctor)
   (declare (special *global*))
   (set-ensured ctor "prototype" proto)
@@ -91,7 +86,8 @@
 
 (defmethod initialize-instance :after ((f native-function) &rest args)
   (declare (ignore args))
-  (setf (prop f "prototype") (add-standard-properties (make-instance 'native-hash))))
+  (set-attribute f "prototype"
+		 (add-standard-properties (make-instance 'native-hash))))
 
 (define-primitive-prototype function.prototype
     (make-instance 'native-function

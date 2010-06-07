@@ -335,7 +335,7 @@
 (set-ensured
  math.obj "atan2"
  (js-function (y x)
-   (js-funcall (prop math.obj "atan") (!/ y x))))
+   (js-funcall (get-attribute math.obj "atan") (!/ y x))))
 
 (set-ensured
  math.obj "ceil"

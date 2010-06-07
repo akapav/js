@@ -8,7 +8,7 @@
 
 (defun %finalize-new-protocol (obj func args)
     (apply (the function (proc func)) obj args)
-    (setf (prop obj "constructor") func)
+    (set-attribute obj "constructor" func)
     ;;todo: move set-default here
     obj)
 
@@ -17,7 +17,7 @@
     (%finalize-new-protocol new-object func args)))
 
 (defun js-new (func args)
-  (let* ((proto (prop* func "prototype" nil))
+  (let* ((proto (prop** (get-attribute func "prototype") nil))
 	 (new-object (js-clone proto)))
     (%finalize-new-protocol new-object func args)))
 

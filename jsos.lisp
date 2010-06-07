@@ -74,20 +74,6 @@
   (ensure-getter key)
   (ensure-setter key))
 
-(define-compiler-macro prop (&whole form obj key)
-  (if (stringp key)
-      (progn
-	(ensure-getter key)
-	`(get-using-getter (function ,(generic-getter-name key)) ,obj))
-      `,form))
-
-(define-compiler-macro (setf prop) (&whole form val obj key)
-  (if (stringp key)
-      (progn
-	(ensure-setter key)
-	`(,(generic-setter-name key) ,val ,obj))
-      `,form))
-
 ;;
 (defclass js-class (standard-class)
   ((slot-class-mappings
@@ -202,16 +188,38 @@
       (let* ((proto-class (class-of prototype))
 	     (obj (make-instance (class-name proto-class) :prototype prototype)))
 	obj)
-      (make-instance 'js-object)))
-
-(defmacro prop* (obj key default)
-  (let ((val (gensym))
-	(found (gensym)))
-    `(multiple-value-bind (,val ,found) (prop ,obj ,key)
-       (if ,found ,val ,default)))))
+      (make-instance 'js-object))))
 
 (defmacro prop** (form default)
   (let ((val (gensym))
 	(found (gensym)))
     `(multiple-value-bind (,val ,found) ,form
        (if ,found ,val ,default))))
+
+(defun %fast-get (obj attr)
+  `(get-using-getter
+    (function ,(generic-function-name (ensure-getter attr)))
+    ,obj))
+
+(defun %fast-set (obj attr val)
+  `(funcall
+    (function ,(generic-function-name (ensure-setter attr)))
+    ,val ,obj))
+
+(defmacro get-attribute (obj attr)
+  (if (stringp attr)
+      `(,@(%fast-get obj attr))
+      `(prop ,obj ,attr)))
+
+(defmacro set-attribute (obj attr val)
+  (if (stringp attr)
+      `(,@(%fast-set obj attr val))
+      `(setf (prop ,obj ,attr) ,val)))
+
+#+nil (defmacro set-ensured (obj attr val)
+  `(funcall ,(ensure-setter attr) ,val ,obj))
+
+(defmacro set-ensured (obj key val)
+  `(progn
+     (ensure-accessors ,key)
+     (setf (prop ,obj ,key) ,val)))

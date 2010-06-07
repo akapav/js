@@ -374,6 +374,17 @@ function test_26() {
   $arrEq(v26, [100, 101, 9]);
 }
 
+function test_27() {
+    o27 = new Object
+    $eq(this['o2' + '7'], o27)
+    this['o2' + '7'].x=5
+    with(o27) {
+	$eq(x, 5)
+	x = 6
+    }
+    $eq(o.x, 6)
+}
+
 function runTests() {
   var failures = [];
   for (var name in this) {
