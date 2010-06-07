@@ -1,6 +1,3 @@
-(in-package :js)
-
-#{javascript}
 //the Object ctor
 function Object(val) {return val;}
 
@@ -42,6 +39,3 @@ declare_unimplemented(String, "replace")
 declare_unimplemented(RegExp, "compile")
 declare_unimplemented(RegExp, "exec")
 declare_unimplemented(RegExp, "test")
-
-print("standard library loaded");
-.

@@ -451,3 +451,5 @@
                                             captured-locals))))
       (dolist (local new-locals) (setf (prop env-obj (symbol-name local)) :undefined))
       (compile-eval (translate-ast parsed)))))
+
+(!include (merge-pathnames "stdlib.js" (asdf:component-pathname (asdf:find-system :js))))

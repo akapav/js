@@ -93,14 +93,13 @@
 (defmacro !eval (str)
   `(wrap-js ,(translate-ast (parse-js-string str))))
 
+;; Compile-time translation and inclusion of JS code.
+(defmacro !include (file)
+  `(wrap-js ,(translate-ast (with-open-file (in (eval file)) (parse-js in)))))
+
 (defun compile-eval (code)
   (funcall (compile nil `(lambda () ,code))))
 
 (defun js-load-file (fname)
   (with-open-file (str fname)
     (compile-eval `(wrap-js ,(translate-ast (parse-js str))))))
-
-(defun js-reader (stream)
-  `(!eval ,(read-line-stream stream)))
-
-(define-reader 'javascript #'js-reader)
