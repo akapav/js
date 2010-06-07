@@ -3,8 +3,32 @@
 (defvar *scope* ())
 (defparameter *label-name* nil)
 
+#+nil (defun generic-function-name (gf)
+  (slot-value gf 'sb-pcl::name))
+
+(defun fast-get (obj attr)
+  `(get-using-getter
+    (function ,(generic-function-name (ensure-getter attr)))
+    ,obj))
+
+(defun fast-set (obj attr val)
+  `(funcall
+    (function ,(generic-function-name (ensure-setter attr)))
+    ,val ,obj))
+
+(eval-when (:compile-toplevel :load-toplevel :execute)
+(defun get-attribute (obj attr)
+  (if (stringp attr)
+      (fast-get obj attr)
+      `(prop obj ,attr)))
+
+(defun set-attribute (obj attr val)
+  (if (stringp attr)
+      (fast-set obj attr val)
+      `(setf (prop obj ,attr) ,val))))
+
 (defmacro lookup-global (name)
-  `(or (prop* *global* ,name nil)
+  `(or (prop** ,(get-attribute *global* name) nil)
       (error "Undefined variable: ~a" ,name)))
 
 (defgeneric lookup-variable (name scope rest))
@@ -15,15 +39,15 @@
   `(lookup-global ,name))
 (defmethod set-variable (name valname (scope null) rest)
   (declare (ignore rest))
-  `(setf (prop *global* ,name) ,valname))
+  (set-attribute *global* name valname))
 
 (defstruct with-scope var)
 (defmethod lookup-variable (name (scope with-scope) rest)
-  `(or (prop* ,(with-scope-var scope) ,name nil)
+  `(or (prop** ,(get-attribute (with-scope-var scope) name) nil)
        ,(lookup-variable name (car rest) (cdr rest))))
 (defmethod set-variable (name valname (scope with-scope) rest)
-  `(if (prop* ,(with-scope-var scope) ,name nil)
-       (setf (prop ,(with-scope-var scope) ,name) ,valname)
+  `(if (prop** ,(get-attribute (with-scope-var scope) name) nil)
+       ,(set-attribute (with-scope-var scope) name valname)
        ,(set-variable name valname (car rest) (cdr rest))))
 
 (defstruct simple-scope vars)
@@ -76,7 +100,7 @@
     (if var
         (funcall (second var))
         (loop :for obj :in (captured-scope-objs scope) :do
-           (let ((val (prop* obj name nil)))
+           (let ((val (prop** (get-attribute obj name) nil)))
              (when val (return val)))
            :finally (return (if (captured-scope-next scope)
                                 (lookup-in-captured-scope name (captured-scope-next scope))
@@ -89,11 +113,11 @@
     (if var
         (funcall (third var) value)
         (loop :for obj :in (captured-scope-objs scope) :do
-           (when (prop* obj name nil)
-             (return (setf (prop obj name) value)))
+           (when (prop** (get-attribute obj name) nil)
+             (return (set-attribute obj name value)))
            :finally (if (captured-scope-next scope)
                         (set-in-captured-scope name value (captured-scope-next scope))
-                        (setf (prop *global* name) value))))))
+                        (set-attribute *global* name value))))))
 (defmethod set-variable (name valname (scope captured-scope) rest)
   (declare (ignore rest))
   `(set-in-captured-scope ,name ,valname ,scope))
@@ -131,7 +155,7 @@
   atom)
 
 (deftranslate (:dot obj attr)
-  `(prop ,(translate obj) ,attr))
+  (get-attribute (translate obj) attr))
 
 (deftranslate (:sub obj attr)
   `(sub ,(translate obj) ,(translate attr)))
@@ -139,7 +163,7 @@
 (deftranslate (:var bindings)
   `(progn ,@(loop :for (name . val) :in bindings
                   :when val :collect (set-in-scope name (translate val))
-                  :else :if (not *scope*) :collect `(setf (prop *global* ,name) :undefined))))
+                  :else :if (not *scope*) :collect `(set-attribute *global* ,name :undefined))))
 
 (deftranslate (:object properties)
   (let ((obj (gensym)))
@@ -375,9 +399,10 @@
         (t `(funcall (the function (proc ,(translate func))) *global* ,@(mapcar 'translate args)))))
 
 (defun translate-assign (place val)
-  (if (eq (car place) :name)
-      (set-in-scope (second place) val)
-      `(setf ,(translate place) ,val)))
+  (case (car place)
+    ((:name) (set-in-scope (second place) val))
+    ((:dot) (set-attribute (translate (second place)) (third place) val))
+    (t `(setf ,(translate place) ,val))))
 
 ;; TODO cache path-to-place
 (deftranslate (:assign op place val)

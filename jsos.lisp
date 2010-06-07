@@ -209,3 +209,9 @@
 	(found (gensym)))
     `(multiple-value-bind (,val ,found) (prop ,obj ,key)
        (if ,found ,val ,default)))))
+
+(defmacro prop** (form default)
+  (let ((val (gensym))
+	(found (gensym)))
+    `(multiple-value-bind (,val ,found) ,form
+       (if ,found ,val ,default))))
