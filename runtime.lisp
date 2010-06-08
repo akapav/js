@@ -77,6 +77,8 @@
 
 (set-ensured *global* "this" *global*)
 (set-ensured *global* "undefined" :undefined)
+(set-ensured *global* "Infinity" (positive-infinity))
+(set-ensured *global* "NaN" (nan))
 
 ;;
 (defclass native-function (native-hash)
@@ -237,11 +239,11 @@
   (declare (special number.prototype))
   (typecase o
     (real t)
-    (symbol
+    (symbol ;; TODO drop this branch when not trapping float exceptions
      (or (realp o)
-	 (eq o :NaN)
-	 (eq o :Inf)
-	 (eq o :-Inf)))
+	 (is-nan o)
+	 (eq o (positive-infinity))
+	 (eq o (negative-infinity))))
     (t (eq (prototype o) number.prototype))))
 
 (deftype js.number ()
@@ -253,7 +255,7 @@
 		     ((js-number? n) (value n))
 		     (t (with-input-from-string (s (to-string (value n)))
 			  (let ((n2 (read s)))
-			    (if (js-number? n2) n2 :NaN)))))))
+			    (if (js-number? n2) n2 (nan))))))))
       (setf (value (!this)) val)
       (the js.number val))))
 

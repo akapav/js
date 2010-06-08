@@ -385,6 +385,22 @@ function test_27() {
     $eq(o.x, 6)
 }
 
+function test_28() {
+  $eq(4 && 5, 5);
+  $eq({} && 7, 7);
+  $eq(0 && 7, 0);
+  $eq(4 || 5, 4);
+  $eq(false || 7, 7);
+  $eq(null || 7, 7);
+  $eq(!0, true);
+  $eq(!1, false);
+
+  var x = 0;
+  true || (x = 1);
+  false && (x = 1);
+  $eq(x, 0);
+}
+
 function runTests() {
   var failures = [];
   for (var name in this) {
@@ -393,13 +409,10 @@ function runTests() {
       catch (e) {failures.push(name + ": " + String(e));}
     }
   }
-  if (failures.length) {
-    print(failures.length + " failures:");
-    print("  " + failures.join("\n  "));
-  }
-  else {
+  if (failures.length)
+    print(failures.length + " failures:\n  " + failures.join("\n  "));
+  else
     print("All passed!");
-  }
 }
 
 runTests();

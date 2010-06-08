@@ -77,7 +77,7 @@
 ;;not sure what is the meaning of that property. recheck the spec
 
 (defun clip-index (n)
-  (if (eq n :NaN) 0
+  (if (is-nan n) 0
       (let ((n (floor n)))
 	(if (< n 0) 0 n))))
 
@@ -282,24 +282,22 @@
              (js-funcall string.ensure rs))))
 
 (define-js-method array "sort" (arr (func js.lexsort))
-    (print func)
-    (sort arr (lambda (ls rs) (js-funcall func ls rs))))
+  (sort arr (lambda (ls rs) (js-funcall func ls rs))))
   
 ;;
 (set-ensured number.ctor "MAX_VALUE" most-positive-double-float)
 (set-ensured number.ctor "MIN_VALUE" most-negative-double-float)
-(set-ensured number.ctor "POSITIVE_INFINITY" :NaN)
-(set-ensured number.ctor "NEGATIVE_INFINITY" :-NaN)
+(set-ensured number.ctor "POSITIVE_INFINITY" (positive-infinity))
+(set-ensured number.ctor "NEGATIVE_INFINITY" (negative-infinity))
 
 ;;
-(defmacro math-function ((arg &key (inf :NaN) (minf :-NaN) (nan :NaN)) &body body)
+(defmacro math-function ((arg &key (inf '(nan)) (minf '(nan)) (nan '(nan))) &body body)
   `(js-function (,arg)
      (let ((,arg (js-funcall number.ensure ,arg)))
-       (case ,arg
-	 ((:NaN) ,nan)
-	 ((:Inf) ,inf)
-	 ((:-Inf) ,minf)
-	 (t (progn ,@body))))))	     
+       (cond ((is-nan ,arg) ,nan)
+             ((eq ,arg (positive-infinity)) ,inf)
+             ((eq ,arg (negative-infinity)) ,minf)
+             (t ,@body)))))
 
 (set-ensured math.obj "E" (exp 1))
 (set-ensured math.obj "LN2" (log 2))
@@ -312,20 +310,20 @@
 
 (set-ensured
  math.obj "abs"
- (math-function (arg :minf :Inf :inf :Inf)
+ (math-function (arg :minf (positive-infinity) :inf (positive-infinity))
    (abs arg)))
 
 (set-ensured
  math.obj "acos"
  (math-function (arg)
    (let ((res (acos arg)))
-     (if (realp res) res :NaN))))
+     (if (realp res) res (nan)))))
 
 (set-ensured
  math.obj "asin"
  (math-function (arg)
    (let ((res (asin arg)))
-     (if (realp res) res :NaN))))
+     (if (realp res) res (nan)))))
 
 (set-ensured
  math.obj "atan"
@@ -339,7 +337,7 @@
 
 (set-ensured
  math.obj "ceil"
- (math-function (arg :minf :-Inf :inf :Inf)
+ (math-function (arg :minf (negative-infinity) :inf (positive-infinity))
    (ceiling arg)))
 
 (set-ensured
@@ -349,24 +347,24 @@
 
 (set-ensured
  math.obj "exp"
- (math-function (arg :minf 0 :inf :Inf)
+ (math-function (arg :minf 0 :inf (positive-infinity))
    (exp arg)))
 
 (set-ensured
  math.obj "floor"
- (math-function (arg :minf :-Inf :inf :Inf)
+ (math-function (arg :minf (negative-infinity) :inf (positive-infinity))
    (floor arg)))
 
 (set-ensured
  math.obj "log"
- (math-function (arg :inf :Inf)
-   (cond ((zerop arg) :-Inf)
-	 ((minusp arg) :NaN)
+ (math-function (arg :inf (positive-infinity))
+   (cond ((zerop arg) (negative-infinity))
+	 ((minusp arg) (nan))
 	 (t (log arg)))))
 
 (set-ensured
  math.obj "round"
- (math-function (arg :minf :-Inf :inf :Inf)
+ (math-function (arg :minf (negative-infinity) :inf (positive-infinity))
    (round arg)))
 
 (set-ensured
@@ -378,7 +376,7 @@
  math.obj "sqrt"
  (math-function (arg)
    (let ((res (sqrt arg)))
-     (if (realp res) res :NaN))))
+     (if (realp res) res (nan)))))
 
 (set-ensured
  math.obj "tan"
@@ -387,15 +385,16 @@
 
 (set-ensured
  math.obj "pow"
- (js-function (base exp)
-   (with-asserted-types ((base number)
-			 (exp number))
-     (cond ((or (eq base :NaN) (eq exp :NaN)) :NaN)
-	   ((eq exp :-Inf) 0)
-	   ((and (realp exp) (zerop exp)) 1)
-	   ((or (eq base :Inf) (eq exp :Inf)) :Inf)
-	   ((eq base :-Inf) :-Inf)
-	   (t (coerce (expt base exp) 'double-float))))))
+      (js-function (base exp)
+	(with-asserted-types ((base number)
+			      (exp number))
+	  (cond ((or (is-nan base) (is-nan exp)) (nan))
+		((eq exp (negative-infinity)) 0)
+		((and (realp exp) (zerop exp)) 1)
+		((or (eq base (positive-infinity))
+		     (eq exp (positive-infinity))) (positive-infinity))
+		((eq base (negative-infinity)) (negative-infinity))
+		(t (coerce (expt base exp) 'double-float))))))
 
 (defmacro num-comparator (name (gt lt cmp))
   (let ((ls (gensym))
@@ -403,14 +402,14 @@
     `(defun ,name (,ls ,rs)
        (let ((,ls (js-funcall number.ensure ,ls))
 	     (,rs (js-funcall number.ensure ,rs)))
-	 (cond ((or (eq ,ls :NaN) (eq ,rs :NaN)) :NaN)
+	 (cond ((or (is-nan ,ls) (is-nan ,rs)) (nan))
 	       ((or (eq ,ls ,gt) (eq ,rs ,gt)) ,gt)
 	       ((eq ,ls ,lt) ,rs)
 	       ((eq ,rs ,lt) ,ls)
 	       (t (,cmp ,ls ,rs)))))))
 
-(num-comparator num.max (:Inf :-Inf max))
-(num-comparator num.min (:-Inf :Inf min))
+(num-comparator num.max ((positive-infinity) (negative-infinity) max))
+(num-comparator num.min ((negative-infinity) (positive-infinity) min))
 
 ;;NaN breaks <number.ext (and >number.ext) invariant so num-comparator
 ;;is implemented. should be fixed soon
@@ -418,12 +417,12 @@
 (set-ensured
  math.obj "max"
  (js-function (&rest args)
-   (reduce #'num.max args :initial-value :-Inf)))
+   (reduce #'num.max args :initial-value (negative-infinity))))
 
 (set-ensured
  math.obj "min"
  (js-function (&rest args)
-   (reduce #'num.min args :initial-value :Inf)))
+   (reduce #'num.min args :initial-value (positive-infinity))))
 
 (set-ensured
  math.obj "random"
@@ -441,9 +440,11 @@
  (js-function (arg)
    (let ((arg (value arg)))
      (cond ((integerp  arg) arg)
-	   ((or (eq arg :NaN) (eq arg :-Inf) (eq arg :Inf)) arg)
+	   ((or (is-nan arg)
+		(eq arg (negative-infinity))
+		(eq arg (positive-infinity))) arg)
 	   (t (with-asserted-types ((arg string))
-		(or (parse-integer arg :junk-allowed t) :NaN)))))))
+		(or (parse-integer arg :junk-allowed t) (nan))))))))
 
 (set-ensured
  *global* "parseFloat"     ;todo: e.g.'123xx' returns :NaN ...
@@ -454,7 +455,7 @@
 (set-ensured
  *global* "isNaN"
  (js-function (arg)
-   (or (eq arg :NaN) (undefined? arg))))
+   (or (is-nan arg) (undefined? arg))))
 
 ;;
 (set-ensured
@@ -475,6 +476,9 @@
            (env-obj (car (captured-scope-objs scope)))
            (captured-locals (captured-scope-local-vars scope))
            (new-locals (and (not (eq captured-locals :null))
-                            (set-difference (find-locals (second parsed)) captured-locals))))
+                            (set-difference (mapcar '->usersym (find-locals (second parsed)))
+                                            captured-locals))))
       (dolist (local new-locals) (setf (prop env-obj (symbol-name local)) :undefined))
-      (compile-eval (translate parsed)))))
+      (compile-eval (translate-ast parsed)))))
+
+(js-load-file (merge-pathnames "stdlib.js" (asdf:component-pathname (asdf:find-system :js))))

@@ -1,6 +1,3 @@
-(in-package :js)
-
-#{javascript}
 
 //Array wrapper methods around splice
 Array.shift = function(arr) {if(arr.length > 0) return  arr.splice(0,1)[0];}
@@ -14,7 +11,6 @@ Array.unshift = function(arr, el)
 
 Array.prototype.unshift = function(el)
 {
-  print(arguments.length)
   if(arguments.length) return Array.unshift(this, el);
   return this.length;
 }
@@ -41,6 +37,3 @@ declare_unimplemented(String, "replace")
 declare_unimplemented(RegExp, "compile")
 declare_unimplemented(RegExp, "exec")
 declare_unimplemented(RegExp, "test")
-
-print("standard library loaded");
-.

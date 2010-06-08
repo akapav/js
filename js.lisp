@@ -2,6 +2,45 @@
 
 (defmacro !this () 'js-user::|this|)
 
+;; Float special values
+
+#+sbclx
+(progn
+  (defmacro without-traps (&body body)
+    `(unwind-protect (progn (sb-int:set-floating-point-modes :traps ()) ,@body)
+       (sb-int:set-floating-point-modes :traps '(:overflow :invalid :divide-by-zero))))
+  (defun make-nan-helper (x) ;; It's not so easy to get a NaN value on SBCL
+    (without-traps (- x sb-ext:double-float-positive-infinity)))
+  (defparameter *nan* (make-nan-helper sb-ext:double-float-positive-infinity)))
+
+(defparameter *float-traps*
+  #+(or allegro sbclx) nil
+  #-(or allegro sbclx) t)
+
+(defmacro wrap-js (&body body)
+  #+sbclx `(without-traps ,@body)
+  #-sbclx `(progn ,@body))
+
+(defmacro positive-infinity ()
+  #+allegro #.excl:*infinity-double*
+  #+sbcxl sb-ext:double-float-positive-infinity
+  #-(or allegro sbclx) :Inf)
+(defmacro negative-infinity ()
+  #+allegro #.excl:*negative-infinity-double*
+  #+sbclx sb-ext:double-float-negative-infinity
+  #-(or allegro sbclx) :-Inf)
+(defmacro nan ()
+  #+allegro #.excl:*nan-double*
+  #+sbclx '*nan*
+  #-(or allegro sbclx) :NaN)
+(defmacro is-nan (val)
+  #+allegro `(excl::nan-p ,val)
+  #+sbclx (let ((name (gensym)))
+           `(let ((,name ,val))
+              (and (floatp ,name) (sb-ext:float-nan-p ,name))))
+  #-(or allegro sbclx) `(eq ,val :NaN))
+
+
 ;;
 (mapc #'ensure-accessors
       '("prototype" "constructor"))
@@ -23,7 +62,8 @@
 
 ;;
 (defun js-funcall (func &rest args)
-  (apply (the function (proc func)) nil args))
+  (wrap-js
+    (apply (the function (proc func)) nil args)))
 
 (defmacro js-function (args &body body)
   (let ((other nil))
@@ -54,22 +94,21 @@
 	(or
 	 (undefined? exp)
 	 (eq exp :null)
-	 (eq exp :false)
-	 (eq exp :NaN))))
+	 (eq exp nil)
+         (is-nan exp))))
       (t t))))
 
 ;;
 (defmacro !eval (str)
-  (translate (parse-js-string str)))
+  `(wrap-js ,(translate-ast (parse-js-string str))))
+
+;; Compile-time translation and inclusion of JS code.
+(defmacro !include (file)
+  `(wrap-js ,(translate-ast (with-open-file (in (eval file)) (parse-js in)))))
 
 (defun compile-eval (code)
   (funcall (compile nil `(lambda () ,code))))
 
 (defun js-load-file (fname)
   (with-open-file (str fname)
-    (compile-eval (translate (parse-js str)))))
-
-(defun js-reader (stream)
-  `(!eval ,(read-line-stream stream)))
-
-(define-reader 'javascript #'js-reader)
+    (compile-eval `(wrap-js ,(translate-ast (parse-js str))))))
