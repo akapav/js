@@ -382,7 +382,7 @@ function test_27() {
 	$eq(x, 5)
 	x = 6
     }
-    $eq(o.x, 6)
+    $eq(o27.x, 6)
 }
 
 function test_28() {
@@ -403,12 +403,24 @@ function test_28() {
 
 function runTests() {
   var failures = [];
-  for (var name in this) {
+  /*for (var name in this) {
     if (name.length > 5 && name.substr(0, 5) == "test_") {
       try {this[name]();}
-      catch (e) {failures.push(name + ": " + String(e));}
+      catch (e) {
+	  failures.push(name + ": " + String(e));
+      }
     }
-  }
+  }*/
+    for(var i = 0; i <= 28; ++i) {
+        var name = "test_" + i
+	try {
+	    this[name]();
+	    print(name + '... passed')
+	}
+	catch (e) {
+	    failures.push(name + ": " + String(e));
+	}
+    }
   if (failures.length)
     print(failures.length + " failures:\n  " + failures.join("\n  "));
   else

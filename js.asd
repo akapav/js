@@ -14,4 +14,7 @@
    (:file "inline-op")
    (:file "translate")
    (:file "stdlib")
-   (:file "operators")))
+   (:file "operators"))
+  :perform (load-op :after (op js)
+		    (with-input-from-string (str "(js:js-load-file (asdf:system-relative-pathname 'js \"stdlib.js\"))")
+		      (eval (read str)))))

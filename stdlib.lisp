@@ -306,6 +306,9 @@
 (set-ensured math.obj "LOG10E" (log (exp 1) 10))
 (set-ensured math.obj "SQRT1_2" (sqrt .5))
 (set-ensured math.obj "SQRT1_2" (sqrt 2))
+
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (shadow 'PI 'js-user)) ;;todo: ... 
 (set-ensured math.obj "PI" pi)
 
 (set-ensured
@@ -481,4 +484,4 @@
       (dolist (local new-locals) (setf (prop env-obj (symbol-name local)) :undefined))
       (compile-eval (translate-ast parsed)))))
 
-(js-load-file (merge-pathnames "stdlib.js" (asdf:component-pathname (asdf:find-system :js))))
+#+nil(js-load-file (merge-pathnames "stdlib.js" (asdf:component-pathname (asdf:find-system :js))))

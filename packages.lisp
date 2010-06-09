@@ -1,7 +1,7 @@
 (defpackage :net.svrg.javascript
   (:nicknames :js)
   (:shadow :array)
-  (:use :cl :parse-js #+sbcl :sb-mop)
+  (:use :cl :parse-js #+sbcl :sb-mop #+allegro :mop)
   (:export native-hash
 	   native-function
 	   global-object

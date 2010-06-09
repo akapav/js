@@ -2,6 +2,21 @@
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
 
+#+sbcl
+(defmacro wrap-method-lambda ((&rest arglist) &body body)
+  (let ((args (gensym))
+	(nm (gensym)))
+    `(lambda (,args ,nm)
+       (declare (ignore ,nm))
+       (let (,@(loop :for var :in arglist
+		  :for i = 0 :then (1+ i)
+		  :collect (list var `(nth ,i ,args))))
+	 ,@body))))
+
+#+allegro
+(defmacro wrap-method-lambda ((&rest arglist) &body body)
+  `(lambda ,arglist ,@body))
+
 (defun stringify (name)
   (if (stringp name) name
       (format nil "~a" name)))
@@ -30,21 +45,19 @@
 	    'standard-method
 	    :specializers (list (find-class 'js-object))
 	    :lambda-list '(obj)
-	    :function (lambda (args nm)
-			(declare (ignore nm))
-			(let ((obj (car args)))
-			  (%ensure-getter obj key)
-			  (funcall gf obj)))))
+	    :function
+	    (wrap-method-lambda (obj)
+	      (%ensure-getter obj key)
+	      (funcall gf obj))))
 	  (add-method
 	   gf
 	   (make-instance
 	    'standard-method
 	    :specializers (list (find-class t))
 	    :lambda-list '(obj)
-	    :function (lambda (args nm)
-			(declare (ignore nm))
-			(let ((obj (car args)))
-			  (prop obj key)))))))))
+	    :function
+	    (wrap-method-lambda (obj)
+	      (prop obj key))))))))
 
 (defun ensure-setter (key)
   (let ((name (generic-setter-name key)))
@@ -57,18 +70,19 @@
 	    'standard-method
 	    :specializers (list (find-class t) (find-class 'js-object))
 	    :lambda-list '(val obj)
-	    :function (lambda (args nm)
-			(declare (ignore nm))
-			(setf (prop (second args) key) (first args)))))
+	    :function
+	    (wrap-method-lambda (val obj)
+	      (setf (prop obj key) val))))
 	  (add-method
 	   gf
 	   (make-instance
 	    'standard-method
 	    :specializers (list (find-class t) (find-class t))
 	    :lambda-list '(val obj)
-	    :function (lambda (args nm)
-			(declare (ignore nm))
-			(first args))))))))
+	    :function
+	    (wrap-method-lambda (val obj)
+	      (declare (ignore obj))
+	      val)))))))
 
 (defun ensure-accessors (key)
   (ensure-getter key)
@@ -128,9 +142,9 @@
 	   'standard-method
 	   :specializers (list (class-of obj))
 	   :lambda-list '(obj)
-	   :function (lambda (args nm)
-		       (declare (ignore nm))
-		       (funcall proc (car args)))))
+	   :function
+	   (wrap-method-lambda (obj)
+	     (funcall proc obj))))
 	 (prop-setter
 	  (make-instance
 	   'standard-method
