@@ -57,10 +57,6 @@
   ((default-value :accessor value :initform nil :initarg :value))
   (:metaclass js-class))
 
-(defmethod initialize-instance :after ((obj native-hash) &rest args)
-  (declare (ignore args))
-  (setf (value obj) obj))
-
 (defmethod list-props ((hash native-hash))
   #+nil(loop :for prop :being :the :hash-keys :in (dict hash) :collect prop) nil)
 
@@ -113,7 +109,6 @@
 (defparameter function.ctor
   (js-function (&rest args)
     (let ((func (apply #'new-function args)))
-      (setf (value (!this)) func)
       func)))
 
 (finalize-class-construction
@@ -122,8 +117,7 @@
 ;;
 (defparameter object.ctor
   (js-function (val)
-    (setf (value (!this)) val)
-    val))
+    (if (undefined? val) (!this) val)))
 
 (define-primitive-prototype
     object.prototype
@@ -193,7 +187,6 @@
 	   (arr (make-array len :adjustable t
 			    :fill-pointer len
 			    :initial-contents args)))
-      (setf (value (!this)) arr)
       arr)))
 
 (define-primitive-prototype
@@ -216,7 +209,6 @@
 (defparameter string.ctor
   (js-function (obj)
     (let ((str (if (eq obj :undefined) "" (to-string (value obj)))))
-      (setf (value (!this)) str)
       (the string str))))
 
 (defparameter string.ensure string.ctor)
@@ -256,7 +248,6 @@
 		     (t (with-input-from-string (s (to-string (value n)))
 			  (let ((n2 (read s)))
 			    (if (js-number? n2) n2 (nan))))))))
-      (setf (value (!this)) val)
       (the js.number val))))
 
 (defparameter number.ensure
@@ -305,7 +296,6 @@
 	  (flags (if (eq flags :undefined) ""
 		     (check-flag flags))))
       (let ((re (make-regexp expr flags)))
-	(setf (value (!this)) re)
 	re))))
 
 (defun make-regexp (expr flags)

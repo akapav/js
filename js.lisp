@@ -46,10 +46,10 @@
       '("prototype" "constructor"))
 
 (defun %finalize-new-protocol (obj func args)
-    (apply (the function (proc func)) obj args)
+  (let ((default (apply (the function (proc func)) obj args)))
     (set-attribute obj "constructor" func)
-    ;;todo: move set-default here
-    obj)
+    (setf (value obj) default)
+    obj))
 
 (defun js-new-ignore-prototype (func args &optional (class-name 'native-hash))
   (let ((new-object (make-instance class-name)))
