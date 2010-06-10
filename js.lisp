@@ -4,41 +4,41 @@
 
 ;; Float special values
 
-#+sbclx
+#+sbcl
 (progn
-  (defmacro without-traps (&body body)
-    `(unwind-protect (progn (sb-int:set-floating-point-modes :traps ()) ,@body)
-       (sb-int:set-floating-point-modes :traps '(:overflow :invalid :divide-by-zero))))
   (defun make-nan-helper (x) ;; It's not so easy to get a NaN value on SBCL
-    (without-traps (- x sb-ext:double-float-positive-infinity)))
+    (sb-int:with-float-traps-masked (:overflow :invalid :divide-by-zero)
+      (- x sb-ext:double-float-positive-infinity)))
   (defparameter *nan* (make-nan-helper sb-ext:double-float-positive-infinity)))
 
 (defparameter *float-traps*
-  #+(or allegro sbclx) nil
-  #-(or allegro sbclx) t)
+  #+(or allegro sbcl) nil
+  #-(or allegro sbcl) t)
 
 (defmacro wrap-js (&body body)
-  #+sbclx `(without-traps ,@body)
-  #-sbclx `(progn ,@body))
+  #+sbcl
+  `(sb-int:with-float-traps-masked (:overflow :invalid :divide-by-zero)
+     ,@body)
+  #-sbcl `(progn ,@body))
 
 (defmacro positive-infinity ()
   #+allegro #.excl:*infinity-double*
   #+sbcxl sb-ext:double-float-positive-infinity
-  #-(or allegro sbclx) :Inf)
+  #-(or allegro sbcl) :Inf)
 (defmacro negative-infinity ()
   #+allegro #.excl:*negative-infinity-double*
-  #+sbclx sb-ext:double-float-negative-infinity
-  #-(or allegro sbclx) :-Inf)
+  #+sbcl sb-ext:double-float-negative-infinity
+  #-(or allegro sbcl) :-Inf)
 (defmacro nan ()
   #+allegro #.excl:*nan-double*
-  #+sbclx '*nan*
-  #-(or allegro sbclx) :NaN)
+  #+sbcl '*nan*
+  #-(or allegro sbcl) :NaN)
 (defmacro is-nan (val)
   #+allegro `(excl::nan-p ,val)
-  #+sbclx (let ((name (gensym)))
+  #+sbcl (let ((name (gensym)))
            `(let ((,name ,val))
               (and (floatp ,name) (sb-ext:float-nan-p ,name))))
-  #-(or allegro sbclx) `(eq ,val :NaN))
+  #-(or allegro sbcl) `(eq ,val :NaN))
 
 
 ;;
