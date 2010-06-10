@@ -6,6 +6,8 @@
 
 #+sbcl
 (progn
+  (defmacro without-traps (&body body)
+    `(sb-int:with-float-traps-masked (:overflow :invalid :divide-by-zero) ,@body))
   (defun make-nan-helper (x) ;; It's not so easy to get a NaN value on SBCL
     (sb-int:with-float-traps-masked (:overflow :invalid :divide-by-zero)
       (- x sb-ext:double-float-positive-infinity)))
