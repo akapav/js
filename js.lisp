@@ -7,8 +7,7 @@
 #+sbcl
 (progn
   (defmacro without-traps (&body body)
-    `(unwind-protect (progn (sb-int:set-floating-point-modes :traps ()) ,@body)
-       (sb-int:set-floating-point-modes :traps '(:overflow :invalid :divide-by-zero))))
+    `(sb-int:with-float-traps-masked (:overflow :invalid :divide-by-zero) ,@body))
   (defun make-nan-helper (x) ;; It's not so easy to get a NaN value on SBCL
     (without-traps (- x sb-ext:double-float-positive-infinity)))
   (defparameter *nan* (make-nan-helper sb-ext:double-float-positive-infinity)))
