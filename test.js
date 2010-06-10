@@ -106,7 +106,7 @@ function test_6() {
   $eq(fbla(2), 6);
 }
 
-function test7() {
+function test_7() {
   var s = 0;
   for(var i = 0; i < 10; i = i + 1)
     s = s + 1;
@@ -152,7 +152,7 @@ function test_9() {
   b: for(i = 0; i< 10 ; i = i + 1) {for(;;) continue b;}
 }
 
-function test10() {
+function test_10() {
   var x10 = null;
   function f1() {
     return function(val) {x10=val;}
