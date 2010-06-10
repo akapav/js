@@ -108,34 +108,34 @@ function test_6() {
 
 function test_7() {
   var s = 0;
-  for(var i = 0; i < 10; i = i + 1)
+  for (var i = 0; i < 10; i = i + 1)
     s = s + 1;
   $eq(s, 10);
 
   s = 0;
-  for(var i = 0;; i = i + 1) {
+  for (var i = 0;; i = i + 1) {
     s = s + i;
     if(s > 100) break;
   }
   $eq(i, 14);
 
   s = 0;
-  for(i = 0; i < 10; i = i +1 ) {
+  for (i = 0; i < 10; i = i +1 ) {
     if(i%2) continue;
     s = s + i;
   }
   $eq(s, 20);
 
   var a = 100;
-  while(a) {a = a - 1;}
+  while (a) {a = a - 1;}
   $eq(a, 0);
 
   a = 100;
-  do {a = a - 1;} while(a > 0);
+  do {a = a - 1;} while (a > 0);
   $eq(a, 0);
 
   do a = a - 1;
-  while(a > 0);
+  while (a > 0);
   $eq(a, -1);
 }
 
@@ -148,8 +148,8 @@ function test_8() {
 }
 
 function test_9() {
-  a: for(;;) {for(;;) break a;}
-  b: for(i = 0; i< 10 ; i = i + 1) {for(;;) continue b;}
+  a: for (;;) {for (;;) break a;}
+  b: for (var i = 0; i < 10 ; i = i + 1) {for (;;) continue b;}
 }
 
 function test_10() {
@@ -402,29 +402,32 @@ function test_28() {
 }
 
 function runTests() {
-  var failures = [];
-  /*for (var name in this) {
-    if (name.length > 5 && name.substr(0, 5) == "test_") {
-      try {this[name]();}
-      catch (e) {
-	  failures.push(name + ": " + String(e));
-      }
-    }
-  }*/
-    for(var i = 0; i <= 28; ++i) {
-        var name = "test_" + i
-	try {
-	    this[name]();
-	    print(name + '... passed')
+    var failures = [];
+    var run = 0;
+    /*
+    for (var name in this) {
+	if (name.length > 5 && name.substr(0, 5) == "test_") {
+	    run++;
+	    try {this[name]();}
+	    catch (e) {
+		failures.push(name + ": " + String(e));
+	    }
 	}
+    }
+    */
+    for(var i = 1; i <= 28; ++i) {
+	var name = "test_" + i
+	run++;
+	try {this[name]();}
 	catch (e) {
 	    failures.push(name + ": " + String(e));
 	}
     }
-  if (failures.length)
-    print(failures.length + " failures:\n  " + failures.join("\n  "));
-  else
-    print("All passed!");
+    print(run + " test run...");
+    if (failures.length)
+	print(failures.length + " failures:\n  " + failures.join("\n  "));
+    else
+	print("All passed!");
 }
 
 runTests();

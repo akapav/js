@@ -203,13 +203,14 @@
        (tagbody
           ,@(translate@ init)
         loop-start
-        ,@(and label (list label))
-          ,@(translate@ step)
           (unless ,(if cond
                        (js->boolean-typed (translate cond) (ast-type cond))
                        t)
             (go loop-end))
           ,@(translate@ body)
+        ,@(and label (list label))
+        loop-continue
+          ,@(translate@ step)
           (go loop-start)
         loop-end))))
 
@@ -237,7 +238,7 @@
       `(go loop-end)))
 
 (deftranslate (:continue label)
-  `(go ,(if label (->usersym label) 'loop-start)))
+  `(go ,(if label (->usersym label) 'loop-continue)))
 
 (deftranslate (:for-in var name obj body)
   (declare (ignore var))
