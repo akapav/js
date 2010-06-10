@@ -57,7 +57,14 @@
 	    :lambda-list '(obj)
 	    :function
 	    (wrap-method-lambda (obj)
-	      (prop obj key))))))))
+	      ;todo: this with *global* is just a temporary hack. we
+	      ;need to find a robust solution for accessing atributes
+	      ;for native types (e.g. string or number). probably we
+	      ;will need to implement something like generic
+	      ;'property-proxy'
+	      ;--aka 10/06/10
+	      (declare (special *global*))
+	      (prop (or obj *global*) key))))))))
 
 (defun ensure-setter (key)
   (let ((name (generic-setter-name key)))
@@ -150,9 +157,10 @@
 	   'standard-method
 	   :specializers (list (find-class t) (class-of obj))
 	   :lambda-list '(val obj)
-	   :function (lambda (args nm)
-		       (declare (ignore nm))
-		       (car args)))))
+	   :function
+	   (wrap-method-lambda (val obj)
+	     (declare (ignore obj))
+	     val))))
     (add-method set-generic prop-setter)
     (add-method get-generic prop-getter)))
 
@@ -177,15 +185,12 @@
 
 (defun %ensure-getter (obj key)
   (let* ((key (stringify key))
-	 (key-sym (->usersym key))
-	 #+nil (getter (ensure-getter key)))
+	 (key-sym (->usersym key)))
     (unless (or (slot-exists-p obj key-sym) (sealed-property? obj key))
-      (js-add-property obj key))
-    #+nil (funcall getter obj)))
+      (js-add-property obj key))))
 
 (defgeneric prop (obj key)
   (:method (obj key)
-;    (%ensure-getter obj key)
     (get-using-getter (ensure-getter key) obj)))
 
 (defgeneric (setf prop) (val obj key)

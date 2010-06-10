@@ -106,11 +106,11 @@
     (if var
         (funcall (third var) value)
         (loop :for obj :in (captured-scope-objs scope) :do
-           (unless (eq (prop** (%get-attribute obj name) :not-found) :not-found)
-             (return (%set-attribute obj name value)))
+           (unless (eq (prop** (get-attribute obj name) :not-found) :not-found)
+             (return (set-attribute obj name value)))
            :finally (if (captured-scope-next scope)
                         (set-in-captured-scope name value (captured-scope-next scope))
-                        (%set-attribute *global* name value))))))
+                        (set-attribute *global* name value))))))
 (defmethod set-variable (name valname (scope captured-scope) rest)
   (declare (ignore rest))
   `(set-in-captured-scope ,name ,valname ,scope))
