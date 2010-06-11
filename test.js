@@ -404,7 +404,6 @@ function test_28() {
 function runTests() {
     var failures = [];
     var run = 0;
-    /*
     for (var name in this) {
 	if (name.length > 5 && name.substr(0, 5) == "test_") {
 	    run++;
@@ -412,15 +411,6 @@ function runTests() {
 	    catch (e) {
 		failures.push(name + ": " + String(e));
 	    }
-	}
-    }
-    */
-    for(var i = 1; i <= 28; ++i) {
-	var name = "test_" + i
-	run++;
-	try {this[name]();}
-	catch (e) {
-	    failures.push(name + ": " + String(e));
 	}
     }
     print(run + " test run...");

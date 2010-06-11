@@ -113,7 +113,8 @@
 ;;
 (defclass js-object ()
   ((prototype :accessor prototype :initarg :prototype :initform nil)
-   (sealed :accessor sealed :initform nil))
+   (sealed :accessor sealed :initform nil)
+   (attributes :accessor attributes :initform nil))
   (:metaclass js-class))
 
 ;;
@@ -133,6 +134,7 @@
 	 (to-class (gethash property-name (slot-class-mappings cls))))
     (ensure-getter property-name)
     (ensure-setter property-name)
+    (push property-name (attributes obj))
     (change-class obj
 		  (or to-class
 		      (%inherit-with-property cls property-name)))))

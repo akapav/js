@@ -58,7 +58,7 @@
   (:metaclass js-class))
 
 (defmethod list-props ((hash native-hash))
-  #+nil(loop :for prop :being :the :hash-keys :in (dict hash) :collect prop) nil)
+  (attributes hash))
 
 ;;
 (defclass global-object (native-hash)
