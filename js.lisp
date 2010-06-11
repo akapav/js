@@ -25,7 +25,7 @@
 
 (defmacro positive-infinity ()
   #+allegro #.excl:*infinity-double*
-  #+sbcxl sb-ext:double-float-positive-infinity
+  #+sbcl sb-ext:double-float-positive-infinity
   #-(or allegro sbcl) :Inf)
 (defmacro negative-infinity ()
   #+allegro #.excl:*negative-infinity-double*
