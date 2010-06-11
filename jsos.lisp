@@ -13,7 +13,7 @@
 		  :collect (list var `(nth ,i ,args))))
 	 ,@body))))
 
-#+allegro
+#-sbcl
 (defmacro wrap-method-lambda ((&rest arglist) &body body)
   `(lambda ,arglist ,@body))
 
