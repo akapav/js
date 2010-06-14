@@ -184,7 +184,7 @@
        ,obj)))
 
 (deftranslate (:regexp expr)
-  `(make-regexp ,(car expr) ,(cdr expr)))
+  `(js-new regexp.ctor (list ,(car expr) ,(cdr expr))))
 
 ;flags
 

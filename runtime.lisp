@@ -54,7 +54,7 @@
 
 ;;
 (defclass native-hash (js-object)
-  ((default-value :accessor value :initform nil :initarg :value))
+  ((value :accessor value :initform nil :initarg :value))
   (:metaclass js-class))
 
 (defmethod list-props ((hash native-hash))
@@ -104,7 +104,7 @@
   (setf (prototype func) function.prototype)
   (setf (proc func) (proc val))
   (setf (name func) nil)
-  (call-next-method func val))
+  (call-next-method))
 
 (defparameter function.ctor
   (js-function (&rest args)
@@ -143,13 +143,13 @@
   (let ((vec (argument-vector args)))
     (if (and (integerp key) (>= key 0) (< key (length vec)))
         (svref vec key)
-        (call-next-method args key))))
+        (call-next-method))))
 
 (defmethod (setf sub) (val (args arguments) key)
   (let ((vec (argument-vector args)))
     (if (and (integerp key) (>= key 0) (< key (length vec)))
         (setf (svref vec key) val)
-        (call-next-method val args key))))
+        (call-next-method))))
 
 (defun arguments-as-list (args) ;; TODO drop, access vector
   (coerce (argument-vector args) 'list))
@@ -169,7 +169,7 @@
   (if (and (integerp key)
 	   (< key (length (value arr)))) ;;todo: safe conversion to integer
       (aref (value arr) key)
-      (call-next-method arr key)))
+      (call-next-method)))
 
 (defmethod (setf prop) (val (arr array-object) key)
   (if (integerp key) ;;todo: ... as above ...
@@ -179,7 +179,7 @@
 	  (loop for ndx from len to key do
 	       (vector-push-extend :undefined arr)))
 	(setf (aref (value arr) key) val))
-      (call-next-method val arr key)))
+      (call-next-method)))
 
 (defparameter array.ctor
   (js-function (&rest args)
@@ -278,8 +278,9 @@
 (set-ensured *global* "Math" math.obj)
 
 ;;
-(defclass regexp (native-function)
+(defclass regexp (native-hash)
   ((expr :accessor expr :initarg :expr)
+   (proc :accessor proc :initarg :proc)
    (scanner :accessor scanner :initarg :scanner)
    (globalp :accessor globalp :initarg :global)
    (case-sensitive-p :accessor case-sensitive-p :initarg :case-insensitive))
@@ -295,28 +296,28 @@
 		    (js-funcall string.ensure  expr)))
 	  (flags (if (eq flags :undefined) ""
 		     (check-flag flags))))
-      (let ((re (make-regexp expr flags)))
-	re))))
+      (fill-regexp (!this) expr flags)
+      (!this))))
 
-(defun make-regexp (expr flags)
+(defun fill-regexp (obj expr flags)
   (let* ((case-sens (search "i" flags))
 	 (scanner (ppcre:create-scanner expr
 					:case-insensitive-mode case-sens)))
-    (make-instance 'regexp
-		   :expr expr
-		   :scanner scanner
-		   :global (search "g" flags)
-		   :case-insensitive case-sens
-		   :proc (lambda (-- &optional str)
-			   (declare (ignore --))
-			   (let ((str (js-funcall string.ensure str)))
-			     (multiple-value-bind (from to) (ppcre:scan scanner str)
-			       (if from (subseq str from to) :null)))))))
+    (setf (expr obj) expr)
+    (setf (scanner obj) scanner)
+    (setf (globalp obj) (search "g" flags))
+    (setf (case-sensitive-p obj) case-sens)
+    (setf (proc obj)
+	  (lambda (-- &optional str)
+	    (declare (ignore --))
+	    (let ((str (js-funcall string.ensure str)))
+	      (multiple-value-bind (from to) (ppcre:scan scanner str)
+		(if from (subseq str from to) :null)))))))
 
 (define-primitive-prototype regexp.prototype
-    (make-regexp "(?:)" ""))
+    (let ((obj (make-instance 'regexp)))
+      (fill-regexp obj "(?:)" "")
+      obj))
 
 (finalize-class-construction
 "RegExp" regexp.ctor regexp.prototype :explicit-ctor t)
-
-;;todo: regexp object constructed with // haven't valid prototype

@@ -53,6 +53,12 @@
       (format nil "function ~A() {[code]}" (name obj))
       "function () {[code]}"))
 
+(defmethod to-string ((obj regexp))
+  (format nil "/~A/~A~A"
+	  (expr obj)
+	  (if (globalp obj) "g" "")
+	  (if (case-sensitive-p obj) "i" "")))
+
 (defmethod to-string ((obj string))
   obj)
 
@@ -459,6 +465,26 @@
  *global* "isNaN"
  (js-function (arg)
    (or (is-nan arg) (undefined? arg))))
+
+;;
+(set-ensured
+ regexp.prototype "exec"
+ (js-function (str)
+   (with-asserted-types ((str string))
+     (funcall (proc (!this)) (!this) str))))
+
+(set-ensured
+ regexp.prototype "compile"
+ (js-function (expr flags)
+   (with-asserted-types ((expr string) (flags string))
+     (funcall (proc regexp.ctor) (!this) expr flags))))
+
+(set-ensured
+ regexp.prototype "test"
+ (js-function (str)
+   (with-asserted-types ((str string))
+     (js->boolean
+      (funcall (proc (get-attribute (!this) "exec")) (!this) str)))))
 
 ;;
 (set-ensured

@@ -33,7 +33,3 @@ declare_unimplemented(String, "fromCharCode")
 declare_unimplemented(String, "match")
 declare_unimplemented(String, "search")
 declare_unimplemented(String, "replace")
-
-declare_unimplemented(RegExp, "compile")
-declare_unimplemented(RegExp, "exec")
-declare_unimplemented(RegExp, "test")
