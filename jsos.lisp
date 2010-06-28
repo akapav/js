@@ -167,6 +167,7 @@
     (add-method get-generic prop-getter)))
 
 (defmethod js-add-sealed-property ((obj js-object) property-name proc)
+  (declare (ignore proc))
   (call-next-method)
   (pushnew property-name (sealed obj) :test #'string=))
 

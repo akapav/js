@@ -66,7 +66,6 @@
   (:metaclass js-class))
 
 (defmethod (setf value) (val (hash global-object))
-  (declare (ignore hash))
   val)
 
 (defparameter *global* (make-instance 'global-object))

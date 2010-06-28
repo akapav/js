@@ -35,8 +35,25 @@
           (defexpand ,op (:number :number) (unless *float-traps* ,expansion))))
 
 (defnumop :+ `(+ ,lhs ,rhs))
+;; TODO merge a + b + c + d into (conc 'string a b c d)
 (defexpand :+ (:string :string) `(concatenate 'string ,lhs ,rhs))
 (defexpand :+ (nil :number) rhs)
+(defexpand :+ (t :number)
+  (unless *float-traps*
+    (let ((lh (gensym)) (rh (gensym)))
+      `(let ((,lh ,lhs) (,rh ,rhs))
+         (typecase ,lh
+           (fixnum (+ (the fixnum ,lh) ,rh))
+           (double-float (+ (the double-float ,lh) ,rh))
+           (t (!+ ,lh ,rh)))))))
+(defexpand :+ (:number t)
+  (unless *float-traps*
+    (let ((lh (gensym)) (rh (gensym)))
+      `(let ((,lh ,lhs) (,rh ,rhs))
+         (typecase ,rh
+           (fixnum (+ ,lh (the fixnum ,rh)))
+           (double-float (+ ,lh (the double-float ,rh)))
+           (t (!+ ,lh ,rh)))))))
 
 (defnumop :- `(- ,lhs ,rhs))
 (defexpand :- (nil :integer) `(- ,rhs))
