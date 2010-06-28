@@ -253,15 +253,16 @@
     (see-body fbody)))
 
 ;; Sets up the scope for a function, and infers it in this scope.
-(defun infer-func (name args body env)
+(defun infer-func (fname args body env)
   (let ((locals (find-locals body `("this" "arguments" ,@args
-                                    ,@(and name (list name)))))
+                                    ,@(and fname (list fname)))))
         (ret-tc (tc ()))
         (arg-tcs (loop :repeat (length args) :collect (tc ()))))
     (multiple-value-bind (defuns body) (split-out-defuns body)
       (when (may-fall-off body) (add-type ret-tc :undefined))
       (let* ((*function-tcs* (cons arg-tcs ret-tc))
              tmp
+             (ft (make-ft :args arg-tcs :returns ret-tc))
              ;; The new scope list
              (sc (loop :for name :in locals :collect
                     (cond ((string= name "this") (list t nil name (tc :object)))
@@ -269,6 +270,8 @@
                           ;; and to be able to keep their ftype
                           ((setf tmp (find name defuns :key #'second :test #'string=))
                            (list (list nil) (cons :function (cdr tmp)) name (tc :object)))
+                          ((equal name fname)
+                           (list (list ft) nil name (tc :object)))
                           ;; arguments
                           ((setf tmp (position name args :test #'string=))
                            (list t nil name (nth tmp arg-tcs)))
@@ -276,7 +279,7 @@
                           (t (list nil nil name (tc ()))))))
              (env (cons sc env)))
         (dolist (stat body) (setf env (infer stat env)))
-        (values (pop-scope env) (make-ft :args arg-tcs :returns ret-tc))))))
+        (values (pop-scope env) ft)))))
 
 ;; Note that definfer automatically adds an env parameter to each of
 ;; these methods.
