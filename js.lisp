@@ -102,7 +102,7 @@
 
 ;;
 (defmacro !eval (str) ;;todo translate-ast temporary removed
-  `(wrap-js ,(#+nil translate-ast translate (parse-js-string str))))
+  `(wrap-js ,(translate-ast (parse-js-string str))))
 
 ;; Compile-time translation and inclusion of JS code.
 (defmacro !include (file)

@@ -183,8 +183,9 @@
             `(setf (sub ,obj ,name) ,(translate val)))
        ,obj)))
 
-(deftranslate (:regexp expr)
-  `(js-new regexp.ctor (list ,(car expr) ,(cdr expr))))
+;; TODO compile only once!!
+(deftranslate (:regexp expr flags)
+  `(js-new regexp.ctor (list ,expr ,flags)))
 
 ;flags
 
@@ -473,4 +474,4 @@
                                          ((eq op :--) '1-) ((eq op :++) '1+)) ,ret))
        ,ret)))
 
-(defun see (js) (translate (parse-js:parse-js-string js)))
+(defun see (js) (translate-ast (parse-js:parse-js-string js)))
