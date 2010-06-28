@@ -451,9 +451,15 @@
   `(prog2 ,(translate form1) ,(translate result)))
 
 (deftranslate (:binary op lhs rhs)
-  (let ((lhs1 (translate lhs)) (rhs1 (translate rhs)))
-    (or (expand op (ast-type lhs) (ast-type rhs) lhs1 rhs1)
-        `(,(js-intern op) ,lhs1 ,rhs1))))
+  (let ((lhs1 (translate lhs)) (rhs1 (translate rhs))
+        (lht (ast-type lhs)) (rht (ast-type rhs)))
+    ;; Hack to join 'a' + 'b' + 'c' into a single concatenate call (if string type is known)
+    (flet ((unwrap-conc (expr)
+             (if (and (consp expr) (eq (car expr) 'concatenate)) (cddr expr) (list expr))))
+      (if (and (eq op :+) (eq lht :string) (eq rht :string))
+          `(concatenate 'string ,@(unwrap-conc lhs1) ,@(unwrap-conc rhs1))
+          (or (expand op lht rht lhs1 rhs1)
+              `(,(js-intern op) ,lhs1 ,rhs1))))))
 
 (deftranslate (:unary-prefix op place)
   (let ((rhs (translate place))

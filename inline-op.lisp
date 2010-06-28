@@ -34,9 +34,8 @@
   `(progn (defexpand ,op (:integer :integer) ,expansion)
           (defexpand ,op (:number :number) (unless *float-traps* ,expansion))))
 
+;; (string + string is handled specially in the :binary translate rule)
 (defnumop :+ `(+ ,lhs ,rhs))
-;; TODO merge a + b + c + d into (conc 'string a b c d)
-(defexpand :+ (:string :string) `(concatenate 'string ,lhs ,rhs))
 (defexpand :+ (nil :number) rhs)
 (defexpand :+ (t :number)
   (unless *float-traps*
