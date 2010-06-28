@@ -12,4 +12,4 @@
 
 (defpackage :net.svrg.js-user
   (:nicknames :js-user)
-  (:use :cl :js :parse-js))
+  (:use))
