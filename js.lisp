@@ -51,10 +51,12 @@
 ;; Indented for use inside of JS code
 (defmacro jscall (func &rest args)
   `(funcall (the function (proc ,func)) *global* ,@args))
+(defmacro jscall* (func this &rest args)
+  `(funcall (the function (proc ,func)) ,this ,@args))
 (defmacro jsmethod (obj name &rest args)
   (let ((o (gensym)))
     `(let ((,o ,obj))
-       (funcall (the function (proc ,(expand-cached-lookup o name))) ,o ,@args))))
+       (jscall* ,(expand-cached-lookup o name) ,o ,@args))))
 
 (defun wrap-js-lambda (args body)
   (let ((other t))
@@ -97,3 +99,12 @@
              (format t "~a~%" (to-string result))))
        (error (e) (format t "! ~a~%" e)))
      (format t "> ")))
+
+;; Conditions
+
+(define-condition js-condition (error)
+  ((value :initarg :value :reader js-condition-value))
+  (:report (lambda (e stream)
+             (format stream "[js] ~s" (js-condition-value e)))))
+
+;; TODO proper JS error objects

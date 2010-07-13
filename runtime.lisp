@@ -1,41 +1,63 @@
 (in-package :js)
 
+(defun js-type-error () (error "type error"))
+
+(defun default-value (val &optional (hint :string))
+  (block nil
+    (unless (obj-p val) (return val))
+    (let ((first "toString") (second "valueOf"))
+      (when (eq hint :number) (rotatef first second))
+      (let ((method (lookup val first)))
+        (when (obj-p method)
+          (let ((res (jscall* method val)))
+            (unless (obj-p res) (return res)))))
+      (let ((method (lookup val second)))
+        (when (obj-p method)
+          (let ((res (jscall* method val)))
+            (unless (obj-p res) (return res)))))
+      (js-type-error))))
+
+(defun obj-class (obj) (declare (ignore obj)) "Object") ;; TODO
+  
+(deftype js-number ()
+  (if *float-traps*
+      '(or number (member :Inf :-Inf :NaN))
+      'number))
+
 (defun to-string (val)
   (etypecase val
     (string val)
-    (number (cond ((is-nan val) "NaN")
-                  ((eq val (infinity)) "Infinity")
-                  ((eq val (-infinity)) "-Infinity")
-                  ((integerp val) (princ-to-string val))
-                  (t (format nil "~,,,,,,'eE" val))))
+    (js-number (cond ((is-nan val) "NaN")
+                     ((eq val (infinity)) "Infinity")
+                     ((eq val (-infinity)) "-Infinity")
+                     ((integerp val) (princ-to-string val))
+                     (t (format nil "~,,,,,,'eE" val))))
     (boolean (if val "true" "false"))
-    (symbol (ecase val
-              (:undefined "undefined") (:null "null")
-              (:Inf (infinity)) (:-Inf (-infinity)) (:NaN (nan))))
-    (obj (to-string (jsmethod val "toString"))))) ;; TODO check standard
+    (symbol (ecase val (:undefined "undefined") (:null "null")))
+    (obj (to-string (default-value val)))))
 
 (defun to-number (val)
   (etypecase val
-    (number val)
+    (js-number val)
     (string (cond ((string= val "Infinity") (infinity))
                   ((string= val "-Infinity") (-infinity))
                   (t (or (read-js-number val) (nan)))))
     (boolean (if val 1 0))
-    (symbol (case val (:undefined (nan)) (:null 0) (t val)))
-    (obj (to-number (jsmethod val "valueOf"))))) ;; TODO check standard
+    (symbol (ecase val (:undefined (nan)) (:null 0)))
+    (obj (to-number (default-value val :number)))))
 
 (defun to-integer (val)
   (etypecase val
     (integer val)
-    (number (cond ((is-nan val) 0)
-                  ((eq val (infinity)) most-positive-fixnum)
-                  ((eq val (-infinity)) most-negative-fixnum)
-                  (t (floor val))))
+    (js-number (cond ((is-nan val) 0)
+                     ((eq val (infinity)) most-positive-fixnum)
+                     ((eq val (-infinity)) most-negative-fixnum)
+                     (t (floor val))))
     (string (let ((read (read-js-number val)))
               (etypecase read (null 0) (integer read) (number (floor read)))))
     (boolean (if val 1 0))
-    (symbol (case val (:Inf most-positive-fixnum) (:-Inf most-negative-fixnum) (t 0)))
-    (obj (to-integer (jsmethod val "valueOf")))))
+    (symbol 0)
+    (obj (to-integer (default-value val :number)))))
 
 (defun to-boolean (val)
   (etypecase val
@@ -179,8 +201,9 @@
   :object)
 
 (stdproto :object
-  (mth "toString" () "[object]")
-  (mth "valueOf" () (if (vobj-p this) (vobj-value this) this)))
+  (mth "toString" () (format nil "[object ~a]" (obj-class this)))
+  (mth "toLocaleString" () (jsmethod this "toString"))
+  (mth "valueOf" () this))
 
 (stdconstructor "Function" (&rest args)
   (let ((body (format nil "(function (~{~a~^, ~}) {~A});"
@@ -324,11 +347,10 @@
         (subseq str from (max from (clip-index to len))))))
 
 (stdproto :string
-  (pr "length" (cons (js-lambda ()
-                       (let ((val (value-of this)))
-                         (if (stringp val) (length val) 0))) nil) +slot-active+)
+  (pr "length" (cons (js-lambda () (if (stringp this) (length this) 0)) nil) +slot-active+)
 
-  (mth "toString" () (to-string (value-of this)))
+  (mth "toString" () (if (stringp this) this (js-type-error)))
+  (mth "valueOf" () (if (stringp this) this (js-type-error)))
 
   (mth "charAt" (index)
     (let ((str (to-string this))
@@ -372,8 +394,16 @@
   (pr "POSITIVE_INFINITY" (infinity))
   (pr "NEGATIVE_INFINITY" (-infinity)))
 
+(defun typed-value-of (obj type)
+  (if (and (vobj-p obj) (typep (vobj-value obj) type)) (vobj-value obj) (js-type-error)))
+
 (stdproto :number
-  (mth "toString" () (to-string (value-of this))))
+  (mth "toString" ((radix 10))
+    (let ((num (typed-value-of this 'js-number)))
+      (if (= radix 10)
+          (to-string num)
+          (let ((*print-radix* (to-integer radix))) (princ-to-string (floor num))))))
+  (mth "valueOf" () (typed-value-of this 'js-number)))
 
 (stdconstructor "Boolean" (value)
   (if (eq this *global*)
@@ -382,7 +412,8 @@
   ())
 
 (stdproto :boolean
-  (mth "toString" () (to-string (value-of this))))
+  (mth "toString" () (if (typed-value-of this 'boolean) "true" "false"))
+  (mth "valueOf" () (typed-value-of this 'boolean)))
 
 (defun init-reobj (obj pattern flags)
   (let* ((flags (if (eq flags :undefined) "" (to-string flags)))

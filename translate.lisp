@@ -247,11 +247,6 @@
   (deftranslate (:conditional test then else)
     (expand-if test then else)))
 
-(define-condition js-condition (error)
-  ((value :initarg :value :reader js-condition-value))
-  (:report (lambda (e stream)
-             (format stream "[js] ~s" (js-condition-value e)))))
-
 (deftranslate (:try body catch finally)
   `(,(if finally 'unwind-protect 'prog1)
      ,(if catch

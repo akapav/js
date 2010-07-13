@@ -46,8 +46,6 @@
   (if (fobj-p val)
       (fobj-proc val)
       (error "~a is not a function." (to-string val))))
-(defun value-of (val)
-  (if (vobj-p val) (vobj-value val) val))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defvar *prop-names*
@@ -454,7 +452,9 @@
 
 (defun ensure-fobj-cls (fobj)
   (let ((proto (lookup fobj "prototype"))) ;; Active property in function prototype ensures this is always bound
-    (unless (obj-p proto) (setf proto (simple-obj)))
+    (unless (obj-p proto)
+      (setf proto (simple-obj))
+      (setf (lookup proto "constructor") fobj))
     (unless (and (fobj-new-cls fobj) (eq (cls-prototype (fobj-new-cls fobj)) proto))
       (setf (fobj-new-cls fobj) (make-scls () proto)))
     (fobj-new-cls fobj)))
