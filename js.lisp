@@ -23,11 +23,11 @@
      ,@body)
   #-sbcl `(progn ,@body))
 
-(defmacro positive-infinity ()
+(defmacro infinity ()
   #+allegro #.excl:*infinity-double*
   #+sbcl sb-ext:double-float-positive-infinity
   #-(or allegro sbcl) :Inf)
-(defmacro negative-infinity ()
+(defmacro -infinity ()
   #+allegro #.excl:*negative-infinity-double*
   #+sbcl sb-ext:double-float-negative-infinity
   #-(or allegro sbcl) :-Inf)
@@ -43,32 +43,21 @@
   #-(or allegro sbcl) `(eq ,val :NaN))
 
 
-;;
-(mapc #'ensure-accessors
-      '("prototype" "constructor"))
-
-(defun %finalize-new-protocol (obj func args)
-  (let ((default (apply (the function (proc func)) obj args)))
-    (set-attribute obj "constructor" func)
-    (setf (value obj) default)
-    obj))
-
-(defun js-new-ignore-prototype (func args &optional (class-name 'native-hash))
-  (let ((new-object (make-instance class-name)))
-    (%finalize-new-protocol new-object func args)))
-
-(defun js-new (func args)
-  (let* ((proto (prop** (get-attribute func "prototype") nil))
-	 (new-object (js-clone proto)))
-    (%finalize-new-protocol new-object func args)))
-
-;;
+;; Intended for from-lisp use
 (defun js-funcall (func &rest args)
   (wrap-js
     (apply (the function (proc func)) nil args)))
 
-(defmacro js-function (args &body body)
-  (let ((other nil))
+;; Indented for use inside of JS code
+(defmacro jscall (func &rest args)
+  `(funcall (the function (proc ,func)) *global* ,@args))
+(defmacro jsmethod (obj name &rest args)
+  (let ((o (gensym)))
+    `(let ((,o ,obj))
+       (funcall (the function (proc ,(expand-cached-lookup o name))) ,o ,@args))))
+
+(defun wrap-js-lambda (args body)
+  (let ((other t))
     (labels ((add-default (args)
                (cond ((not args) (setf other t) '(&rest other-args))
                      ((eq (car args) '&rest) args)
@@ -76,29 +65,11 @@
                       (cons (list (car args) :undefined) (add-default (cdr args))))
                      (t (cons (car args) (add-default (cdr args)))))))
       (setf args (cons '&optional (add-default args))))
-    `(make-instance
-      'native-function :prototype function.prototype
-      :proc (lambda (js-user::|this| ,@args)
-              (declare (ignorable js-user::|this| ,@(and other '(other-args))))
-              ,@body))))
-
-(defmacro undefined? (exp)
-  `(eq ,exp :undefined))
-
-(defun js->boolean (exp)
-  (when exp
-    (typecase exp
-      (fixnum (not (zerop exp)))
-      (number (not (zerop exp)))
-      (string (not (zerop (length exp))))
-      (symbol
-       (not
-	(or
-	 (undefined? exp)
-	 (eq exp :null)
-	 (eq exp nil)
-         (is-nan exp))))
-      (t t))))
+    `(lambda (this ,@args)
+       (declare (ignorable this ,@(and other '(other-args))))
+       ,@body)))
+(defmacro js-lambda (args &body body)
+  (wrap-js-lambda args body))
 
 ;;
 (defmacro !eval (str) ;;todo translate-ast temporary removed
@@ -114,3 +85,15 @@
 (defun js-load-file (fname)
   (with-open-file (str fname)
     (compile-eval `(wrap-js ,(translate-ast (parse-js str))))))
+
+;; TODO support multiline input
+(defun js-repl ()
+  (format t "~%JS repl (#q to quit)~%> ")
+  (loop :for line := (read-line) :do
+     (when (equal line "#q") (return))
+     (handler-case
+         (let ((result (compile-eval (translate-ast (parse-js-string line)))))
+           (unless (eq result :undefined)
+             (format t "~a~%" (to-string result))))
+       (error (e) (format t "! ~a~%" e)))
+     (format t "> ")))

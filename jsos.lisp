@@ -1,247 +1,460 @@
 (in-package :js)
 
+;; TODO optimize declarations
+;; TODO thread-safety
+;; TODO viable to intern props without leaking space?
+
+(defstruct cls prototype)
+(defstruct (scls (:constructor make-scls (props prototype)) (:include cls))
+  props children)
+(defstruct (hcls (:constructor make-hcls (prototype)) (:include cls)))
+
+(defstruct (obj (:constructor make-obj (cls &optional vals)))
+  cls (vals (make-array 4)))
+(defstruct (vobj (:constructor make-vobj (cls value)) (:include obj))
+  value)
+(defstruct (fobj (:constructor make-fobj (cls proc new-cls &optional vals)) (:include obj))
+  proc new-cls)
+(defstruct (gobj (:constructor make-gobj (cls protos vals)) (:include obj))
+  protos)
+(defstruct (aobj (:constructor make-aobj (cls arr)) (:include obj))
+  arr)
+(defstruct (reobj (:constructor make-reobj (cls proc scanner args)) (:include fobj))
+  scanner args)
+(defstruct (argobj (:constructor make-argobj (cls vector callee)) (:include obj))
+  vector callee)
+
+(defmethod print-object ((obj obj) stream) (format stream "#<js obj>"))
+
+;; Slots are (offset . flags) conses for scls objects, (value . flags) conses for hcls
+(defconstant +slot-ro+ 1)
+(defconstant +slot-active+ 2)
+(defconstant +slot-enum+ 4)
+(defconstant +slot-dflt+ +slot-enum+)
+
+(defun hash-obj (obj)
+  (let* ((scls (obj-cls obj))
+         (hcls (make-hcls (cls-prototype scls)))
+         (vec (obj-vals obj))
+         (table (make-hash-table :test 'eq :size (* (length vec) 2))))
+    (loop :for (prop offset . flags) :in (scls-props scls) :do
+       (setf (gethash prop table) (cons (svref vec offset) flags)))
+    (setf (obj-cls obj) hcls (obj-vals obj) table))
+  obj)
+
+(defun proc (val)
+  (if (fobj-p val)
+      (fobj-proc val)
+      (error "~a is not a function." (to-string val))))
+(defun value-of (val)
+  (if (vobj-p val) (vobj-value val) val))
+
 (eval-when (:compile-toplevel :load-toplevel :execute)
+  (defvar *prop-names*
+    #+allegro (make-hash-table :test 'equal :weak-keys t :values :weak)
+    #+sbcl (make-hash-table :test 'equal :weakness :key-and-value)
+    #-(or allegro sbcl) (make-hash-table :test 'equal))) ;; Space leak when we don't have weak hashes
+(defmacro intern-prop (prop)
+  (let ((p (gensym)))
+    `(let ((,p ,prop))
+       (or (gethash ,p *prop-names*)
+           (setf (gethash ,p *prop-names*) ,p)))))
 
-#+sbcl
-(defmacro wrap-method-lambda ((&rest arglist) &body body)
-  (let ((args (gensym))
-	(nm (gensym)))
-    `(lambda (,args ,nm)
-       (declare (ignore ,nm))
-       (let (,@(loop :for var :in arglist
-		  :for i = 0 :then (1+ i)
-		  :collect (list var `(nth ,i ,args))))
-	 ,@body))))
+(defmacro lookup-slot (scls prop)
+  `(cdr (assoc ,prop (scls-props ,scls))))
+(defmacro dcall (val obj)
+  `(funcall (the function (car ,val)) ,obj))
 
-#-sbcl
-(defmacro wrap-method-lambda ((&rest arglist) &body body)
-  `(lambda ,arglist ,@body))
+(defstruct (cache (:constructor make-cache (prop)) (:type vector))
+  (op #'cache-miss) prop cls a1 a2)
 
-(defun stringify (name)
-  (if (stringp name) name
-      (format nil "~a" name)))
+(defmethod static-lookup ((obj obj) cache)
+  (funcall (the function (cache-op cache)) obj obj cache))
+(defmethod static-lookup (obj cache)
+  (declare (ignore cache))
+  (error "~a does not have properties." (to-string obj)))
 
-(defun generic-getter-name (name)
-  (->usersym (concatenate 'string (symbol-name 'generic-getter-) (stringify name))))
+(defun do-lookup (obj start prop)
+  (simple-lookup obj start (intern-prop (if (stringp prop) prop (to-string prop)))))
+(defmethod lookup ((obj obj) prop)
+  (do-lookup obj obj prop))
+(defmethod lookup (obj prop)
+  (declare (ignore prop))
+  (error "~a does not have properties." (to-string obj)))
 
-(defun generic-setter-name (name)
-  (->usersym (concatenate 'string (symbol-name 'generic-setter-) (stringify name))))
+(defun index-in-range (index len)
+  (if (and (typep index 'fixnum) (>= index 0) (< index len))
+      index
+      (let ((index (to-string index)) index-int)
+        (if (and (every #'digit-char-p index) ;; TODO faster check
+                 (progn (setf index-int (parse-integer index)) (>= index-int 0) (< index-int len)))
+            index-int
+            nil))))
 
-(defun slot-name->initarg (slot-name)
-  (list :name (->usersym (stringify slot-name))
-	:initform :%unset
-	:initfunction (lambda () :%unset)
-	:readers `(,(generic-getter-name slot-name))
-	:writers `(,(generic-setter-name slot-name))))
+(defmethod lookup ((obj aobj) prop)
+  (let* ((vec (aobj-arr obj))
+         (index (index-in-range prop (length vec))))
+    (if index
+        (aref vec index)
+        (do-lookup obj obj prop))))
+(defmethod lookup ((obj argobj) prop)
+  (let* ((vec (argobj-vector obj))
+         (index (index-in-range prop (length vec))))
+    (if index
+        (svref vec index)
+        (do-lookup obj obj prop))))
 
-(defun ensure-getter (key)
-  (let ((name (generic-getter-name key)))
-    (if (fboundp name)
-	(symbol-function name)
-	(let ((gf (ensure-generic-function name)))
-	  (add-method
-	   gf
-	   (make-instance
-	    'standard-method
-	    :specializers (list (find-class 'js-object))
-	    :lambda-list '(obj)
-	    :function
-	    (wrap-method-lambda (obj)
-	      (%ensure-getter obj key)
-	      (funcall gf obj))))
-	  (add-method
-	   gf
-	   (make-instance
-	    'standard-method
-	    :specializers (list (find-class t))
-	    :lambda-list '(obj)
-	    :function
-	    (wrap-method-lambda (obj)
-	      ;todo: this with *global* is just a temporary hack. we
-	      ;need to find a robust solution for accessing atributes
-	      ;for native types (e.g. string or number). probably we
-	      ;will need to implement something like generic
-	      ;'property-proxy'
-	      ;--aka 10/06/10
-	      (declare (special *global*))
-	      (prop (or obj *global*) key))))))))
+(defvar *not-found* :undefined)
+(defmacro if-not-found ((var lookup) &body then/else)
+  (unless var (setf var (gensym)))
+  `(let ((,var (let ((*not-found* :not-found)) ,lookup)))
+     (declare (ignorable ,var))
+     (if (eq ,var :not-found) ,@then/else)))
 
-(defun ensure-setter (key)
-  (let ((name (generic-setter-name key)))
-    (if (fboundp name)
-	(symbol-function name)
-	(let ((gf (ensure-generic-function name)))
-	  (add-method
-	   gf
-	   (make-instance
-	    'standard-method
-	    :specializers (list (find-class t) (find-class 'js-object))
-	    :lambda-list '(val obj)
-	    :function
-	    (wrap-method-lambda (val obj)
-	      (setf (prop obj key) val))))
-	  (add-method
-	   gf
-	   (make-instance
-	    'standard-method
-	    :specializers (list (find-class t) (find-class t))
-	    :lambda-list '(val obj)
-	    :function
-	    (wrap-method-lambda (val obj)
-	      (declare (ignore obj))
-	      val)))))))
+;; Used for non-cached lookups
+(defun simple-lookup (this start prop)
+  (loop :for obj := start :then (cls-prototype cls) :while obj
+        :for cls := (obj-cls obj) :do
+     (macrolet ((maybe-active (slot value)
+                  `(if (logtest (cdr ,slot) +slot-active+)
+                       (dcall ,value this)
+                       ,value)))
+       (if (hcls-p cls)
+           (let ((slot (gethash prop (obj-vals obj))))
+             (when slot
+               (return (maybe-active slot (car slot)))))
+           (let ((slot (lookup-slot cls prop)))
+             (when slot
+               (return (maybe-active slot (svref (obj-vals obj) (car slot))))))))
+     :finally (return *not-found*)))
 
-(defun ensure-accessors (key)
-  (ensure-getter key)
-  (ensure-setter key))
+(defun cache-miss (val obj cache)
+  (multiple-value-bind (fn a1 a2 result) (meta-lookup val obj (cache-prop cache))
+    (setf (cache-op cache) fn (cache-a1 cache) a1 (cache-a2 cache) a2)
+    result))
 
-;;
-(defclass js-class (standard-class)
-  ((slot-class-mappings
-    :accessor slot-class-mappings
-    :initform (make-hash-table :test 'equal))))
+(defun %direct-lookup (val obj cache)
+  (if (eq (cache-cls cache) (obj-cls obj))
+      (svref (obj-vals obj) (cache-a1 cache))
+      (cache-miss val obj cache)))
 
-(defmethod validate-superclass
-    ((clss js-class) (base standard-class)) t)
+(defun %direct-lookup-d (val obj cache)
+  (if (eq (cache-cls cache) (obj-cls obj))
+      (dcall (svref (obj-vals obj) (cache-a1 cache)) val)
+      (cache-miss val obj cache)))
 
-(defmethod validate-superclass
-    ((clss js-class) (base js-class)) t)
+(defun %direct-lookup-m (val obj cache)
+  (if (eq (cache-cls cache) (obj-cls obj))
+      *not-found*
+      (cache-miss val obj cache)))
 
-(defmethod validate-superclass
-    ((clss standard-class) (base js-class)) t)
+(defun %direct-lookup-h (val obj cache)
+  (if (hcls-p (obj-cls obj))
+      (simple-lookup val obj (cache-prop cache))
+      (cache-miss val obj cache)))
 
-;;
-(defclass js-object ()
-  ((prototype :accessor prototype :initarg :prototype :initform nil)
-   (sealed :accessor sealed :initform nil)
-   (attributes :accessor attributes :initform nil))
-  (:metaclass js-class))
+(defun %proto-lookup (val obj cache)
+  (let* ((cls (obj-cls obj))
+         (proto (cls-prototype cls)))
+    (if (and (eq (cache-cls cache) cls)
+             (eq (cache-a2 cache) (obj-cls proto)))
+        (svref (obj-vals proto) (cache-a1 cache))
+        (cache-miss val obj cache))))
 
-;;
-(defgeneric js-add-property (obj property-name))
+(defun %proto-lookup-d (val obj cache)
+  (let* ((cls (obj-cls obj))
+         (proto (cls-prototype cls)))
+    (if (and (eq (cache-cls cache) cls)
+             (eq (cache-a2 cache) (obj-cls proto)))
+        (dcall (svref (obj-vals proto) (cache-a1 cache)) val)
+        (cache-miss val obj cache))))
 
-(defun %inherit-with-property (cls property-name)
-  (let ((new-class-name (gensym "jsos")))
-    (ensure-class new-class-name
-		  :direct-superclasses (list cls)
-		  :direct-slots (list (slot-name->initarg property-name))
-		  :metaclass 'js-class)
-    (setf (gethash property-name (slot-class-mappings cls)) new-class-name)
-    new-class-name))
+(defun %proto-lookup-m (val obj cache)
+  (let ((cls (obj-cls obj)))
+    (if (and (eq (cache-cls cache) cls)
+             (eq (cache-a2 cache) (obj-cls (cls-prototype cls))))
+        *not-found*
+        (cache-miss val obj cache))))
 
-(defmethod js-add-property ((obj js-object) property-name)
-  (let* ((cls (class-of obj))
-	 (to-class (gethash property-name (slot-class-mappings cls))))
-    (ensure-getter property-name)
-    (ensure-setter property-name)
-    (push property-name (attributes obj))
-    (change-class obj
-		  (or to-class
-		      (%inherit-with-property cls property-name)))))
+(defun %proto-lookup-h (val obj cache)
+  (let ((cls (obj-cls obj)))
+    (if (eq (cache-cls cache) cls)
+        (simple-lookup val (cls-prototype cls) (cache-prop cache))
+        (cache-miss val obj cache))))
 
-(defgeneric js-add-sealed-property (obj property-name proc))
+(defun %deep-lookup (val obj cache)
+  (let* ((cls (obj-cls obj))
+         (proto-cls (obj-cls (cls-prototype cls))))
+    (if (and (eq (cache-cls cache) cls)
+             (eq (cache-a2 cache) proto-cls))
+        (simple-lookup val (cls-prototype proto-cls) (cache-prop cache))
+        (cache-miss val obj cache))))
 
-(defmethod js-add-sealed-property ((obj t) property-name proc)
-  (let* ((get-generic (ensure-generic-function
-		       (generic-getter-name property-name)))
-	 (set-generic (ensure-generic-function
-		       (generic-setter-name property-name)))
-	 (prop-getter
-	  (make-instance
-	   'standard-method
-	   :specializers (list (class-of obj))
-	   :lambda-list '(obj)
-	   :function
-	   (wrap-method-lambda (obj)
-	     (funcall proc obj))))
-	 (prop-setter
-	  (make-instance
-	   'standard-method
-	   :specializers (list (find-class t) (class-of obj))
-	   :lambda-list '(val obj)
-	   :function
-	   (wrap-method-lambda (val obj)
-	     (declare (ignore obj))
-	     val))))
-    (add-method set-generic prop-setter)
-    (add-method get-generic prop-getter)))
+(defun meta-lookup (this obj prop)
+  (macrolet ((ret (&rest vals) `(return-from meta-lookup (values ,@vals))))
+    (let ((cls (obj-cls obj)))
+      (when (hcls-p cls)
+        (ret #'%direct-lookup-h nil nil (simple-lookup this obj prop)))
+      (let ((slot (lookup-slot cls prop)))
+        (when slot
+          (if (logtest (cdr slot) +slot-active+)
+              (ret #'%direct-lookup-d (car slot) nil (dcall (svref (obj-vals obj) (car slot)) this))
+              (ret #'%direct-lookup (car slot) nil (svref (obj-vals obj) (car slot))))))
+      (let ((proto (cls-prototype cls)))
+        (unless proto (ret #'%direct-lookup-m nil nil *not-found*))
+        (let ((proto-cls (obj-cls proto)))
+          (when (hcls-p proto-cls)
+            (ret #'%proto-lookup-h nil nil (simple-lookup this proto prop)))
+          (let ((slot (lookup-slot proto-cls prop)))
+            (when slot
+              (if (logtest (cdr slot) +slot-active+)
+                  (ret #'%proto-lookup-d (car slot) proto-cls (dcall (svref (obj-vals proto) (car slot)) this))
+                  (ret #'%proto-lookup (car slot) proto-cls (svref (obj-vals proto) (car slot))))))
+          (let ((proto2 (cls-prototype proto-cls)))
+            (unless proto2 (ret #'%proto-lookup-m nil proto-cls *not-found*))
+            (ret #'%deep-lookup nil proto-cls (simple-lookup this proto2 prop))))))))
 
-(defmethod js-add-sealed-property ((obj js-object) property-name proc)
-  (declare (ignore proc))
-  (call-next-method)
-  (pushnew property-name (sealed obj) :test #'string=))
+(defun expand-cached-lookup (obj prop)
+  `(static-lookup ,obj (load-time-value (make-cache (intern-prop ,prop)))))
+(defmacro cached-lookup (obj prop)
+  (expand-cached-lookup obj prop))
 
-(defun sealed-property? (obj property-name)
-  (or (member property-name (sealed obj) :test #'string=)
-      (and (prototype obj) (sealed-property? (prototype obj) property-name))))
+;; Writing
 
-;;
-(defun get-using-getter (getter obj)
-  (declare (function getter))
-  (let ((ret (funcall getter obj)))
-    (if (eq ret :%unset)
-	(let ((prototype (prototype obj)))
-	  (if prototype
-	      (get-using-getter getter prototype)
-	      (values :undefined nil)))
-	(values ret t))))
+;; TODO should there also be support for dynamic setters? (stdlib seems to be okay with ro+dynread)
 
-(defun %ensure-getter (obj key)
-  (let* ((key (stringify key))
-	 (key-sym (->usersym key)))
-    (unless (or (slot-exists-p obj key-sym) (sealed-property? obj key))
-      (js-add-property obj key))))
+(defun update-class-and-set (obj new-cls slot val)
+  (setf (obj-cls obj) new-cls)
+  (unless (< slot (length (obj-vals obj)))
+    (let ((vals (make-array (max 4 (* 2 (length (obj-vals obj)))))))
+      (replace vals (obj-vals obj))
+      (setf (obj-vals obj) vals)))
+  (setf (svref (obj-vals obj) slot) val))
 
-(defgeneric prop (obj key)
-  (:method (obj key)
-    (get-using-getter (ensure-getter key) obj)))
+(defstruct (wcache (:constructor make-wcache (prop)) (:type vector))
+  (op #'wcache-miss) cls prop slot a1)
 
-(defgeneric (setf prop) (val obj key)
-  (:method (val obj key)
-    (let* ((key (stringify key))
-	   (key-sym (->usersym key))
-	   (setter (ensure-setter key)))
-      (unless (or (slot-exists-p obj key-sym) (sealed-property? obj key))
-	(js-add-property obj key))
-      (funcall setter val obj))))
+(defun %simple-set (obj wcache val)
+  (if (eq (obj-cls obj) (wcache-cls wcache))
+      (setf (svref (obj-vals obj) (wcache-slot wcache)) val)
+      (wcache-miss obj wcache val)))
 
-(defun js-clone (&optional prototype)
-  (if prototype
-      (let* ((proto-class (class-of prototype))
-	     (obj (make-instance (class-name proto-class) :prototype prototype)))
-	obj)
-      (make-instance 'js-object))))
+(defun %change-class-set (obj wcache val)
+  (if (eq (obj-cls obj) (wcache-cls wcache))
+      (update-class-and-set obj (wcache-a1 wcache) (wcache-slot wcache) val)
+      (wcache-miss obj wcache val)))
 
-(defmacro prop** (form default)
-  (let ((val (gensym))
-	(found (gensym)))
-    `(multiple-value-bind (,val ,found) ,form
-       (if ,found ,val ,default))))
+(defun %ignored-set (obj wcache val)
+  (if (eq (obj-cls obj) (wcache-cls wcache))
+      val
+      (wcache-miss obj wcache val)))
 
-(defun %fast-get (obj attr)
-  `(get-using-getter
-    (function ,(generic-function-name (ensure-getter attr)))
-    ,obj))
+(defun %hash-set (obj wcache val)
+  (if (hcls-p (obj-cls obj))
+      (hash-set obj (wcache-prop wcache) val)
+      (wcache-miss obj wcache val)))
 
-(defun %fast-set (obj attr val)
-  `(funcall
-    (function ,(generic-function-name (ensure-setter attr)))
-    ,val ,obj))
+(defun %hash-then-set (obj wcache val)
+  (if (eq (obj-cls obj) (wcache-cls wcache))
+      (progn (hash-obj obj) (hash-set obj (wcache-prop wcache) val))
+      (wcache-miss obj wcache val)))
 
-(defmacro get-attribute (obj attr)
-  (if (stringp attr)
-      `(,@(%fast-get obj attr))
-      `(prop ,obj ,attr)))
+(defun hash-set (obj prop val)
+  (let* ((table (obj-vals obj))
+         (exists (gethash prop table)))
+    (if exists
+        (setf (car exists) val)
+        (setf (gethash prop table) (cons val +slot-dflt+)))))
 
-(defmacro set-attribute (obj attr val)
-  (if (stringp attr)
-      `(,@(%fast-set obj attr val))
-      `(setf (prop ,obj ,attr) ,val)))
+(defun wcache-miss (obj wcache val)
+  (multiple-value-bind (fn slot a1) (meta-set obj (wcache-prop wcache) val)
+    (setf (wcache-op wcache) fn (wcache-slot wcache) slot (wcache-a1 wcache) a1)
+    val))
 
-#+nil (defmacro set-ensured (obj attr val)
-  `(funcall ,(ensure-setter attr) ,val ,obj))
+;; TODO should ro props in prototypes be taken into account?
+(defun meta-set (obj prop val)
+  (macrolet ((ret (&rest vals) `(return-from meta-set (values ,@vals))))
+    (let ((cls (obj-cls obj)))
+      (when (hcls-p cls)
+        (hash-set obj prop val)
+        (ret #'%hash-set))
+      (let ((slot (lookup-slot cls prop)))
+        (when slot
+          (when (logtest (cdr slot) +slot-ro+)
+            (ret #'%ignored-set))
+          (setf (svref (obj-vals obj) (car slot)) val)
+          (ret #'%simple-set (car slot)))
+        (when (eq (scls-children cls) :hash)
+          (hash-obj obj) (hash-set obj prop val)
+          (ret #'%hash-then-set))
+        (let ((new-cls (cdr (assoc prop (scls-children cls)))))
+          (when (and (not new-cls) (> (length (scls-children cls)) 8)) ;; TODO maybe exception for new Object() class?
+            (setf (scls-children cls) :hash) ;; TODO store actual class
+            (hash-obj obj) (hash-set  obj prop val)
+            (ret #'%hash-then-set))
+          (if new-cls
+              (setf slot (lookup-slot new-cls prop))
+              (progn
+                (setf slot (cons (length (scls-props cls)) +slot-dflt+)
+                      new-cls (make-scls (cons (cons prop slot) (scls-props cls)) (cls-prototype cls)))
+                (push (cons prop new-cls) (scls-children cls))))
+          (update-class-and-set obj new-cls (car slot) val)
+          (values #'%change-class-set (car slot) new-cls))))))
 
-(defmacro set-ensured (obj key val)
+(defmethod (setf static-lookup) (val (obj obj) wcache)
+  (funcall (the function (wcache-op wcache)) obj wcache val))
+(defmethod (setf static-lookup) (val obj wcache)
+  (declare (ignore wcache val))
+  (error "Can not set properties in ~a." (to-string obj)))
+
+(defmethod (setf lookup) (val (obj obj) prop)
+  ;; Uses meta-set since the overhead isn't big, and duplicating all
+  ;; that logic is error-prone.
+  (meta-set obj (intern-prop (if (stringp prop) prop (to-string prop))) val)
+  val)
+(defmethod (setf lookup) (val obj prop)
+  (declare (ignore prop val))
+  (error "Can not set properties in ~a." (to-string obj)))
+;; TODO sparse storage, clever resizing
+(defmethod (setf lookup) (val (obj aobj) prop)
+  (let ((index (index-in-range prop most-positive-fixnum)))
+    (if index
+        (let ((arr (aobj-arr obj)))
+          (when (>= index (length arr))
+            (adjust-array arr (1+ index) :fill-pointer (1+ index) :initial-element :undefined))
+          (setf (aref arr index) val))
+        (call-next-method val obj prop))))
+(defmethod (setf lookup) (val (obj argobj) prop)
+  (let* ((vec (argobj-vector obj))
+         (index (index-in-range prop (length vec))))
+    (if index
+        (setf (svref vec index) val)
+        (call-next-method val obj prop))))
+
+(defun expand-cached-set (obj prop val)
+  `(setf (static-lookup ,obj (load-time-value (make-wcache (intern-prop ,prop)))) ,val))
+(defmacro cached-set (obj prop val)
+  (expand-cached-set obj prop val))
+
+;; Optimized global-object access
+
+(defvar *global*)
+
+(defun gcache-lookup (gcache obj)
+  (let ((slot (car gcache))
+        (cache (cdr gcache)))
+    (macrolet ((read-slot ()
+                 `(if (logtest (cdr slot) +slot-active+)
+                      (dcall (car slot) obj)
+                      (car slot))))
+      (cond (slot (read-slot))
+            ((setf slot (gethash (cache-prop cache) (obj-vals obj)))
+             (setf (car gcache) slot)
+             (read-slot))
+            (t (if-not-found (value (static-lookup obj cache))
+                 (error "Undefined variable: ~a" (cache-prop cache))
+                 value))))))
+
+(defun expand-global-lookup (prop)
+  `(gcache-lookup (load-time-value (cons nil (make-cache (intern-prop ,prop)))) ,*global*))
+
+(defun global-lookup (prop)
+  (if-not-found (value (lookup *global* prop))
+    (error "Undefined variable: ~a" prop)
+    value))
+
+(defun gcache-set (gcache obj val)
+  (let ((slot (car gcache))
+        (prop (cdr gcache)))
+    (cond (slot (unless (logtest (cdr slot) +slot-ro+)
+                  (setf (car slot) val)))
+          ((setf slot (gethash prop (obj-vals obj)))
+           (setf (car gcache) slot)
+           (unless (logtest (cdr slot) +slot-ro+)
+             (setf (car slot) val)))
+          (t
+           (setf (car gcache) (setf (gethash prop (obj-vals obj)) (cons val +slot-dflt+))))))
+  val)
+
+(defun expand-global-set (prop val)
+  `(gcache-set (load-time-value (cons nil (intern-prop ,prop))) ,*global* ,val))
+
+;; Enumerating
+
+(defun enumerate-properties (obj)
+  (let ((set ()))
+    (flet ((enum (obj)
+             (let ((cls (obj-cls obj)))
+               (if (hcls-p cls)
+                   (with-hash-table-iterator (next (obj-vals obj))
+                     (loop
+                        (multiple-value-bind (more key val) (next)
+                          (unless more (return))
+                          (when (logtest (cdr val) +slot-enum+) (pushnew key set)))))
+                   (loop :for (name nil . flags) :in (scls-props cls) :do
+                      (when (logtest flags +slot-enum+) (pushnew name set)))))))
+      (loop :for cur := obj :then (cls-prototype (obj-cls cur)) :while cur :do (enum cur))
+      set)))
+
+(defmethod list-props ((obj obj))
+  (enumerate-properties obj))
+(defmethod list-props (obj)
+  (error "~a does not have any properties." (to-string obj)))
+
+;; Registering prototypes for string, number, and boolean values
+
+(defmacro declare-primitive-prototype (specializer proto-id)
   `(progn
-     (ensure-accessors ,key)
-     (setf (prop ,obj ,key) ,val)))
+     (defmethod static-lookup ((obj ,specializer) cache)
+       (funcall (the function (cache-op cache)) obj (find-proto ,proto-id) cache))
+     (defmethod lookup ((obj ,specializer) prop)
+       (do-lookup obj (find-proto ,proto-id) prop))
+     (defmethod (setf static-lookup) (val (obj ,specializer) wcache)
+       (declare (ignore wcache))
+       val)
+     (defmethod (setf lookup) (val (obj ,specializer) prop)
+       (declare (ignore prop))
+       val)
+     (defmethod list-props ((obj ,specializer))
+       (enumerate-properties (find-proto ,proto-id)))))
+
+(declare-primitive-prototype string :string)
+(declare-primitive-prototype number :number)
+(declare-primitive-prototype (eql t) :boolean)
+(declare-primitive-prototype (eql nil) :boolean)
+
+;; Utilities
+
+(defun obj-from-props (proto props &optional (make #'make-obj))
+  (let* ((vals (make-array (max 2 (length props))))
+         (cls (make-scls (loop :for off :from 0 :for (name value . flags) :in props
+                               :do (setf (svref vals off) value)
+                               :collect (cons (intern-prop name) (cons off flags)))
+                         proto)))
+    (funcall make cls vals)))
+
+(defun expand-static-obj (proto props)
+  (let ((cls (gensym)))
+    `(let ((,cls (load-time-value (make-scls ',(loop :for off :from 0 :for (name) :in props :collect
+                                                  (cons (intern-prop name) (cons off +slot-dflt+)))
+                                             ,proto))))
+       (make-obj ,cls (vector ,@(mapcar #'cdr props))))))
+
+(defun global-obj (protos)
+  (make-gobj (make-hcls (cdr (assoc :object protos))) protos (make-hash-table :test 'eq)))
+
+(defun js-new (func &rest args) ;; TODO check standard
+  (unless (fobj-p func) (error "~a is not a constructor." (to-string func)))
+  (let* ((this (make-obj (ensure-fobj-cls func)))
+         (result (apply (the function (proc func)) this args)))
+    (if (obj-p result) result this)))
+
+(defun simple-obj ()
+  (make-obj (make-scls () (find-proto :object))))
+
+(defun ensure-fobj-cls (fobj)
+  (let ((proto (lookup fobj "prototype"))) ;; Active property in function prototype ensures this is always bound
+    (unless (obj-p proto) (setf proto (simple-obj)))
+    (unless (and (fobj-new-cls fobj) (eq (cls-prototype (fobj-new-cls fobj)) proto))
+      (setf (fobj-new-cls fobj) (make-scls () proto)))
+    (fobj-new-cls fobj)))

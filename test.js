@@ -172,9 +172,9 @@ function test_11() {
   function f11x(o) {
     with(o) {return function(val) {x11=val;};}
   }
-  var o11 = new Object
-  var f11 = f11x(o11)
-  f11(5)
+  var o11 = new Object;
+  var f11 = f11x(o11);
+  f11(5);
   $eq(x11, 5);
   $eq(o11.x11, undefined);
 
@@ -402,22 +402,22 @@ function test_28() {
 }
 
 function runTests() {
-    var failures = [];
-    var run = 0;
-    for (var name in this) {
-	if (name.length > 5 && name.substr(0, 5) == "test_") {
-	    run++;
-	    try {this[name]();}
-	    catch (e) {
-		failures.push(name + ": " + String(e));
-	    }
-	}
+  var failures = [];
+  var run = 0;
+  for (var name in this) {
+    if (name.length > 5 && name.substr(0, 5) == "test_") {
+      run++;
+      try {this[name]();}
+      catch (e) {
+	failures.push(name + ": " + String(e));
+      }
     }
-    print(run + " test run...");
-    if (failures.length)
-	print(failures.length + " failures:\n  " + failures.join("\n  "));
-    else
-	print("All passed!");
+  }
+  print(run + " test run...");
+  if (failures.length)
+    print(failures.length + " failures:\n  " + failures.join("\n  "));
+  else
+    print("All passed!");
 }
 
 runTests();

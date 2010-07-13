@@ -1,14 +1,8 @@
 (defpackage :net.svrg.javascript
   (:nicknames :js)
   (:shadow :array)
-  (:use :cl :parse-js #+sbcl :sb-mop #+allegro :mop #+ccl :ccl)
-  (:export native-hash
-	   native-function
-	   global-object
-	   !eval
-	   javascript js
-           js-load-file
-	   define-js-function))
+  (:use :cl :parse-js)
+  (:export #:!eval #:js-load-file #:js-repl))
 
 (defpackage :net.svrg.js-user
   (:nicknames :js-user)

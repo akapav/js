@@ -19,23 +19,21 @@
 	 (rs (gensym)))
     (if *float-traps*
         `(defun ,nameext (,ls ,rs)
-           (declare (js.number ,ls ,rs))
            (cond
-             ((and (numberp (value ,ls)) (numberp (value ,rs)))
-              (,name (value ,ls) (value ,rs)))
+             ((and (numberp ,ls) (numberp ,rs)) (,name ,ls ,rs))
              ((or (is-nan ,ls) (is-nan ,rs)) ,nan)
-             ((and (eq ,ls ,(positive-infinity)) (eq ,rs ,(positive-infinity))) ,inf-inf)
-             ((and (eq ,ls ,(positive-infinity)) (eq ,rs ,(negative-infinity))) ,inf-minf)
-             ((and (eq ,ls ,(negative-infinity)) (eq ,rs ,(positive-infinity))) ,minf-inf)
-             ((and (eq ,ls ,(negative-infinity)) (eq ,rs ,(negative-infinity))) ,minf-minf)
-             ((eq ,rs ,(positive-infinity)) ,num-inf)
-             ((eq ,rs ,(negative-infinity)) ,num-minf)
-             ((eq ,ls ,(positive-infinity)) ,inf-num)
-             ((eq ,ls ,(negative-infinity)) ,minf-num)
+             ((and (eq ,ls ,(infinity)) (eq ,rs ,(infinity))) ,inf-inf)
+             ((and (eq ,ls ,(infinity)) (eq ,rs ,(-infinity))) ,inf-minf)
+             ((and (eq ,ls ,(-infinity)) (eq ,rs ,(infinity))) ,minf-inf)
+             ((and (eq ,ls ,(-infinity)) (eq ,rs ,(-infinity))) ,minf-minf)
+             ((eq ,rs ,(infinity)) ,num-inf)
+             ((eq ,rs ,(-infinity)) ,num-minf)
+             ((eq ,ls ,(infinity)) ,inf-num)
+             ((eq ,ls ,(-infinity)) ,minf-num)
              (t (error (format nil "internal error in ~A~%" ',op)))))
         `(defun ,nameext (,ls ,rs)
            (declare (number ,ls ,rs))
-           (,name (value ,ls) (value ,rs))))))
+           (,name ,ls ,rs)))))
 
 ;;
 
@@ -43,25 +41,24 @@
 (trivial-op number +)
 
 (extended-number-op (+)
-		    (positive-infinity) (nan) (nan) (negative-infinity)
-		    (positive-infinity) (negative-infinity) (positive-infinity)
-                    (negative-infinity))
+		    (infinity) (nan) (nan) (-infinity)
+		    (infinity) (-infinity) (infinity)
+                    (-infinity))
 
 (defun +string (ls rs)
-  (let ((ls (js-funcall string.ctor ls))
-	(rs (js-funcall string.ctor rs)))
-    (concatenate 'string ls rs)))
+  (concatenate 'string (to-string ls) (to-string rs)))
 
+;; TODO optimize
 (defun !+ (ls rs)
   (funcall
    (cond
      ((and (typep ls 'fixnum) (typep rs 'fixnum)) #'+fixnum)
      ((and (numberp ls) (numberp rs)) #'+number)
      ;;;todo: fast string concat when both are strings
-     ((and (js-number? ls) (js-number? rs)) #'+number.ext)
-     ((and (js-number? ls) (undefined? rs)) (constantly (nan)))
-     ((and (undefined? ls) (js-number? rs)) (constantly (nan)))
-     ((and (undefined? ls) (undefined? rs)) (constantly (nan)))
+     ((and (numberp ls) (numberp rs)) #'+number.ext)
+     ((and (numberp ls) (eq rs :undefined)) (constantly (nan)))
+     ((and (eq ls :undefined) (eq rs :undefined)) (constantly (nan)))
+     ((and (eq ls :undefined) (eq rs :undefined)) (constantly (nan)))
      (t #'+string)) ls rs))
 
 ;;
@@ -69,16 +66,16 @@
 (trivial-op number -)
 
 (extended-number-op (-)
-		    (nan) (positive-infinity) (negative-infinity) (nan)
-		    (negative-infinity) (positive-infinity) (positive-infinity)
-                    (negative-infinity))
+		    (nan) (infinity) (-infinity) (nan)
+		    (-infinity) (infinity) (infinity)
+                    (-infinity))
 
 (defun !- (ls rs)
   (funcall 
    (cond
      ((and (typep ls 'fixnum) (typep rs 'fixnum)) #'-fixnum)
      ((and (numberp ls) (numberp rs)) #'-number)
-     ((and (js-number? ls) (js-number? rs)) #'-number.ext)
+     ((and (numberp ls) (numberp rs)) #'-number.ext)
      (t (constantly (nan)))) ls rs))
 
 ;;
@@ -86,16 +83,16 @@
 (trivial-op number *)
 
 (extended-number-op (*)
-		    (positive-infinity) (negative-infinity) (negative-infinity)
-                    (positive-infinity) (positive-infinity) (negative-infinity)
-                    (positive-infinity) (negative-infinity))
+		    (infinity) (-infinity) (-infinity)
+                    (infinity) (infinity) (-infinity)
+                    (infinity) (-infinity))
 
 (defun !* (ls rs)
   (funcall
    (cond
      ((and (typep ls 'fixnum) (typep rs 'fixnum)) #'*fixnum)
      ((and (numberp ls) (numberp rs)) #'*number)
-     ((and (js-number? ls) (js-number? rs)) #'*number.ext)
+     ((and (numberp ls) (numberp rs)) #'*number.ext)
      (t (constantly (nan)))) ls rs))     
 
 ;;
@@ -103,19 +100,19 @@
   (declare (number ls rs))
   (if (zerop rs)
       (cond ((zerop ls) (nan))
-	    ((minusp ls) (negative-infinity))
-	    (t (positive-infinity)))
+	    ((minusp ls) (-infinity))
+	    (t (infinity)))
       (coerce (/ ls rs) 'double-float)))
 
 (extended-number-op (/)
 		    (nan) (nan) (nan) (nan)
-		    0 0 (positive-infinity) (negative-infinity))
+		    0 0 (infinity) (-infinity))
 
 (defun !/ (ls rs)
   (funcall
    (cond
      ((and (numberp ls) (numberp rs)) #'/number)
-     ((and (js-number? ls) (js-number? rs)) #'/number.ext)
+     ((and (numberp ls) (numberp rs)) #'/number.ext)
      (t (constantly (nan)))) ls rs))
 
 ;;
@@ -129,7 +126,7 @@
   (funcall
    (cond
      ((and (numberp ls) (numberp rs)) #'mod)
-     ((and (js-number? ls) (js-number? rs)) #'%number.ext)
+     ((and (numberp ls) (numberp rs)) #'%number.ext)
      (t (constantly (nan)))) ls rs))
 
 ;;
@@ -144,21 +141,21 @@
 (defun !== (ls rs)
   (or (!=== ls rs)
       (cond
-	((eq (type-of (value ls)) (type-of (value rs)))
-	 (!=== (value ls) (value rs)))
-	((and (js-number? ls) (js-string? rs))
-	 (!=== ls (js-funcall number.ctor rs)))
-	((and (js-string? ls) (js-number? rs))
-	 (!=== (js-funcall number.ctor ls) rs))
+	((eq (type-of ls) (type-of rs))
+	 (!=== ls rs))
+	((and (numberp ls) (stringp rs))
+	 (!=== ls (to-number rs)))
+	((and (stringp ls) (numberp rs))
+	 (!=== (to-number ls) rs))
 	((or
-	  (and (undefined? ls) (eq rs :null))
-	  (and (eq ls :null) (undefined? rs))) t)
+	  (and (eq ls :undefined) (eq rs :null))
+	  (and (eq ls :null) (eq rs :undefined))) t)
 	((eq ls t) (!== 1 rs))
 	((eq ls nil) (!== 0 rs))
 	((eq rs t) (!== ls 1))
 	((eq rs nil) (!== ls 0))
-	(t (!=== (to-string (value ls))
-		 (to-string (value rs)))))))
+	(t (!=== (to-string ls)
+		 (to-string rs))))))
 
 (defun !!= (ls rs)
   (not (!== ls rs)))
@@ -175,13 +172,10 @@
   (cond
     ((and (typep ls 'fixnum) (typep rs 'fixnum)) (<fixnum ls rs))
     ((and (numberp ls) (numberp rs)) (<number ls rs))
-    ((and (js-number? ls) (js-number? rs)) (<number.ext ls rs))
-    ((and (js-number? ls) (js-string? rs))
-     (<number.ext ls (js-funcall number.ctor rs)))
-    ((and (js-string? ls) (js-number? rs))
-     (<number.ext (js-funcall number.ctor ls) rs))
-    (t (when (string< (to-string (value ls))
-		      (to-string (value rs))) t))))
+    ((and (numberp ls) (numberp rs)) (<number.ext ls rs))
+    ((and (numberp ls) (stringp rs)) (<number.ext ls (to-number rs)))
+    ((and (stringp ls) (numberp rs)) (<number.ext (to-number ls) rs))
+    (t (when (string< (to-string ls) (to-string rs)) t))))
 
 ;;
 (trivial-op fixnum >)
@@ -195,13 +189,10 @@
   (cond
     ((and (typep ls 'fixnum) (typep rs 'fixnum)) (>fixnum ls rs))
     ((and (numberp ls) (numberp rs)) (>number ls rs))
-    ((and (js-number? ls) (js-number? rs)) (>number.ext ls rs))
-    ((and (js-number? ls) (js-string? rs))
-     (>number.ext ls (js-funcall number.ctor rs)))
-    ((and (js-string? ls) (js-number? rs))
-     (>number.ext (js-funcall number.ctor ls) rs))
-    (t (when (string> (to-string (value ls))
-		      (to-string (value rs))) t))))
+    ((and (numberp ls) (numberp rs)) (>number.ext ls rs))
+    ((and (numberp ls) (stringp rs)) (>number.ext ls (to-number rs)))
+    ((and (stringp ls) (numberp rs)) (>number.ext (to-number ls) rs))
+    (t (when (string> (to-string ls) (to-string rs)) t))))
 
 ;;
 (defun !<= (ls rs)
@@ -214,21 +205,23 @@
 
 ;;
 (defun !++ (arg)
-  (!+ (js-funcall number.ensure arg) 1))
+  (!+ (to-number arg) 1))
 
 (defun !-- (arg)
-  (!- (js-funcall number.ensure arg) 1))
+  (!- (to-number arg) 1))
 
 ;;
 (defun !instanceof (ls rs)
-  (and (typep ls 'native-hash)
-       (eq (prop ls "constructor") rs)))
+  (and (obj-p ls) (fobj-p rs)
+       (let ((proto (lookup rs "prototype")))
+         (loop :for cur := ls :then (cls-prototype (obj-cls cur)) :while cur :do
+            (when (eq cur proto) (return t))))))
 
 (defun !typeof (exp)
   (cond
-    ((js-number? exp) "number")
-    ((undefined? exp) "undefined")
+    ((numberp exp) "number")
+    ((eq exp :undefined) "undefined")
     ((stringp exp) "string")
-    ((typep exp 'native-function) "function")
+    ((typep exp 'fobj) "function")
     ((or (eq exp t) (eq exp nil)) "boolean")
     (t "object")))

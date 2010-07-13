@@ -21,14 +21,14 @@
       (setf result (expand-op op (if (eq lht :integer) :number lht) :number lhs rhs)))
     result))
 
-(defun js->boolean-typed (expr type)
+(defun to-boolean-typed (expr type)
   (case type
     (:boolean expr)
     ((:undefined :null) `(progn ,expr nil))
     (:object `(progn ,expr t))
     (:integer `(not (= ,expr 0)))
     (:number (let ((tmp (gensym))) `(let ((,tmp ,expr)) (not (or (= ,tmp 0) (is-nan ,tmp))))))
-    (t `(js->boolean ,expr))))
+    (t `(to-boolean ,expr))))
 
 (defmacro defnumop (op expansion)
   `(progn (defexpand ,op (:integer :integer) ,expansion)
@@ -81,12 +81,12 @@
 (defexpand :&& (t t)
   (let ((temp (gensym)))
     `(let ((,temp ,lhs))
-       (if ,(js->boolean-typed temp lht) ,rhs ,temp))))
+       (if ,(to-boolean-typed temp lht) ,rhs ,temp))))
 (defexpand :|\|\|| (t t)
   (let ((temp (gensym)))
     `(let ((,temp ,lhs))
-       (if ,(js->boolean-typed temp lht) ,temp ,rhs))))
-(defexpand :! (t t) `(not ,(js->boolean-typed rhs rht)))
+       (if ,(to-boolean-typed temp lht) ,temp ,rhs))))
+(defexpand :! (t t) `(not ,(to-boolean-typed rhs rht)))
 
 (defexpand :void (t t)
   `(progn ,rhs :undefined))

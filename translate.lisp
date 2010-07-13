@@ -1,47 +1,30 @@
 (in-package :js)
 
+;; TODO :delete, :switch
+
 (defvar *scope* ())
 (defparameter *label-name* nil)
-
-(eval-when (:compile-toplevel :load-toplevel :execute)
-(defun %get-attribute (obj attr)
-  (if (stringp attr)
-      (%fast-get obj attr)
-      `(prop obj ,attr)))
-
-(defun %set-attribute (obj attr val)
-  (if (stringp attr)
-      (%fast-set obj attr val)
-      `(setf (prop obj ,attr) ,val))))
-
-(defmacro lookup-global (name)
-  (let ((found (gensym)))
-    `(let ((,found (prop** ,(%get-attribute *global* name) :not-found)))
-       (if (eq ,found :not-found)
-	   (error "Undefined variable: ~a" ,name)
-	   ,found))))
 
 (defgeneric lookup-variable (name scope rest))
 (defgeneric set-variable (name valname scope rest))
 
 (defmethod lookup-variable (name (scope null) rest)
   (declare (ignore rest))
-  `(lookup-global ,name))
+  (expand-global-lookup name))
 (defmethod set-variable (name valname (scope null) rest)
   (declare (ignore rest))
-  (%set-attribute *global* name valname))
+  (expand-global-set name valname))
 
 (defstruct with-scope var)
 (defmethod lookup-variable (name (scope with-scope) rest)
   (let ((found (gensym)))
-    `(let ((,found (prop** ,(%get-attribute (with-scope-var scope) name) :not-found)))
-       (if (eq ,found :not-found)
-	   ,(lookup-variable name (car rest) (cdr rest))
-	   ,found))))
-(defmethod set-variable (name valname (scope with-scope) rest)
-  `(if (eq (prop** ,(%get-attribute (with-scope-var scope) name) :not-found) :not-found)
-       ,(set-variable name valname (car rest) (cdr rest))
-       ,(%set-attribute (with-scope-var scope) name valname)))
+    `(if-not-found (,found ,(expand-cached-lookup (with-scope-var scope) name))
+       ,(lookup-variable name (car rest) (cdr rest))
+       ,found)))
+(defmethod set-variable (name valname (scope with-scope) rest) ;; TODO hasOwnProperty?
+  `(if-not-found (nil ,(expand-cached-lookup (with-scope-var scope) name))
+     ,(set-variable name valname (car rest) (cdr rest))
+     ,(expand-cached-set (with-scope-var scope) name valname)))
 
 (defstruct simple-scope vars)
 (defmethod lookup-variable (name (scope simple-scope) rest)
@@ -60,13 +43,13 @@
   (declare (ignore rest))
   (let ((arg-pos (position (->usersym name) (arguments-scope-args scope))))
     (if arg-pos
-        `(svref (argument-vector js-user::|arguments|) ,arg-pos)
+        `(svref (argobj-vector js-user::|arguments|) ,arg-pos)
         (call-next-method))))
 (defmethod set-variable (name valname (scope arguments-scope) rest)
   (declare (ignore rest))
   (let ((arg-pos (position (->usersym name) (arguments-scope-args scope))))
     (if arg-pos
-        `(setf (svref (argument-vector js-user::|arguments|) ,arg-pos) ,valname)
+        `(setf (svref (argobj-vector js-user::|arguments|) ,arg-pos) ,valname)
         (call-next-method))))
 
 (defstruct captured-scope vars local-vars objs next)
@@ -85,7 +68,7 @@
         (captured-scope (setf next level))))
     `(make-captured-scope
       :vars (list ,@(loop :for var :in varnames :collect
-                       `(list ',var (lambda () ,(lookup (symbol-name var)))
+                       `(list ',var (lambda () ,(lookup-var (symbol-name var)))
                               (lambda (,val-arg) ,(set-in-scope (symbol-name var) val-arg)))))
       :local-vars ',locals :objs (list ,@(nreverse objs)) :next ,next)))
 (defun lookup-in-captured-scope (name scope)
@@ -93,11 +76,12 @@
     (if var
         (funcall (second var))
         (loop :for obj :in (captured-scope-objs scope) :do
-           (let ((val (prop** (%get-attribute obj name) :not-found)))
-             (unless (eq val :not-found) (return val)))
+           (if-not-found (val (lookup obj name))
+             nil
+             (return val))
            :finally (return (if (captured-scope-next scope)
                                 (lookup-in-captured-scope name (captured-scope-next scope))
-                                (lookup-global name)))))))
+                                (global-lookup name)))))))
 (defmethod lookup-variable (name (scope captured-scope) rest)
   (declare (ignore rest))
   `(lookup-in-captured-scope ,name ,scope))
@@ -106,16 +90,17 @@
     (if var
         (funcall (third var) value)
         (loop :for obj :in (captured-scope-objs scope) :do
-           (unless (eq (prop** (get-attribute obj name) :not-found) :not-found)
-             (return (set-attribute obj name value)))
+           (if-not-found (nil (lookup obj name))
+             nil
+             (return (setf (lookup obj name) value)))
            :finally (if (captured-scope-next scope)
                         (set-in-captured-scope name value (captured-scope-next scope))
-                        (set-attribute *global* name value))))))
+                        (setf (lookup *global* name) value))))))
 (defmethod set-variable (name valname (scope captured-scope) rest)
   (declare (ignore rest))
   `(set-in-captured-scope ,name ,valname ,scope))
 
-(defun lookup (name)
+(defun lookup-var (name)
   (lookup-variable name (car *scope*) (cdr *scope*)))
 (defun set-in-scope (name value &optional is-defun)
   (let ((valname (gensym))
@@ -166,26 +151,23 @@
     (t atom)))
 
 (deftranslate (:dot obj attr)
-  (%get-attribute (translate obj) attr))
+  (expand-cached-lookup (translate obj) attr))
 
 (deftranslate (:sub obj attr)
-  `(sub ,(translate obj) ,(translate attr)))
+  `(lookup ,(translate obj) ,(translate attr)))
 
 (deftranslate (:var bindings)
   `(progn ,@(loop :for (name . val) :in bindings
                   :when val :collect (set-in-scope name (translate val))
-                  :else :if (not *scope*) :collect `(%set-attribute *global* ,name :undefined))))
+                  :else :if (not *scope*) :collect (expand-global-set name :undefined))))
 
 (deftranslate (:object properties)
-  (let ((obj (gensym)))
-    `(let ((,obj (js-new object.ctor ())))
-       ,@(loop :for (name . val) :in properties :collect
-            `(setf (sub ,obj ,name) ,(translate val)))
-       ,obj)))
+  (expand-static-obj '(find-proto :object) (loop :for (name . val) :in properties :collect
+                                              (cons name (translate val)))))
 
-;; TODO compile only once!!
+;; TODO reuse class
 (deftranslate (:regexp expr flags)
-  `(js-new regexp.ctor (list ,expr ,flags)))
+  `(load-time-value (init-reobj (make-reobj (make-scls () (find-proto :regexp)) nil nil nil) ,expr ,flags)))
 
 ;flags
 
@@ -205,7 +187,7 @@
           ,@(translate@ init)
         loop-start
           (unless ,(if cond
-                       (js->boolean-typed (translate cond) (ast-type cond))
+                       (to-boolean-typed (translate cond) (ast-type cond))
                        t)
             (go loop-end))
           ,@(translate@ body)
@@ -229,10 +211,11 @@
         loop-start
         ,@(and label (list label))
           ,@(translate@ body)
-          (when ,(js->boolean-typed (translate cond) (ast-type cond))
+          (when ,(to-boolean-typed (translate cond) (ast-type cond))
             (go loop-start))
         loop-end))))
 
+;; TODO superfluous labels
 (deftranslate (:break label)
   (if label
       `(return-from ,(->usersym label))
@@ -257,7 +240,7 @@
           loop-end)))))
 
 (flet ((expand-if (test then else)
-         `(if ,(js->boolean-typed (translate test) (ast-type test))
+         `(if ,(to-boolean-typed (translate test) (ast-type test))
               ,(translate then) ,(translate else))))
   (deftranslate (:if test then else)
     (expand-if test then else))
@@ -273,11 +256,11 @@
   `(,(if finally 'unwind-protect 'prog1)
      ,(if catch
           (with-scope (make-simple-scope :vars (list (->usersym (car catch))))
-            `(handler-case ,(translate body)
-               (error (,(->usersym (car catch)))
-                 (when (typep ,(->usersym (car catch)) 'js-condition)
-                   (setf ,(->usersym (car catch)) (js-condition-value ,(->usersym (car catch)))))
-                 ,(translate (cdr catch)))))
+            (let ((var (->usersym (car catch))))
+              `(handler-case ,(translate body)
+                 (error (,var)
+                   (setf ,var (if (typep ,var 'js-condition) (js-condition-value ,var) (princ-to-string ,var)))
+                   ,(translate (cdr catch))))))
           (translate body))
      ,@(and finally (list (translate finally)))))
 
@@ -285,7 +268,7 @@
   `(error 'js-condition :value ,(translate expr)))
 
 (deftranslate (:name name)
-  (lookup name))
+  (lookup-var name))
 
 (deftranslate (:with obj body)
   (let ((obj-var (gensym "with")))
@@ -347,7 +330,8 @@
   (let* ((uses-eval (uses-lexical-eval body))
          (uses-args (or uses-eval (references-arguments body)))
          (eval-scope (gensym "eval-scope"))
-         (base-locals (cons "this" args)))
+         (base-locals (cons "this" args))
+         (fname (and uses-args (or name (gensym)))))
     (when name (push name base-locals))
     (when uses-args (push "arguments" base-locals))
     (multiple-value-bind (locals internal) (find-locals body base-locals)
@@ -358,21 +342,24 @@
         (when uses-eval
           (push (make-with-scope :var eval-scope) *scope*))
         (let ((funcval
-               `(make-instance
-                 'native-function :prototype function.prototype :name ,name
-                 :proc ,(let ((body1 `((let* (,@(loop :for var :in internal :collect `(,var :undefined))
-                                              ,@(and uses-eval `((,eval-scope (js-new object.ctor ()))
-                                                                 (eval-env ,(capture-scope)))))
-                                         (declare (ignorable ,@internal ,@(and uses-eval (list eval-scope))))
-                                         ,@(mapcar 'translate (lift-defuns body))
-                                         :undefined))))
-                             (if uses-args
-                                 (wrap-function/arguments body1)
-                                 (wrap-function args body1))))))
-          (if name
-              `(let (,(->usersym name))
-                 (declare (ignorable ,(->usersym name)))
-                 (setf ,(->usersym name) ,funcval))
+               `(make-fobj
+                 (make-scls () (find-proto :function)) ;; TODO reuse
+                 ,(let ((body1 `((let* (,@(loop :for var :in internal :collect `(,var :undefined))
+                                        ;; TODO sane object init
+                                        ,@(and uses-eval `((,eval-scope (make-obj (make-scls () (find-proto :object))))
+                                                           (eval-env ,(capture-scope)))))
+                                   (declare (ignorable ,@internal ,@(and uses-eval (list eval-scope))))
+                                   ,@(mapcar 'translate (lift-defuns body))
+                                   :undefined))))
+                       (if uses-args
+                           (wrap-function/arguments body1 fname)
+                           (wrap-function args body1)))
+                 nil)))
+          (if (or name fname)
+              (let ((n (->usersym (or name fname))))
+                `(let (,n)
+                   (declare (ignorable ,n))
+                   (setf ,n ,funcval)))
               funcval))))))
 
 (defun wrap-function (args body)
@@ -384,11 +371,13 @@
               (ignorable js-user::|this| ,@(mapcar '->usersym args)))
      (block function ,@body)))
 
-(defun wrap-function/arguments (body)
+(defun wrap-function/arguments (body fname)
   (let ((argument-list (gensym "arguments")))
     `(lambda (js-user::|this| &rest ,argument-list)
        (declare (ignorable js-user::|this|))
-       (let* ((js-user::|arguments| (make-args ,argument-list)))
+       (let* ((js-user::|arguments|
+                ;; TODO reuse class
+                (make-argobj (make-scls () (find-proto :arguments)) (coerce ,argument-list 'vector) ,fname)))
          (declare (ignorable js-user::|arguments|))
          (block function ,@body)))))
 
@@ -407,7 +396,7 @@
   `(progn ,@(mapcar 'translate (lift-defuns body))))
 
 (deftranslate (:new func args)
-  `(js-new ,(translate func) (list ,@(mapcar 'translate args))))
+  `(js-new ,(translate func) ,@(mapcar 'translate args)))
 
 (deftranslate (:call func args)
   (cond ((ast-is-eval-var func)
@@ -417,8 +406,8 @@
          (let ((obj (gensym)))
            `(let ((,obj ,(translate (second func))))
               (funcall (the function (proc ,(case (car func)
-                                                  (:dot (%get-attribute obj (third func)))
-                                                  (:sub `(sub ,obj ,(translate (third func)))))))
+                                                  (:dot (expand-cached-lookup obj (third func)))
+                                                  (:sub `(lookup ,obj ,(translate (third func)))))))
                        ,obj
                        ,@(mapcar 'translate args)))))
         (t `(funcall (the function (proc ,(translate func))) *global* ,@(mapcar 'translate args)))))
@@ -426,7 +415,7 @@
 (defun translate-assign (place val)
   (case (car place)
     ((:name) (set-in-scope (second place) val))
-    ((:dot) (%set-attribute (translate (second place)) (third place) val))
+    ((:dot) (expand-cached-set (translate (second place)) (third place) val))
     (t `(setf ,(translate place) ,val))))
 
 ;; TODO cache path-to-place
@@ -439,7 +428,11 @@
 (deftranslate (:string str) str)
 
 (deftranslate (:array elems)
-  `(js-new array.ctor (list ,@(mapcar 'translate elems))))
+  (let ((arr (gensym)))
+    `(let ((,arr (make-array ,(length elems) :fill-pointer ,(length elems) :adjustable t)))
+       ,@(loop :for elt :in elems :for pos :from 0 :collect
+            `(setf (aref ,arr ,pos) ,(translate elt)))
+       (build-array ,arr))))
 
 (deftranslate (:stat form)
   (translate form))
