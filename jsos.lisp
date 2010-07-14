@@ -4,6 +4,8 @@
 ;; TODO thread-safety
 ;; TODO viable to intern props without leaking space?
 
+;; TODO give up caching when it fails too often
+
 (defstruct cls prototype)
 (defstruct (scls (:constructor make-scls (props prototype)) (:include cls))
   props children)
@@ -29,12 +31,13 @@
 ;; Slots are (offset . flags) conses for scls objects, (value . flags) conses for hcls
 (defconstant +slot-ro+ 1)
 (defconstant +slot-active+ 2)
-(defconstant +slot-enum+ 4)
-(defconstant +slot-dflt+ +slot-enum+)
+(defconstant +slot-noenum+ 4)
+(defconstant +slot-nodel+ 8)
+(defconstant +slot-dflt+ 0)
 
-(defun hash-obj (obj)
+(defun hash-obj (obj &optional hcls)
   (let* ((scls (obj-cls obj))
-         (hcls (make-hcls (cls-prototype scls)))
+         (hcls (or hcls (make-hcls (cls-prototype scls))))
          (vec (obj-vals obj))
          (table (make-hash-table :test 'eq :size (* (length vec) 2))))
     (loop :for (prop offset . flags) :in (scls-props scls) :do
@@ -50,7 +53,7 @@
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defvar *prop-names*
     #+allegro (make-hash-table :test 'equal :weak-keys t :values :weak)
-    #+sbcl (make-hash-table :test 'equal :weakness :key-and-value)
+    #+sbcl (make-hash-table :test 'equal :weakness :key-or-value)
     #-(or allegro sbcl) (make-hash-table :test 'equal))) ;; Space leak when we don't have weak hashes
 (defmacro intern-prop (prop)
   (let ((p (gensym)))
@@ -60,10 +63,10 @@
 
 (defmacro lookup-slot (scls prop)
   `(cdr (assoc ,prop (scls-props ,scls))))
-(defmacro dcall (val obj)
-  `(funcall (the function (car ,val)) ,obj))
+(defmacro dcall (proc obj &rest args)
+  `(funcall (the function ,proc) ,obj ,@args))
 
-(defstruct (cache (:constructor make-cache (prop)) (:type vector))
+(defstruct (cache (:constructor make-cache (prop)))
   (op #'cache-miss) prop cls a1 a2)
 
 (defmethod static-lookup ((obj obj) cache)
@@ -115,7 +118,7 @@
         :for cls := (obj-cls obj) :do
      (macrolet ((maybe-active (slot value)
                   `(if (logtest (cdr ,slot) +slot-active+)
-                       (dcall ,value this)
+                       (dcall (car ,value) this)
                        ,value)))
        (if (hcls-p cls)
            (let ((slot (gethash prop (obj-vals obj))))
@@ -138,7 +141,7 @@
 
 (defun %direct-lookup-d (val obj cache)
   (if (eq (cache-cls cache) (obj-cls obj))
-      (dcall (svref (obj-vals obj) (cache-a1 cache)) val)
+      (dcall (car (svref (obj-vals obj) (cache-a1 cache))) val)
       (cache-miss val obj cache)))
 
 (defun %direct-lookup-m (val obj cache)
@@ -164,7 +167,7 @@
          (proto (cls-prototype cls)))
     (if (and (eq (cache-cls cache) cls)
              (eq (cache-a2 cache) (obj-cls proto)))
-        (dcall (svref (obj-vals proto) (cache-a1 cache)) val)
+        (dcall (car (svref (obj-vals proto) (cache-a1 cache))) val)
         (cache-miss val obj cache))))
 
 (defun %proto-lookup-m (val obj cache)
@@ -196,7 +199,7 @@
       (let ((slot (lookup-slot cls prop)))
         (when slot
           (if (logtest (cdr slot) +slot-active+)
-              (ret #'%direct-lookup-d (car slot) nil (dcall (svref (obj-vals obj) (car slot)) this))
+              (ret #'%direct-lookup-d (car slot) nil (dcall (car (svref (obj-vals obj) (car slot))) this))
               (ret #'%direct-lookup (car slot) nil (svref (obj-vals obj) (car slot))))))
       (let ((proto (cls-prototype cls)))
         (unless proto (ret #'%direct-lookup-m nil nil *not-found*))
@@ -206,7 +209,7 @@
           (let ((slot (lookup-slot proto-cls prop)))
             (when slot
               (if (logtest (cdr slot) +slot-active+)
-                  (ret #'%proto-lookup-d (car slot) proto-cls (dcall (svref (obj-vals proto) (car slot)) this))
+                  (ret #'%proto-lookup-d (car slot) proto-cls (dcall (car (svref (obj-vals proto) (car slot))) this))
                   (ret #'%proto-lookup (car slot) proto-cls (svref (obj-vals proto) (car slot))))))
           (let ((proto2 (cls-prototype proto-cls)))
             (unless proto2 (ret #'%proto-lookup-m nil proto-cls *not-found*))
@@ -229,12 +232,17 @@
       (setf (obj-vals obj) vals)))
   (setf (svref (obj-vals obj) slot) val))
 
-(defstruct (wcache (:constructor make-wcache (prop)) (:type vector))
+(defstruct (wcache (:constructor make-wcache (prop)))
   (op #'wcache-miss) cls prop slot a1)
 
 (defun %simple-set (obj wcache val)
   (if (eq (obj-cls obj) (wcache-cls wcache))
       (setf (svref (obj-vals obj) (wcache-slot wcache)) val)
+      (wcache-miss obj wcache val)))
+
+(defun %active-set (obj wcache val)
+  (if (eq (obj-cls obj) (wcache-cls wcache))
+      (progn (dcall (wcache-a1 wcache) obj val) val)
       (wcache-miss obj wcache val)))
 
 (defun %change-class-set (obj wcache val)
@@ -254,7 +262,9 @@
 
 (defun %hash-then-set (obj wcache val)
   (if (eq (obj-cls obj) (wcache-cls wcache))
-      (progn (hash-obj obj) (hash-set obj (wcache-prop wcache) val))
+      (progn (hash-obj obj)
+             (setf (gethash (wcache-prop wcache) (obj-vals obj)) (cons val +slot-dflt+))
+             val)
       (wcache-miss obj wcache val)))
 
 (defun hash-set (obj prop val)
@@ -262,14 +272,28 @@
          (exists (gethash prop table)))
     (if exists
         (setf (car exists) val)
-        (setf (gethash prop table) (cons val +slot-dflt+)))))
+        ;; Check prototypes for read-only or active slots
+        (if (loop :for cur := (cls-prototype (obj-cls obj)) :then (cls-prototype curc) :while cur
+                  :for curc := (obj-cls cur) :do
+               (let ((slot (if (hcls-p curc) (gethash prop (obj-vals cur)) (lookup-slot curc prop))))
+                 (when slot
+                   (when (logtest (cdr slot) +slot-ro+) (return t))
+                   (when (logtest (cdr slot) +slot-active+)
+                     (let ((func (cdr (if (hcls-p curc) (car slot) (svref (obj-vals cur) (car slot))))))
+                       (when func (dcall func obj val))
+                       (return t)))
+                   (return nil))))
+            val
+            (progn (setf (gethash prop table) (cons val +slot-dflt+)) val)))))
 
 (defun wcache-miss (obj wcache val)
   (multiple-value-bind (fn slot a1) (meta-set obj (wcache-prop wcache) val)
     (setf (wcache-op wcache) fn (wcache-slot wcache) slot (wcache-a1 wcache) a1)
     val))
 
-;; TODO should ro props in prototypes be taken into account?
+;; This makes the assumption that the read-only flag of a property is
+;; final, and doesn't change at runtime. If we add code to allow
+;; twiddling of this flag, we can no longer cache the check.
 (defun meta-set (obj prop val)
   (macrolet ((ret (&rest vals) `(return-from meta-set (values ,@vals))))
     (let ((cls (obj-cls obj)))
@@ -280,24 +304,59 @@
         (when slot
           (when (logtest (cdr slot) +slot-ro+)
             (ret #'%ignored-set))
+          (when (logtest (cdr slot) +slot-active+)
+            (let ((func (cdr (svref (obj-vals obj) (car slot)))))
+              (when func
+                (dcall func obj val)
+                (ret #'%active-set func))
+              (ret #'%ignored-set)))
           (setf (svref (obj-vals obj) (car slot)) val)
-          (ret #'%simple-set (car slot)))
-        (when (eq (scls-children cls) :hash)
-          (hash-obj obj) (hash-set obj prop val)
-          (ret #'%hash-then-set))
-        (let ((new-cls (cdr (assoc prop (scls-children cls)))))
-          (when (and (not new-cls) (> (length (scls-children cls)) 8)) ;; TODO maybe exception for new Object() class?
-            (setf (scls-children cls) :hash) ;; TODO store actual class
-            (hash-obj obj) (hash-set  obj prop val)
-            (ret #'%hash-then-set))
-          (if new-cls
-              (setf slot (lookup-slot new-cls prop))
-              (progn
-                (setf slot (cons (length (scls-props cls)) +slot-dflt+)
-                      new-cls (make-scls (cons (cons prop slot) (scls-props cls)) (cls-prototype cls)))
-                (push (cons prop new-cls) (scls-children cls))))
-          (update-class-and-set obj new-cls (car slot) val)
-          (values #'%change-class-set (car slot) new-cls))))))
+          (ret #'%simple-set (car slot))))
+      ;; Look for a read-only or active slot in prototypes
+      (loop :for cur := (cls-prototype cls) :then (cls-prototype curc) :while cur :for curc := (obj-cls cur) :do
+         (let ((slot (if (hcls-p curc) (gethash prop (obj-vals cur)) (lookup-slot curc prop))))
+           (when slot
+             (when (logtest (cdr slot) +slot-ro+) (ret #'%ignored-set))
+             (when (logtest (cdr slot) +slot-active+)
+               (let ((func (cdr (if (hcls-p curc) (car slot) (svref (obj-vals cur) (car slot))))))
+                 (when func
+                   (dcall func obj val)
+                   (ret #'%active-set func))
+                 (ret #'%ignored-set)))
+             (return))))
+      ;; No direct slot found yet, but can write. Add slot.
+      (scls-add-slot obj cls prop val +slot-dflt+))))
+  
+(defun scls-add-slot (obj cls prop val flags)
+  ;; Setting scls-children to a hash class means hash, using that class, when adding slots
+  (when (hcls-p (scls-children cls))
+    (hash-obj obj (scls-children cls))
+    (setf (gethash prop (obj-vals obj)) (cons val flags))
+    (return-from scls-add-slot #'%hash-then-set))
+  (let ((new-cls (cdr (assoc prop (scls-children cls)))) slot)
+    (when (and (not new-cls) (> (length (scls-children cls)) 8)) ;; TODO maybe exception for new Object() class?
+      (setf (scls-children cls) (make-hcls (cls-prototype cls)))
+      (hash-obj obj (scls-children cls))
+      (setf (gethash prop (obj-vals obj)) (cons val flags))
+      (return-from scls-add-slot #'%hash-then-set))
+    (if new-cls
+        (setf slot (lookup-slot new-cls prop))
+        (progn
+          (setf slot (cons (length (scls-props cls)) flags)
+                new-cls (make-scls (cons (cons prop slot) (scls-props cls)) (cls-prototype cls)))
+          (push (cons prop new-cls) (scls-children cls))))
+    (update-class-and-set obj new-cls (car slot) val)
+    (values #'%change-class-set (car slot) new-cls)))
+
+(defun ensure-slot (obj prop val &optional (flags +slot-dflt+))
+  (setf prop (intern-prop prop))
+  (let ((cls (obj-cls obj)))
+    (if (hcls-p cls)
+        (setf (gethash prop (obj-vals obj)) (cons val flags))
+        (let ((slot (lookup-slot cls prop)))
+          (if slot
+              (setf (svref (obj-vals obj) (car slot)) val)
+              (scls-add-slot obj cls prop val flags))))))
 
 (defmethod (setf static-lookup) (val (obj obj) wcache)
   (funcall (the function (wcache-op wcache)) obj wcache val))
@@ -364,15 +423,14 @@
 (defun gcache-set (gcache obj val)
   (let ((slot (car gcache))
         (prop (cdr gcache)))
-    (cond (slot (unless (logtest (cdr slot) +slot-ro+)
-                  (setf (car slot) val)))
-          ((setf slot (gethash prop (obj-vals obj)))
-           (setf (car gcache) slot)
-           (unless (logtest (cdr slot) +slot-ro+)
-             (setf (car slot) val)))
-          (t
-           (setf (car gcache) (setf (gethash prop (obj-vals obj)) (cons val +slot-dflt+))))))
-  val)
+    (when (cond (slot t)
+                ((setf slot (gethash prop (obj-vals obj))) (setf (car gcache) slot))
+                (t (hash-set obj prop val) nil))
+      (cond ((logtest (cdr slot) +slot-active+)
+             (when (cdar slot) (dcall (cdar slot) obj val)))
+            ((not (logtest (cdr slot) +slot-ro+))
+             (setf (car slot) val))))
+    val))
 
 (defun expand-global-set (prop val)
   `(gcache-set (load-time-value (cons nil (intern-prop ,prop))) ,*global* ,val))
@@ -388,9 +446,9 @@
                      (loop
                         (multiple-value-bind (more key val) (next)
                           (unless more (return))
-                          (when (logtest (cdr val) +slot-enum+) (pushnew key set)))))
+                          (unless (logtest (cdr val) +slot-noenum+) (pushnew key set)))))
                    (loop :for (name nil . flags) :in (scls-props cls) :do
-                      (when (logtest flags +slot-enum+) (pushnew name set)))))))
+                      (unless (logtest flags +slot-noenum+) (pushnew name set)))))))
       (loop :for cur := obj :then (cls-prototype (obj-cls cur)) :while cur :do (enum cur))
       set)))
 

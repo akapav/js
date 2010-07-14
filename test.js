@@ -39,14 +39,11 @@ function test_1() {
 }
 
 function test_2() {
-  a = {x: 3};
-
   function f33() {
     var v = {v1: {v2: 4}};
     this.y = v.v1.v2;
   }
-
-  f33.prototype = a;
+  f33.prototype = {x: 3};
 
   b = new f33();
   $eq(b.x, 3);
@@ -310,8 +307,11 @@ function test_21() {
   $arrEq(a, [1, 2]);
   a = [1, 2, 3]; a.splice(2, 2, 10, 12);
   $arrEq(a, [1, 2, 10, 12]);
-  $arrEq(Array.splice(a, 0, 1), [1]);
-  $arrEq(a, [2, 10, 12]);
+  // Commenting this for now. Having these as methods of the
+  // constructor seems widespread, but isn't in the standard. I want
+  // to focus on the standard first.
+  // $arrEq(Array.splice(a, 0, 1), [1]);
+  // $arrEq(a, [2, 10, 12]);
 }
 
 function test_22() {

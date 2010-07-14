@@ -59,7 +59,7 @@
        (jscall* ,(expand-cached-lookup o name) ,o ,@args))))
 
 (defun wrap-js-lambda (args body)
-  (let ((other t))
+  (let ((other nil))
     (labels ((add-default (args)
                (cond ((not args) (setf other t) '(&rest other-args))
                      ((eq (car args) '&rest) args)

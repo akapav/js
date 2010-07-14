@@ -5,6 +5,7 @@
 (defun default-value (val &optional (hint :string))
   (block nil
     (unless (obj-p val) (return val))
+    (when (vobj-p val) (return (vobj-value val)))
     (let ((first "toString") (second "valueOf"))
       (when (eq hint :number) (rotatef first second))
       (let ((method (lookup val first)))
@@ -24,6 +25,7 @@
       '(or number (member :Inf :-Inf :NaN))
       'number))
 
+;; TODO these might be much faster as methods (profile)
 (defun to-string (val)
   (etypecase val
     (string val)
@@ -102,7 +104,14 @@
          :finally (let ((cell (list (cons name val))))
                     (if prev
                         (progn (setf (cdr prev) cell) (return set))
-                        (return cell)))))))
+                        (return cell))))))
+  (defun slot-flags (props)
+    (let ((base (if (member :enum props) 0 +slot-noenum+)))
+      (dolist (prop props)
+        (case prop (:active (setf base (logior base +slot-active+)))
+                   (:ro (setf base (logior base +slot-ro+)))
+                   (:nodel (setf base (logior base +slot-nodel+)))))
+      base)))
 
 ;; List of name->func pairs, where func initializes the value.
 (defvar *stdenv-props* ())
@@ -113,9 +122,10 @@
   `(obj-from-props ,proto (list ,@props)))
 ;; Mostly there to help emacs indent definition bodies
 (defmacro mth (name args &body body)
-  (multiple-value-bind (name flags) (if (consp name) (values (car name) (second name)) (values name 0))
+  (multiple-value-bind (name flags)
+      (if (consp name) (values (car name) (slot-flags (cdr name))) (values name +slot-noenum+))
     `(list* ,name (build-func ,(wrap-js-lambda args body)) ,flags)))
-(defmacro pr (name value &optional (flags 0)) `(list* ,name ,value ,flags))
+(defmacro pr (name value &rest flags) `(list* ,name ,value ,(slot-flags flags)))
 
 (defparameter *std-prototypes* ())
 (defmacro stdproto (id &body props)
@@ -169,11 +179,11 @@
 (defun ensure-proto (spec)
   (if (keywordp spec)
       (find-proto spec)
-      (obj-from-props (find-proto :object) `(("constructor" nil . 0) . ,spec))))
+      (obj-from-props (find-proto :object) (cons (pr "constructor" nil) spec))))
 
 (defun build-constructor (self proto props constr)
   (obj-from-props (find-proto :function)
-                  `(("prototype" ,proto . 0) ,@props)
+                  (cons (pr "prototype" proto) props)
                   (lambda (cls vals)
                     (setf (fobj-cls self) cls (fobj-vals self) vals (fobj-proc self) constr)))
   (setf (lookup proto "constructor") self)
@@ -213,7 +223,8 @@
 
 (stdproto :function
   ;; TODO hidden property (api)
-  (pr "prototype" (cons (js-lambda () (setf (lookup this "prototype") (simple-obj))) nil) +slot-active+)
+  (pr "prototype" (cons (js-lambda () (setf (lookup this "prototype") (simple-obj)))
+                        (js-lambda (val) (ensure-slot this "prototype" val))) :active)
 
   (mth "apply" (self args)
     (apply (proc this) self
@@ -238,7 +249,7 @@
   `(if (aobj-p this) (progn ,@body) ,default))
 
 (stdproto :array
-  (pr "length" (cons (js-lambda () (if (aobj-p this) (length (aobj-arr this)) 0)) nil) +slot-active+)
+  (pr "length" (cons (js-lambda () (if (aobj-p this) (length (aobj-arr this)) 0)) nil) :active)
 
   (mth "toString" ()
     (jsmethod this "join"))
@@ -312,7 +323,7 @@
 
   (mth "reverse" ()
     (unless-array (build-array (fvector this))
-      (nreverse (aobj-arr this))
+      (setf (aobj-arr this) (nreverse (aobj-arr this)))
       this))
   (mth "sort" (compare)
     (unless-array (build-array (fvector this))
@@ -324,14 +335,16 @@
         this))))
 
 (stdproto :arguments
-  (pr "length" (cons (js-lambda () (length (argobj-vector this))) nil) +slot-active+)
-  (pr "callee" (cons (js-lambda () (argobj-callee this)) nil) +slot-active+))
+  (pr "length" (cons (js-lambda () (length (argobj-vector this))) nil) :active)
+  (pr "callee" (cons (js-lambda () (argobj-callee this)) nil) :active))
 
 (stdconstructor "String" (value)
   (if (eq this *global*)
       (to-string value)
       (make-vobj (ensure-fobj-cls -self-) (to-string value)))
-  :string)
+  :string
+  (mth "fromCharCode" (code)
+    (string (code-char (to-integer code)))))
 
 (defun clip-index (index len)
   (setf index (to-integer index))
@@ -346,11 +359,14 @@
         (subseq str from)
         (subseq str from (max from (clip-index to len))))))
 
-(stdproto :string
-  (pr "length" (cons (js-lambda () (if (stringp this) (length this) 0)) nil) +slot-active+)
+(defun really-string (val)
+  (if (stringp val) val (and (vobj-p val) (stringp (vobj-value val)) (vobj-value val))))
 
-  (mth "toString" () (if (stringp this) this (js-type-error)))
-  (mth "valueOf" () (if (stringp this) this (js-type-error)))
+(stdproto :string
+  (pr "length" (cons (js-lambda () (let ((str (really-string this))) (if str (length str) 0))) nil) :active)
+
+  (mth "toString" () (or (really-string this) (js-type-error)))
+  (mth "valueOf" () (or (really-string this) (js-type-error)))
 
   (mth "charAt" (index)
     (let ((str (to-string this))
