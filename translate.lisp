@@ -4,6 +4,7 @@
 
 (defvar *scope* ())
 (defparameter *label-name* nil)
+(defvar *break/cont* ())
 
 (defgeneric lookup-variable (name scope rest))
 (defgeneric set-variable (name valname scope rest))
@@ -179,23 +180,41 @@
 (defun translate@ (form)
   (and form (list (translate form))))
 
+(defun translate/break-continue (label form)
+  (let* ((*break/cont* (cons nil *break/cont*))
+         (translated (translate form)))
+    (let (br cn lb-br lb-cn)
+      (dolist (evt (car *break/cont*))
+        (cond ((eq evt :break) (setf br t))
+              ((eq evt :continue) (setf cn t))
+              ((string= (cdr evt) (string label))
+               (ecase (car evt) (:break (setf lb-br t)) (:continue (setf lb-cn t))))
+              ((cdr *break/cont*) (push evt (second *break/cont*)))))
+      (values translated br cn lb-br lb-cn))))
+
+(defmacro with-label (var &body body)
+  `(let ((,var (and *label-name* (->usersym *label-name*)))
+         (*label-name* nil))
+     ,@body))
+
 (defun translate-for (init cond step body)
-  (let ((label (and *label-name* (->usersym *label-name*)))
-        (*label-name* nil))
-    `(block ,label
-       (tagbody
-          ,@(translate@ init)
-        loop-start
-          (unless ,(if cond
-                       (to-boolean-typed (translate cond) (ast-type cond))
-                       t)
-            (go loop-end))
-          ,@(translate@ body)
-        ,@(and label (list label))
-        loop-continue
-          ,@(translate@ step)
-          (go loop-start)
-        loop-end))))
+  (with-label label
+    (multiple-value-bind (body br cn lb-br lb-cn) (translate/break-continue label body)
+      (declare (ignore br lb-br))
+      `(block ,label
+         (tagbody
+            ,@(translate@ init)
+          loop-start
+            (unless ,(if cond
+                         (to-boolean-typed (translate cond) (ast-type cond))
+                         t)
+              (go loop-end))
+            ,@(and body (list body))
+          ,@(and lb-cn (list label))
+          ,@(and cn '(loop-continue))
+            ,@(translate@ step)
+            (go loop-start)
+          loop-end)))))
 
 (deftranslate (:for init cond step body)
   (translate-for init cond step body))
@@ -204,40 +223,45 @@
   (translate-for nil cond nil body))
 
 (deftranslate (:do cond body)
-  (let ((label (and *label-name* (->usersym *label-name*)))
-        (*label-name* nil))
-    `(block ,label
-       (tagbody
-        loop-start
-        ,@(and label (list label))
-          ,@(translate@ body)
-          (when ,(to-boolean-typed (translate cond) (ast-type cond))
-            (go loop-start))
-        loop-end))))
+  (with-label label
+    (multiple-value-bind (body br cn lb-br lb-cn) (translate/break-continue label body)
+      (declare (ignore lb-br))
+      `(block ,label
+         (tagbody
+          loop-start
+          ,@(and label (list label))
+            ,@(and body (list body))
+          ,@(and lb-cn (list label))
+          ,@(and cn '(loop-continue))
+            (when ,(to-boolean-typed (translate cond) (ast-type cond))
+              (go loop-start))
+          ,@(and br '(loop-end)))))))
 
-;; TODO superfluous labels
 (deftranslate (:break label)
+  (push (if label (cons :break label) :break) (car *break/cont*))
   (if label
       `(return-from ,(->usersym label))
       `(go loop-end)))
 
 (deftranslate (:continue label)
+  (push (if label (cons :continue label) :continue) (car *break/cont*))
   `(go ,(if label (->usersym label) 'loop-continue)))
 
 (deftranslate (:for-in var name obj body)
   (declare (ignore var))
-  (let ((label (and *label-name* (->usersym *label-name*)))
-        (*label-name* nil)
-        (props (gensym)))
-    `(block ,label
-       (let ((,props (list-props ,(translate obj))))
-         (tagbody
-          loop-start
-          ,@(and label (list label))
-            ,(set-in-scope name `(or (pop ,props) (go loop-end)))
-            ,(translate body)
-            (go loop-start)
-          loop-end)))))
+  (with-label label
+    (multiple-value-bind (body br cn lb-br lb-cn) (translate/break-continue label body)
+      (declare (ignore br lb-br cn))
+      (let ((props (gensym)))
+        `(block ,label
+           (let ((,props (list-props ,(translate obj))))
+             (tagbody
+              loop-continue
+              ,@(and lb-cn (list label))
+                ,(set-in-scope name `(or (pop ,props) (go loop-end)))
+                ,body
+                (go loop-continue)
+              loop-end)))))))
 
 (flet ((expand-if (test then else)
          `(if ,(to-boolean-typed (translate test) (ast-type test))
