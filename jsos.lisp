@@ -12,6 +12,8 @@
 
 ;; TODO give up caching when it fails too often
 
+(locally (declare (optimize speed (safety 0)))
+
 (defstruct cls prototype)
 (defstruct (scls (:constructor make-scls (props prototype)) (:include cls))
   props children)
@@ -61,11 +63,9 @@
     #+allegro (make-hash-table :test 'equal :weak-keys t :values :weak)
     #+sbcl (make-hash-table :test 'equal :weakness :key-or-value)
     #-(or allegro sbcl) (make-hash-table :test 'equal))) ;; Space leak when we don't have weak hashes
-(defmacro intern-prop (prop)
-  (let ((p (gensym)))
-    `(let ((,p ,prop))
-       (or (gethash ,p *prop-names*)
-           (setf (gethash ,p *prop-names*) ,p)))))
+(defun intern-prop (prop)
+  (or (gethash prop *prop-names*)
+      (setf (gethash prop *prop-names*) prop)))
 
 (defmacro lookup-slot (scls prop)
   `(cdr (assoc ,prop (scls-props ,scls))))
@@ -520,3 +520,11 @@
     (unless (and (fobj-new-cls fobj) (eq (cls-prototype (fobj-new-cls fobj)) proto))
       (setf (fobj-new-cls fobj) (make-scls () proto)))
     (fobj-new-cls fobj)))
+
+(defun find-slot (obj prop)
+  (let ((cls (obj-cls obj)))
+    (if (hcls-p cls)
+        (gethash (intern-prop prop) (obj-vals obj))
+        (cdr (assoc (intern-prop prop) (scls-props cls))))))
+
+)

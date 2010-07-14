@@ -211,7 +211,11 @@
 (stdproto :object
   (mth "toString" () (format nil "[object ~a]" (obj-class this)))
   (mth "toLocaleString" () (jsmethod this "toString"))
-  (mth "valueOf" () this))
+  (mth "valueOf" () this)
+
+  (mth "hasOwnProperty" (prop) (and (obj-p this) (find-slot this (to-string prop)) t))
+  (mth "propertyIsEnumerable" (prop) (and (obj-p this) (let ((slot (find-slot this (to-string prop))))
+                                                         (and slot (not (logtest (cdr slot) +slot-noenum+)))))))
 
 (stdconstructor "Function" (&rest args)
   (let ((body (format nil "(function (~{~a~^, ~}) {~A});"

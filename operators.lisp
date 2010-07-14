@@ -217,6 +217,9 @@
          (loop :for cur := ls :then (cls-prototype (obj-cls cur)) :while cur :do
             (when (eq cur proto) (return t))))))
 
+(defun !in (prop obj)
+  (if-not-found (nil (lookup obj prop)) nil t))
+
 (defun !typeof (exp)
   (cond
     ((numberp exp) "number")

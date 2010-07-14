@@ -401,6 +401,18 @@ function test_28() {
   $eq(x, 0);
 }
 
+function test_29() {
+  var a = {a: 10};
+  $eq(a.hasOwnProperty("a"), true);
+  $eq(a.hasOwnProperty("b"), false);
+  $eq(a.hasOwnProperty("toString"), false);
+  $eq(a.propertyIsEnumerable("a"), true);
+  $eq(a.propertyIsEnumerable("b"), false);
+  $eq(a.propertyIsEnumerable("toString"), false);
+  $eq(Object.prototype.hasOwnProperty("toString"), true);
+  $eq(Object.prototype.propertyIsEnumerable("toString"), false);
+}
+
 function runTests() {
   var failures = [];
   var run = 0;
