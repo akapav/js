@@ -168,7 +168,7 @@
 
 ;; TODO reuse class
 (deftranslate (:regexp expr flags)
-  `(load-time-value (init-reobj (make-reobj (make-scls () (find-proto :regexp)) nil nil nil) ,expr ,flags)))
+  `(load-time-value (init-reobj (make-reobj (find-cls :regexp) nil nil nil) ,expr ,flags)))
 
 ;flags
 
@@ -362,10 +362,10 @@
           (push (make-with-scope :var eval-scope) *scope*))
         (let ((funcval
                `(make-fobj
-                 (make-scls () (find-proto :function)) ;; TODO reuse
+                 (find-cls :function)
                  ,(let ((body1 `((let* (,@(loop :for var :in internal :collect `(,var :undefined))
                                         ;; TODO sane object init
-                                        ,@(and uses-eval `((,eval-scope (make-obj (make-scls () (find-proto :object))))
+                                        ,@(and uses-eval `((,eval-scope (make-obj (find-cls :object)))
                                                            (eval-env ,(capture-scope)))))
                                    (declare (ignorable ,@internal ,@(and uses-eval (list eval-scope))))
                                    ,@(mapcar 'translate (lift-defuns body))
@@ -396,7 +396,7 @@
        (declare (ignorable js-user::|this|))
        (let* ((js-user::|arguments|
                 ;; TODO reuse class
-                (make-argobj (make-scls () (find-proto :arguments)) (coerce ,argument-list 'vector) ,fname)))
+                (make-argobj (find-cls :arguments) (coerce ,argument-list 'vector) ,fname)))
          (declare (ignorable js-user::|arguments|))
          (block function ,@body)))))
 

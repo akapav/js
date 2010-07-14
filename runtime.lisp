@@ -72,12 +72,11 @@
 (defun fvector (&rest elements)
   (let ((len (length elements)))
     (make-array len :fill-pointer len :initial-contents elements :adjustable t)))
-(defun build-array (vector) ;; TODO share a class
-  (make-aobj (make-scls () (find-proto :array)) vector))
+(defun build-array (vector)
+  (make-aobj (find-cls :array) vector))
 
-;; TODO prototype
-(defun build-func (lambda) ;; TODO share a class
-  (make-fobj (make-scls () (find-proto :function)) lambda (make-scls () (find-proto :object))))
+(defun build-func (lambda)
+  (make-fobj (find-cls :function) lambda nil))
 
 (defun lexical-eval (str scope)
   (let* ((str (to-string str))
@@ -131,25 +130,24 @@
 (defmacro stdproto (id &body props)
   `(setf *std-prototypes* (update-set *std-prototypes* ,id (lambda () (list ,@props)))))
 
-;; Prototypes that need to be globally visible when constructing an environment
-(defun fundamental-prototypes ()
+(defun init-env ()
   (let* ((bootstrap (loop :for (name) :in *std-prototypes* :collect (cons name (make-obj nil nil))))
-         (*global* (make-gobj nil bootstrap nil))
-         (objproto (find-proto :object)))
+         (objproto (cdr (assoc :object bootstrap)))
+         (clss (loop :for id :in '(:object :arguments :function :array :regexp) :collect
+                  (cons id (make-scls () (or (cdr (assoc id bootstrap)) objproto)))))
+         (*global* (make-gobj (make-hcls objproto) (make-hash-table :test 'eq) bootstrap clss)))
     (loop :for (nil . shell) :in bootstrap :for (name . create) :in *std-prototypes* :do
        (let ((real-obj (obj-from-props (if (eq name :object) nil objproto) (funcall create))))
          (setf (obj-vals shell) (obj-vals real-obj)
                (obj-cls shell) (obj-cls real-obj))))
-    bootstrap))
-
-(defun find-proto (id)
-  (cdr (assoc id (gobj-protos *global*))))
-
-(defun init-env ()
-  (let ((*global* (global-obj (fundamental-prototypes))))
     (loop :for (name . func) :in *stdenv-props* :do
        (setf (lookup *global* name) (funcall func)))
     *global*))
+
+(defun find-proto (id)
+  (cdr (assoc id (gobj-protos *global*))))
+(defun find-cls (id)
+  (cdr (assoc id (gobj-common-cls *global*))))
 
 (defmacro stdprop (name value)
   `(addstdprop ,name (lambda () ,value)))

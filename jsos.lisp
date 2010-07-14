@@ -1,8 +1,14 @@
 (in-package :js)
 
+(defvar *global*)
+
+;; (Some of this code is *really* unorthogonal, repeating itself a
+;; lot. This is mostly due to the fact that we are using different
+;; code paths, some of which can assume previously-checked conditions,
+;; to optimize.)
+
 ;; TODO optimize declarations
-;; TODO thread-safety
-;; TODO viable to intern props without leaking space?
+;; TODO thread-safety (maybe)
 
 ;; TODO give up caching when it fails too often
 
@@ -17,8 +23,8 @@
   value)
 (defstruct (fobj (:constructor make-fobj (cls proc new-cls &optional vals)) (:include obj))
   proc new-cls)
-(defstruct (gobj (:constructor make-gobj (cls protos vals)) (:include obj))
-  protos)
+(defstruct (gobj (:constructor make-gobj (cls vals protos common-cls)) (:include obj))
+  protos common-cls)
 (defstruct (aobj (:constructor make-aobj (cls arr)) (:include obj))
   arr)
 (defstruct (reobj (:constructor make-reobj (cls proc scanner args)) (:include fobj))
@@ -35,7 +41,7 @@
 (defconstant +slot-nodel+ 8)
 (defconstant +slot-dflt+ 0)
 
-(defun hash-obj (obj &optional hcls)
+(defun hash-obj (obj hcls)
   (let* ((scls (obj-cls obj))
          (hcls (or hcls (make-hcls (cls-prototype scls))))
          (vec (obj-vals obj))
@@ -262,7 +268,7 @@
 
 (defun %hash-then-set (obj wcache val)
   (if (eq (obj-cls obj) (wcache-cls wcache))
-      (progn (hash-obj obj)
+      (progn (hash-obj obj (scls-children (obj-cls obj)))
              (setf (gethash (wcache-prop wcache) (obj-vals obj)) (cons val +slot-dflt+))
              val)
       (wcache-miss obj wcache val)))
@@ -334,7 +340,10 @@
     (setf (gethash prop (obj-vals obj)) (cons val flags))
     (return-from scls-add-slot #'%hash-then-set))
   (let ((new-cls (cdr (assoc prop (scls-children cls)))) slot)
-    (when (and (not new-cls) (> (length (scls-children cls)) 8)) ;; TODO maybe exception for new Object() class?
+    ;; We switch to a hash table if this class has 8 'exits' (probably
+    ;; being used as a container), and it is not one of the reused classes.
+    (when (and (not new-cls) (> (length (scls-children cls)) 8)
+               (not (find cls (gobj-common-cls *global*) :key #'cdr)))
       (setf (scls-children cls) (make-hcls (cls-prototype cls)))
       (hash-obj obj (scls-children cls))
       (setf (gethash prop (obj-vals obj)) (cons val flags))
@@ -394,8 +403,6 @@
   (expand-cached-set obj prop val))
 
 ;; Optimized global-object access
-
-(defvar *global*)
 
 (defun gcache-lookup (gcache obj)
   (let ((slot (car gcache))
@@ -496,9 +503,6 @@
                                              ,proto))))
        (make-obj ,cls (vector ,@(mapcar #'cdr props))))))
 
-(defun global-obj (protos)
-  (make-gobj (make-hcls (cdr (assoc :object protos))) protos (make-hash-table :test 'eq)))
-
 (defun js-new (func &rest args) ;; TODO check standard
   (unless (fobj-p func) (error "~a is not a constructor." (to-string func)))
   (let* ((this (make-obj (ensure-fobj-cls func)))
@@ -506,7 +510,7 @@
     (if (obj-p result) result this)))
 
 (defun simple-obj ()
-  (make-obj (make-scls () (find-proto :object))))
+  (make-obj (find-cls :object)))
 
 (defun ensure-fobj-cls (fobj)
   (let ((proto (lookup fobj "prototype"))) ;; Active property in function prototype ensures this is always bound
