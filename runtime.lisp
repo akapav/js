@@ -399,8 +399,8 @@
        (if (equal delim "")
            (fvector str)
            (coerce (loop :with step := (length delim) :for beg := 0 :then (+ pos step)
-                         :for pos := (search delim str :start2 beg) :while pos :collect
-                      (subseq str beg pos)) 'simple-vector))))))
+                         :for pos := (search delim str :start2 beg)
+                         :collect (subseq str beg pos) :while pos) 'simple-vector))))))
 
 (stdconstructor "Number" (value)
   (if (eq this *global*)

@@ -109,11 +109,9 @@
 		    0 0 (infinity) (-infinity))
 
 (defun !/ (ls rs)
-  (funcall
-   (cond
-     ((and (numberp ls) (numberp rs)) #'/number)
-     ((and (numberp ls) (numberp rs)) #'/number.ext)
-     (t (constantly (nan)))) ls rs))
+  (if (and (numberp ls) (numberp rs))
+      (/number ls rs)
+      (/number.ext (to-number ls) (to-number rs))))
 
 ;;
 (defun %number (ls rs) (mod ls rs))
@@ -210,6 +208,14 @@
 (defun !-- (arg)
   (!- (to-number arg) 1))
 
+;; TODO to-int-32
+(defun !>> (a b)
+  (ash (to-integer a) (- (to-integer b))))
+(defun !<< (a b)
+  (ash (to-integer a) (to-integer b)))
+(defun !>>> (a b)
+  (ash (to-integer a) (- (to-integer b))))
+
 ;;
 (defun !instanceof (ls rs)
   (and (obj-p ls) (fobj-p rs)
@@ -220,6 +226,7 @@
 (defun !in (prop obj)
   (if-not-found (nil (lookup obj prop)) nil t))
 
+;; TODO typeof on undefined globals should return undefined, no error
 (defun !typeof (exp)
   (cond
     ((numberp exp) "number")

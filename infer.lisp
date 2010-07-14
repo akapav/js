@@ -437,7 +437,8 @@
           ((:== :=== :!= :!== :instanceof :in :< :> :<= :>=) (tc :boolean))
           ((:^ :& :|\|| :>> :<< :>>>) (tc :integer))
           ((:&& :|\|\||) (tc nil `(:either ,lhst ,rhst)))
-          ((:- :* :/ :%) (tc nil `(:maybe-int ,lhst ,rhst))))))))
+          ((:- :* :%) (tc nil `(:maybe-int ,lhst ,rhst)))
+          (:/ (tc :number)))))))
 (definfer (:unary-prefix op place)
   (multiple-value-bind (env argt) (infer place env)
     (ecase op
