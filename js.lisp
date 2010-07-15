@@ -86,7 +86,7 @@
 
 (defun js-load-file (fname)
   (with-open-file (str fname)
-    (compile-eval `(wrap-js ,(translate-ast (parse-js str))))))
+    (compile-eval `(locally (declare (optimize speed (safety 0))) (wrap-js ,(translate-ast (parse-js str)))))))
 
 ;; TODO support multiline input
 (defun js-repl ()

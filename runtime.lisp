@@ -470,14 +470,20 @@
         (and (ppcre:scan (reobj-scanner this) (to-string str)) t)
         nil)))
 
+(defmacro with-overflow (&body body)
+  `(handler-case (progn ,@body)
+     (floating-point-overflow () (infinity)) ;; TODO -infinity?
+     (floating-point-underflow () 0d0)))
+
 (defmacro math-case (var &body cases)
   (flet ((find-case (id)
            (or (cdr (assoc id cases)) '((nan)))))
     `(let ((,var (to-number ,var)))
-       (cond ((is-nan ,var) ,@(find-case :NaN))
-             ((eq ,var (infinity)) ,@(find-case :Inf))
-             ((eq ,var (-infinity)) ,@(find-case :-Inf))
-             (t ,@(find-case t))))))
+       (with-overflow
+         (cond ((is-nan ,var) ,@(find-case :NaN))
+               ((eq ,var (infinity)) ,@(find-case :Inf))
+               ((eq ,var (-infinity)) ,@(find-case :-Inf))
+               (t ,@(find-case t)))))))
 
 (defun my-atan (arg)
   (math-case arg (:-Inf (- (/ pi 2))) (:Inf (/ pi 2)) (t (atan arg))))
@@ -535,7 +541,8 @@
                ((minusp arg) (nan))
                (t (log arg))))))
   (mth "sqrt" (arg)
-    (math-case arg (let ((res (sqrt arg))) (if (realp res) res (nan)))))
+    (math-case arg (:Inf (infinity))
+               (t (let ((res (sqrt arg))) (if (realp res) res (nan))))))
   (mth "pow" (base exp)
     (let ((base (to-number base)) (exp (to-number exp)))
       (cond ((or (is-nan base) (is-nan exp)) (nan))
@@ -543,7 +550,7 @@
             ((and (realp exp) (zerop exp)) 1)
             ((or (eq base (infinity)) (eq exp (infinity))) (infinity))
             ((eq base (-infinity)) (-infinity))
-            (t (coerce (expt base exp) 'double-float)))))
+            (t (coerce (with-overflow (expt base exp)) 'double-float)))))
 
   (mth "max" (&rest args)
     (let ((cur (-infinity)))
