@@ -223,19 +223,23 @@
     (compile-eval (translate (parse-js-string body))))
   :function)
 
+(defun vec-apply (func this vec)
+  (macrolet ((vapply (n)
+               `(case (length vec)
+                  ,@(loop :for i :below n :collect
+                       `(,i (funcall func this ,@(loop :for j :below i :collect `(aref vec ,j)))))
+                  (t (apply func this (coerce vec 'list))))))
+    (vapply 7)))
+             
 (stdproto :function
-  ;; TODO hidden property (api)
   (pr "prototype" (cons (js-lambda () (setf (lookup this "prototype") (simple-obj)))
-                        (js-lambda (val) (ensure-slot this "prototype" val))) :active)
+                        (js-lambda (val) (ensure-slot this "prototype" val +slot-noenum+))) :active)
 
   (mth "apply" (self args)
-    (apply (proc this) self
-           (coerce (typecase args
-                     (vector args)
-                     (aobj (aobj-arr args))
-                     (argobj (argobj-vector args))
-                     (t (error "second argument to apply must be an array")))
-                   'list)))
+    (typecase args
+      (aobj (vec-apply (proc this) self (aobj-arr args)))
+      (argobj (apply (proc this) self (argobj-list args)))
+      (t (error "second argument to apply must be an array"))))
   (mth "call" (self &rest args)
     (apply (proc this) self args)))
 
@@ -337,7 +341,7 @@
         this))))
 
 (stdproto :arguments
-  (pr "length" (cons (js-lambda () (length (argobj-vector this))) nil) :active)
+  (pr "length" (cons (js-lambda () (argobj-length this)) nil) :active)
   (pr "callee" (cons (js-lambda () (argobj-callee this)) nil) :active))
 
 (stdconstructor "String" (value)
@@ -566,4 +570,6 @@
   (mth "random" ()
     (random 1.0)))
 
-(setf *global* (init-env))
+(defun reset ()
+  (setf *global* (init-env)))
+(reset)

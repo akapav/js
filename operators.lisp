@@ -129,31 +129,26 @@
 
 ;;
 (defun !=== (ls rs)
-  (unless (or (eq ls (nan)) (eq rs (nan)))
-    (equal ls rs)))
+  (cond ((is-nan ls) nil)
+        ((eq ls rs) t)
+        ((stringp ls) (and (stringp rs) (string= ls rs)))
+        ((numberp ls) (and (numberp rs) (= ls rs)))))
 
 (defun !!== (ls rs)
   (not (!=== ls rs)))
 
 ;;
 (defun !== (ls rs)
-  (or (!=== ls rs)
-      (cond
-	((eq (type-of ls) (type-of rs))
-	 (!=== ls rs))
-	((and (numberp ls) (stringp rs))
-	 (!=== ls (to-number rs)))
-	((and (stringp ls) (numberp rs))
-	 (!=== (to-number ls) rs))
-	((or
-	  (and (eq ls :undefined) (eq rs :null))
-	  (and (eq ls :null) (eq rs :undefined))) t)
-	((eq ls t) (!== 1 rs))
-	((eq ls nil) (!== 0 rs))
-	((eq rs t) (!== ls 1))
-	((eq rs nil) (!== ls 0))
-	(t (!=== (to-string ls)
-		 (to-string rs))))))
+  (cond ((is-nan ls) nil)
+        ((eq ls rs) t)
+        ((eq ls :null) (eq rs :undefined))
+        ((eq ls :undefined) (eq rs :null))
+        ((numberp ls) (= ls (to-number rs)))
+        ((stringp ls) (string= ls (to-string rs)))
+        ((or (eq ls t) (eq ls nil)) (!== (if ls 1 0) rs))
+        ((or (eq rs t) (eq rs nil)) (!== ls (if rs 1 0)))
+        ((obj-p ls) (cond ((stringp rs) (!== (default-value ls) rs))
+                          ((typep rs 'js-number) (!== (default-value ls :number) rs))))))
 
 (defun !!= (ls rs)
   (not (!== ls rs)))

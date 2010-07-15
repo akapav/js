@@ -42,16 +42,14 @@
 (defstruct (arguments-scope (:include simple-scope)) args)
 (defmethod lookup-variable (name (scope arguments-scope) rest)
   (declare (ignore rest))
-  (let ((arg-pos (position (->usersym name) (arguments-scope-args scope))))
-    (if arg-pos
-        `(svref (argobj-vector js-user::|arguments|) ,arg-pos)
-        (call-next-method))))
+  (if (member (->usersym name) (arguments-scope-args scope))
+      `(car ,(->usersym name))
+      (call-next-method)))
 (defmethod set-variable (name valname (scope arguments-scope) rest)
   (declare (ignore rest))
-  (let ((arg-pos (position (->usersym name) (arguments-scope-args scope))))
-    (if arg-pos
-        `(setf (svref (argobj-vector js-user::|arguments|) ,arg-pos) ,valname)
-        (call-next-method))))
+  (if (member (->usersym name) (arguments-scope-args scope))
+      `(setf (car ,(->usersym name)) ,valname)
+      (call-next-method)))
 
 (defstruct captured-scope vars local-vars objs next)
 (defun capture-scope ()
@@ -371,7 +369,7 @@
                                    ,@(mapcar 'translate (lift-defuns body))
                                    :undefined))))
                        (if uses-args
-                           (wrap-function/arguments body1 fname)
+                           (wrap-function/arguments args body1 fname)
                            (wrap-function args body1)))
                  nil)))
           (if (or name fname)
@@ -390,14 +388,15 @@
               (ignorable js-user::|this| ,@(mapcar '->usersym args)))
      (block function ,@body)))
 
-(defun wrap-function/arguments (body fname)
-  (let ((argument-list (gensym "arguments")))
+(defun wrap-function/arguments (args body fname)
+  (let ((argument-list (gensym "arguments"))
+        (arg-names (mapcar #'->usersym args)))
     `(lambda (js-user::|this| &rest ,argument-list)
        (declare (ignorable js-user::|this|))
-       (let* ((js-user::|arguments|
-                ;; TODO reuse class
-                (make-argobj (find-cls :arguments) (coerce ,argument-list 'vector) ,fname)))
-         (declare (ignorable js-user::|arguments|))
+       (let ((js-user::|arguments|
+               (make-argobj (find-cls :arguments) ,argument-list (length ,argument-list) ,fname))
+             ,@(loop :for arg :in arg-names :collect `(,arg (prog1 ,argument-list (pop ,argument-list)))))
+         (declare (ignorable js-user::|arguments| ,@arg-names))
          (block function ,@body)))))
 
 (deftranslate (:return value)

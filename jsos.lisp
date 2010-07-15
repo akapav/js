@@ -31,8 +31,8 @@
   arr)
 (defstruct (reobj (:constructor make-reobj (cls proc scanner args)) (:include fobj))
   scanner args)
-(defstruct (argobj (:constructor make-argobj (cls vector callee)) (:include obj))
-  vector callee)
+(defstruct (argobj (:constructor make-argobj (cls list length callee)) (:include obj))
+  list length callee)
 
 (defmethod print-object ((obj obj) stream) (format stream "#<js obj>"))
 
@@ -68,7 +68,7 @@
       (setf (gethash prop *prop-names*) prop)))
 
 (defmacro lookup-slot (scls prop)
-  `(cdr (assoc ,prop (scls-props ,scls))))
+  `(cdr (assoc ,prop (scls-props ,scls) :test #'eq)))
 (defmacro dcall (proc obj &rest args)
   `(funcall (the function ,proc) ,obj ,@args))
 
@@ -105,10 +105,10 @@
         (aref vec index)
         (do-lookup obj obj prop))))
 (defmethod lookup ((obj argobj) prop)
-  (let* ((vec (argobj-vector obj))
-         (index (index-in-range prop (length vec))))
+  (let ((lst (argobj-list obj))
+        (index (index-in-range prop (argobj-length obj))))
     (if index
-        (svref vec index)
+        (nth index lst)
         (do-lookup obj obj prop))))
 
 (defvar *not-found* :undefined)
@@ -121,23 +121,23 @@
 ;; Used for non-cached lookups
 (defun simple-lookup (this start prop)
   (loop :for obj := start :then (cls-prototype cls) :while obj
-        :for cls := (obj-cls obj) :do
+        :for cls := (obj-cls obj) :for vals := (obj-vals obj) :do
      (macrolet ((maybe-active (slot value)
                   `(if (logtest (cdr ,slot) +slot-active+)
                        (dcall (car ,value) this)
                        ,value)))
-       (if (hcls-p cls)
-           (let ((slot (gethash prop (obj-vals obj))))
+       (if (hash-table-p vals)
+           (let ((slot (gethash prop vals)))
              (when slot
                (return (maybe-active slot (car slot)))))
            (let ((slot (lookup-slot cls prop)))
              (when slot
-               (return (maybe-active slot (svref (obj-vals obj) (car slot))))))))
+               (return (maybe-active slot (svref vals (car slot))))))))
      :finally (return *not-found*)))
 
 (defun cache-miss (val obj cache)
   (multiple-value-bind (fn a1 a2 result) (meta-lookup val obj (cache-prop cache))
-    (setf (cache-op cache) fn (cache-a1 cache) a1 (cache-a2 cache) a2)
+    (setf (cache-op cache) fn (cache-a1 cache) a1 (cache-a2 cache) a2 (cache-cls cache) (obj-cls obj))
     result))
 
 (defun %direct-lookup (val obj cache)
@@ -156,7 +156,7 @@
       (cache-miss val obj cache)))
 
 (defun %direct-lookup-h (val obj cache)
-  (if (hcls-p (obj-cls obj))
+  (if (hash-table-p (obj-vals obj))
       (simple-lookup val obj (cache-prop cache))
       (cache-miss val obj cache)))
 
@@ -199,24 +199,24 @@
 
 (defun meta-lookup (this obj prop)
   (macrolet ((ret (&rest vals) `(return-from meta-lookup (values ,@vals))))
-    (let ((cls (obj-cls obj)))
-      (when (hcls-p cls)
+    (let ((cls (obj-cls obj)) (vals (obj-vals obj)))
+      (when (hash-table-p vals)
         (ret #'%direct-lookup-h nil nil (simple-lookup this obj prop)))
       (let ((slot (lookup-slot cls prop)))
         (when slot
           (if (logtest (cdr slot) +slot-active+)
-              (ret #'%direct-lookup-d (car slot) nil (dcall (car (svref (obj-vals obj) (car slot))) this))
-              (ret #'%direct-lookup (car slot) nil (svref (obj-vals obj) (car slot))))))
+              (ret #'%direct-lookup-d (car slot) nil (dcall (car (svref vals (car slot))) this))
+              (ret #'%direct-lookup (car slot) nil (svref vals (car slot))))))
       (let ((proto (cls-prototype cls)))
         (unless proto (ret #'%direct-lookup-m nil nil *not-found*))
-        (let ((proto-cls (obj-cls proto)))
-          (when (hcls-p proto-cls)
+        (let ((proto-cls (obj-cls proto)) (proto-vals (obj-vals proto)))
+          (when (hash-table-p proto-vals)
             (ret #'%proto-lookup-h nil nil (simple-lookup this proto prop)))
           (let ((slot (lookup-slot proto-cls prop)))
             (when slot
               (if (logtest (cdr slot) +slot-active+)
-                  (ret #'%proto-lookup-d (car slot) proto-cls (dcall (car (svref (obj-vals proto) (car slot))) this))
-                  (ret #'%proto-lookup (car slot) proto-cls (svref (obj-vals proto) (car slot))))))
+                  (ret #'%proto-lookup-d (car slot) proto-cls (dcall (car (svref proto-vals (car slot))) this))
+                  (ret #'%proto-lookup (car slot) proto-cls (svref proto-vals (car slot))))))
           (let ((proto2 (cls-prototype proto-cls)))
             (unless proto2 (ret #'%proto-lookup-m nil proto-cls *not-found*))
             (ret #'%deep-lookup nil proto-cls (simple-lookup this proto2 prop))))))))
@@ -262,7 +262,7 @@
       (wcache-miss obj wcache val)))
 
 (defun %hash-set (obj wcache val)
-  (if (hcls-p (obj-cls obj))
+  (if (hash-table-p (obj-vals obj))
       (hash-set obj (wcache-prop wcache) val)
       (wcache-miss obj wcache val)))
 
@@ -280,12 +280,12 @@
         (setf (car exists) val)
         ;; Check prototypes for read-only or active slots
         (if (loop :for cur := (cls-prototype (obj-cls obj)) :then (cls-prototype curc) :while cur
-                  :for curc := (obj-cls cur) :do
-               (let ((slot (if (hcls-p curc) (gethash prop (obj-vals cur)) (lookup-slot curc prop))))
+                  :for curc := (obj-cls cur) :for curv := (obj-vals cur) :for hash := (hash-table-p curv) :do
+               (let ((slot (if hash (gethash prop curv) (lookup-slot curc prop))))
                  (when slot
                    (when (logtest (cdr slot) +slot-ro+) (return t))
                    (when (logtest (cdr slot) +slot-active+)
-                     (let ((func (cdr (if (hcls-p curc) (car slot) (svref (obj-vals cur) (car slot))))))
+                     (let ((func (cdr (if hash (car slot) (svref curv (car slot))))))
                        (when func (dcall func obj val))
                        (return t)))
                    (return nil))))
@@ -293,6 +293,7 @@
             (progn (setf (gethash prop table) (cons val +slot-dflt+)) val)))))
 
 (defun wcache-miss (obj wcache val)
+  (setf (wcache-cls wcache) (obj-cls obj))
   (multiple-value-bind (fn slot a1) (meta-set obj (wcache-prop wcache) val)
     (setf (wcache-op wcache) fn (wcache-slot wcache) slot (wcache-a1 wcache) a1)
     val))
@@ -302,8 +303,8 @@
 ;; twiddling of this flag, we can no longer cache the check.
 (defun meta-set (obj prop val)
   (macrolet ((ret (&rest vals) `(return-from meta-set (values ,@vals))))
-    (let ((cls (obj-cls obj)))
-      (when (hcls-p cls)
+    (let ((cls (obj-cls obj)) (vals (obj-vals obj)))
+      (when (hash-table-p vals)
         (hash-set obj prop val)
         (ret #'%hash-set))
       (let ((slot (lookup-slot cls prop)))
@@ -311,20 +312,21 @@
           (when (logtest (cdr slot) +slot-ro+)
             (ret #'%ignored-set))
           (when (logtest (cdr slot) +slot-active+)
-            (let ((func (cdr (svref (obj-vals obj) (car slot)))))
+            (let ((func (cdr (svref vals (car slot)))))
               (when func
                 (dcall func obj val)
                 (ret #'%active-set func))
               (ret #'%ignored-set)))
-          (setf (svref (obj-vals obj) (car slot)) val)
+          (setf (svref vals (car slot)) val)
           (ret #'%simple-set (car slot))))
       ;; Look for a read-only or active slot in prototypes
-      (loop :for cur := (cls-prototype cls) :then (cls-prototype curc) :while cur :for curc := (obj-cls cur) :do
-         (let ((slot (if (hcls-p curc) (gethash prop (obj-vals cur)) (lookup-slot curc prop))))
+      (loop :for cur := (cls-prototype cls) :then (cls-prototype curc) :while cur
+            :for curc := (obj-cls cur) :for curv := (obj-vals cur) :for hash := (hash-table-p curv) :do
+         (let ((slot (if hash (gethash prop curv) (lookup-slot curc prop))))
            (when slot
              (when (logtest (cdr slot) +slot-ro+) (ret #'%ignored-set))
              (when (logtest (cdr slot) +slot-active+)
-               (let ((func (cdr (if (hcls-p curc) (car slot) (svref (obj-vals cur) (car slot))))))
+               (let ((func (cdr (if hash (car slot) (svref curv (car slot))))))
                  (when func
                    (dcall func obj val)
                    (ret #'%active-set func))
@@ -335,11 +337,11 @@
   
 (defun scls-add-slot (obj cls prop val flags)
   ;; Setting scls-children to a hash class means hash, using that class, when adding slots
-  (when (hcls-p (scls-children cls))
+  (unless (listp (scls-children cls))
     (hash-obj obj (scls-children cls))
     (setf (gethash prop (obj-vals obj)) (cons val flags))
     (return-from scls-add-slot #'%hash-then-set))
-  (let ((new-cls (cdr (assoc prop (scls-children cls)))) slot)
+  (let ((new-cls (cdr (assoc prop (scls-children cls) :test #'eq))) slot)
     ;; We switch to a hash table if this class has 8 'exits' (probably
     ;; being used as a container), and it is not one of the reused classes.
     (when (and (not new-cls) (> (length (scls-children cls)) 8)
@@ -359,10 +361,10 @@
 
 (defun ensure-slot (obj prop val &optional (flags +slot-dflt+))
   (setf prop (intern-prop prop))
-  (let ((cls (obj-cls obj)))
-    (if (hcls-p cls)
-        (setf (gethash prop (obj-vals obj)) (cons val flags))
-        (let ((slot (lookup-slot cls prop)))
+  (let ((vals (obj-vals obj)))
+    (if (hash-table-p vals)
+        (setf (gethash prop vals) (cons val flags))
+        (let* ((cls (obj-cls obj)) (slot (lookup-slot cls prop)))
           (if slot
               (setf (svref (obj-vals obj) (car slot)) val)
               (scls-add-slot obj cls prop val flags))))))
@@ -391,10 +393,10 @@
           (setf (aref arr index) val))
         (call-next-method val obj prop))))
 (defmethod (setf lookup) (val (obj argobj) prop)
-  (let* ((vec (argobj-vector obj))
-         (index (index-in-range prop (length vec))))
+  (let ((lst (argobj-list obj))
+        (index (index-in-range prop (argobj-length obj))))
     (if index
-        (setf (svref vec index) val)
+        (setf (nth index lst) val)
         (call-next-method val obj prop))))
 
 (defun expand-cached-set (obj prop val)
@@ -447,14 +449,14 @@
 (defun enumerate-properties (obj)
   (let ((set ()))
     (flet ((enum (obj)
-             (let ((cls (obj-cls obj)))
-               (if (hcls-p cls)
-                   (with-hash-table-iterator (next (obj-vals obj))
+             (let ((vals (obj-vals obj)))
+               (if (hash-table-p vals)
+                   (with-hash-table-iterator (next vals)
                      (loop
                         (multiple-value-bind (more key val) (next)
                           (unless more (return))
                           (unless (logtest (cdr val) +slot-noenum+) (pushnew key set)))))
-                   (loop :for (name nil . flags) :in (scls-props cls) :do
+                   (loop :for (name nil . flags) :in (scls-props (obj-cls obj)) :do
                       (unless (logtest flags +slot-noenum+) (pushnew name set)))))))
       (loop :for cur := obj :then (cls-prototype (obj-cls cur)) :while cur :do (enum cur))
       set)))
@@ -522,9 +524,9 @@
     (fobj-new-cls fobj)))
 
 (defun find-slot (obj prop)
-  (let ((cls (obj-cls obj)))
-    (if (hcls-p cls)
-        (gethash (intern-prop prop) (obj-vals obj))
-        (cdr (assoc (intern-prop prop) (scls-props cls))))))
+  (let ((vals (obj-vals obj)))
+    (if (hash-table-p vals)
+        (gethash (intern-prop prop) vals)
+        (cdr (lookup-slot (obj-cls obj) (intern-prop prop))))))
 
 )
