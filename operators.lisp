@@ -221,12 +221,10 @@
 (defun !in (prop obj)
   (if-not-found (nil (lookup obj prop)) nil t))
 
-;; TODO typeof on undefined globals should return undefined, no error
-(defun !typeof (exp)
-  (cond
-    ((numberp exp) "number")
-    ((eq exp :undefined) "undefined")
-    ((stringp exp) "string")
-    ((typep exp 'fobj) "function")
-    ((or (eq exp t) (eq exp nil)) "boolean")
-    (t "object")))
+(defun js-type-of (exp)
+  (etypecase exp
+    (string "string")
+    (js-number "number")
+    (fobj "function")
+    (obj "object")
+    (symbol (ecase exp ((t nil) "boolean") (:undefined "undefined") (:null "object")))))

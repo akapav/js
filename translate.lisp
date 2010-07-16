@@ -487,6 +487,10 @@
                    `(delete-prop ,(translate (second rhs))
                                  ,(ecase (car rhs) (:dot (third rhs)) (:sub (translate (third rhs)))))
                    `(progn ,(translate rhs) t)))
+      (:typeof (if (eq (car rhs) :name)
+                   `(handler-case (js-type-of ,(translate rhs))
+                      (undefined-variable () "undefined"))
+                   `(js-type-of ,(translate rhs))))
       (t (or (expand op nil type nil (translate rhs))
              `(,(js-intern op) ,(translate rhs)))))))
 

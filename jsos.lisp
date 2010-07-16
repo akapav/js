@@ -406,6 +406,10 @@
 
 ;; Optimized global-object access
 
+(define-condition undefined-variable (js-condition) ()) ;; TODO proper contents
+(defun undefined-variable (name)
+  (error 'undefined-variable :value (format nil "Undefined variable: ~a" name)))
+
 (defun gcache-lookup (gcache obj)
   (let ((slot (car gcache))
         (cache (cdr gcache)))
@@ -421,7 +425,7 @@
              (setf (car gcache) slot)
              (read-slot))
             (t (if-not-found (value (static-lookup obj cache))
-                 (error "Undefined variable: ~a" (cache-prop cache))
+                 (undefined-variable (cache-prop cache))
                  value))))))
 
 (defun expand-global-lookup (prop)
@@ -429,7 +433,7 @@
 
 (defun global-lookup (prop)
   (if-not-found (value (lookup *global* prop))
-    (error "Undefined variable: ~a" prop)
+    (undefined-variable prop)
     value))
 
 (defun gcache-set (gcache obj val)
