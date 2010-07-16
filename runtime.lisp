@@ -18,8 +18,6 @@
             (unless (obj-p res) (return res)))))
       (js-type-error))))
 
-(defun obj-class (obj) (declare (ignore obj)) "Object") ;; TODO
-  
 (deftype js-number ()
   (if *float-traps*
       '(or number (member :Inf :-Inf :NaN))
@@ -174,10 +172,13 @@
 (stdfunc "eval" (str)
   (compile-eval (translate (parse-js:parse-js-string (to-string str)))))
 
+;; TODO URI encoding/decoding functions
+
 (defun ensure-proto (spec)
-  (if (keywordp spec)
-      (find-proto spec)
-      (obj-from-props (find-proto :object) (cons (pr "constructor" nil) spec))))
+  (cond ((keywordp spec) (find-proto spec))
+        ((eq (car spec) :clone)
+         (obj-from-props (find-proto (second spec)) (list (pr "constructor" nil))))
+        (t (obj-from-props (find-proto :object) (cons (pr "constructor" nil) spec)))))
 
 (defun build-constructor (self proto props constr)
   (obj-from-props (find-proto :function)
@@ -209,7 +210,7 @@
   :object)
 
 (stdproto :object
-  (mth "toString" () (format nil "[object ~a]" (obj-class this)))
+  (mth "toString" () "[object Object]")
   (mth "toLocaleString" () (jsmethod this "toString"))
   (mth "valueOf" () this)
 
@@ -474,6 +475,31 @@
         (and (ppcre:scan (reobj-scanner this) (to-string str)) t)
         nil)))
 
+(stdconstructor "Error" (message)
+  (if (eq this *global*)
+      (js-new -self- message)
+      (unless (eq message :undefined)
+        (cached-set this "message" message)))
+  :error)
+
+(stdproto :error
+  (pr "name" "Error" :enum)
+  (pr "message" "Error" :enum)
+  (mth "toString" ()
+    (concatenate 'string "Error: " (cached-lookup this "message"))))
+
+(macrolet ((deferror (name)
+             `(stdconstructor ,name (message)
+                (if (eq this *global*)
+                    (js-new -self- message)
+                    (unless (eq message :undefined)
+                      (cached-set this "message" message)))
+                (:clone :error))))
+  (deferror "TypeError")
+  (deferror "SyntaxError")
+  (deferror "TypeError")
+  (deferror "URIError"))
+
 (defmacro with-overflow (&body body)
   `(handler-case (progn ,@body)
      (floating-point-overflow () (infinity)) ;; TODO -infinity?
@@ -501,6 +527,8 @@
            (t (,cmp ls rs)))))
 
 (stdobject "Math"
+  (mth "toString" () "[object Math]")
+
   (pr "E" (exp 1))
   (pr "LN2" (log 2))
   (pr "LN10" (log 10))
