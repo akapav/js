@@ -1,5 +1,7 @@
 (in-package :js)
 
+;; TODO try operators as clos methods
+
 (defmacro trivial-op (type op)
   (let ((name (intern (concatenate
 		       'string (symbol-name op) (symbol-name type))))

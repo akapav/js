@@ -56,7 +56,7 @@
 (defun proc (val)
   (if (fobj-p val)
       (fobj-proc val)
-      (error "~a is not a function." (to-string val))))
+      (js-error :type-error "~a is not a function." (to-string val))))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defvar *prop-names*
@@ -79,7 +79,7 @@
   (funcall (the function (cache-op cache)) obj obj cache))
 (defmethod static-lookup (obj cache)
   (declare (ignore cache))
-  (error "~a does not have properties." (to-string obj)))
+  (js-error :type-error "~a has no properties." (to-string obj)))
 
 (defun do-lookup (obj start prop)
   (simple-lookup obj start (intern-prop (if (stringp prop) prop (to-string prop)))))
@@ -87,7 +87,7 @@
   (do-lookup obj obj prop))
 (defmethod lookup (obj prop)
   (declare (ignore prop))
-  (error "~a does not have properties." (to-string obj)))
+  (js-error :type-error "~a has no properties." (to-string obj)))
 
 (defun index-in-range (index len)
   (if (and (typep index 'fixnum) (>= index 0) (< index len))
@@ -373,7 +373,7 @@
   (funcall (the function (wcache-op wcache)) obj wcache val))
 (defmethod (setf static-lookup) (val obj wcache)
   (declare (ignore wcache val))
-  (error "Can not set properties in ~a." (to-string obj)))
+  (js-error :type-error "~a has no properties." (to-string obj)))
 
 (defmethod (setf lookup) (val (obj obj) prop)
   ;; Uses meta-set since the overhead isn't big, and duplicating all
@@ -382,7 +382,7 @@
   val)
 (defmethod (setf lookup) (val obj prop)
   (declare (ignore prop val))
-  (error "Can not set properties in ~a." (to-string obj)))
+  (js-error :type-error "~a has no properties." (to-string obj)))
 ;; TODO sparse storage, clever resizing
 (defmethod (setf lookup) (val (obj aobj) prop)
   (let ((index (index-in-range prop most-positive-fixnum)))
@@ -408,7 +408,8 @@
 
 (define-condition undefined-variable (js-condition) ()) ;; TODO proper contents
 (defun undefined-variable (name)
-  (error 'undefined-variable :value (format nil "Undefined variable: ~a" name)))
+  (let ((err (make-js-error :reference-error "Undefined variable: ~a" name)))
+    (error 'undefined-variable :value err)))
 
 (defun gcache-lookup (gcache obj)
   (let ((slot (car gcache))
@@ -474,7 +475,8 @@
 (defmethod list-props ((obj obj))
   (enumerate-properties obj))
 (defmethod list-props (obj)
-  (error "~a does not have any properties." (to-string obj)))
+  (declare (ignore obj))
+  ())
 
 ;; Registering prototypes for string, number, and boolean values
 
@@ -516,7 +518,8 @@
        (make-obj ,cls (vector ,@(mapcar #'cdr props))))))
 
 (defun js-new (func &rest args) ;; TODO check standard
-  (unless (fobj-p func) (error "~a is not a constructor." (to-string func)))
+  (unless (fobj-p func)
+    (js-error :type-error "~a is not a constructor." (to-string func)))
   (let* ((this (make-obj (ensure-fobj-cls func)))
          (result (apply (the function (proc func)) this args)))
     (if (obj-p result) result this)))

@@ -94,10 +94,13 @@
   (loop :for line := (read-line) :do
      (when (equal line "#q") (return))
      (handler-case
-         (let ((result (compile-eval (translate-ast (parse-js-string line)))))
+         (let ((result (compile-eval (translate-ast (parse/err line)))))
            (unless (eq result :undefined)
              (format t "~a~%" (to-string result))))
-       (error (e) (format t "! ~a~%" e)))
+       (js-condition (e)
+         (format t "! ~a~%" (to-string (js-condition-value e))))
+       (error (e)
+         (format t "!! ~a~%" e)))
      (format t "> ")))
 
 ;; Conditions
@@ -105,6 +108,9 @@
 (define-condition js-condition (error)
   ((value :initarg :value :reader js-condition-value))
   (:report (lambda (e stream)
-             (format stream "[js] ~s" (js-condition-value e)))))
+             (format stream "[js] ~a" (to-string (js-condition-value e))))))
 
-;; TODO proper JS error objects
+(defun parse/err (string)
+  (handler-case (parse-js-string string)
+    (js-parse-error (e)
+      (js-error :syntax-error (princ-to-string e)))))

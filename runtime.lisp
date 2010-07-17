@@ -78,7 +78,7 @@
 
 (defun lexical-eval (str scope)
   (let* ((str (to-string str))
-         (parsed (parse-js:parse-js-string str))
+         (parsed (parse/err str))
          (*scope* (list scope))
          (env-obj (car (captured-scope-objs scope)))
          (captured-locals (captured-scope-local-vars scope))
@@ -110,6 +110,13 @@
                    (:nodel (setf base (logior base +slot-nodel+)))))
       base)))
 
+(defun make-js-error (type message &rest args)
+  (let ((err (make-obj (or (find-cls type) (error "Bad JS-error type: ~a" type)))))
+    (cached-set err "message" (if args (apply #'format nil message args) message))
+    err))
+(defun js-error (type message &rest args)
+  (error 'js-condition :value (apply #'make-js-error type message args)))
+
 ;; List of name->func pairs, where func initializes the value.
 (defvar *stdenv-props* ())
 (defun addstdprop (name value)
@@ -125,19 +132,22 @@
 (defmacro pr (name value &rest flags) `(list* ,name ,value ,(slot-flags flags)))
 
 (defparameter *std-prototypes* ())
-(defmacro stdproto (id &body props)
-  `(setf *std-prototypes* (update-set *std-prototypes* ,id (lambda () (list ,@props)))))
+(defmacro stdproto ((id parent) &body props)
+  `(setf *std-prototypes* (update-set *std-prototypes* ,id (lambda () (list ,parent ,@props)))))
+
+(defparameter *common-classes*
+  '(:object :arguments :function :array :regexp :type-error :parse-error :reference-error :syntax-error))
 
 (defun init-env ()
   (let* ((bootstrap (loop :for (name) :in *std-prototypes* :collect (cons name (make-obj nil nil))))
          (objproto (cdr (assoc :object bootstrap)))
-         (clss (loop :for id :in '(:object :arguments :function :array :regexp) :collect
+         (clss (loop :for id :in *common-classes* :collect
                   (cons id (make-scls () (or (cdr (assoc id bootstrap)) objproto)))))
          (*global* (make-gobj (make-hcls objproto) (make-hash-table :test 'eq) bootstrap clss)))
-    (loop :for (nil . shell) :in bootstrap :for (name . create) :in *std-prototypes* :do
-       (let ((real-obj (obj-from-props (if (eq name :object) nil objproto) (funcall create))))
-         (setf (obj-vals shell) (obj-vals real-obj)
-               (obj-cls shell) (obj-cls real-obj))))
+    (loop :for (nil . shell) :in bootstrap :for (nil . create) :in *std-prototypes* :do
+       (destructuring-bind (proto-id . props) (funcall create)
+         (obj-from-props (cdr (assoc proto-id bootstrap)) props
+                         (lambda (cls vals) (setf (obj-vals shell) vals (obj-cls shell) cls)))))
     (loop :for (name . func) :in *stdenv-props* :do
        (setf (lookup *global* name) (funcall func)))
     *global*))
@@ -170,7 +180,7 @@
 (stdfunc "isNaN" (val)
   (is-nan (to-number val)))
 (stdfunc "eval" (str)
-  (compile-eval (translate (parse-js:parse-js-string (to-string str)))))
+  (compile-eval (translate (parse/err (to-string str)))))
 
 ;; TODO URI encoding/decoding functions
 
@@ -209,7 +219,7 @@
       this)
   :object)
 
-(stdproto :object
+(stdproto (:object nil)
   (mth "toString" () "[object Object]")
   (mth "toLocaleString" () (jsmethod this "toString"))
   (mth "valueOf" () this)
@@ -221,7 +231,7 @@
 (stdconstructor "Function" (&rest args)
   (let ((body (format nil "(function (~{~a~^, ~}) {~A});"
                       (butlast args) (car (last args)))))
-    (compile-eval (translate (parse-js-string body))))
+    (compile-eval (translate (parse/err body))))
   :function)
 
 (defun vec-apply (func this vec)
@@ -232,7 +242,7 @@
                   (t (apply func this (coerce vec 'list))))))
     (vapply 7)))
              
-(stdproto :function
+(stdproto (:function :object)
   (pr "prototype" (cons (js-lambda () (setf (lookup this "prototype") (simple-obj)))
                         (js-lambda (val) (ensure-slot this "prototype" val +slot-noenum+))) :active)
 
@@ -240,7 +250,7 @@
     (typecase args
       (aobj (vec-apply (proc this) self (aobj-arr args)))
       (argobj (apply (proc this) self (argobj-list args)))
-      (t (error "second argument to apply must be an array"))))
+      (t (js-error :type-error "Second argument to Function.prototype.apply must be an array."))))
   (mth "call" (self &rest args)
     (apply (proc this) self args)))
 
@@ -255,7 +265,7 @@
 (defmacro unless-array (default &body body)
   `(if (aobj-p this) (progn ,@body) ,default))
 
-(stdproto :array
+(stdproto (:array :object)
   (pr "length" (cons (js-lambda () (if (aobj-p this) (length (aobj-arr this)) 0)) nil) :active)
 
   (mth "toString" ()
@@ -341,7 +351,7 @@
         (sort (aobj-arr this) func)
         this))))
 
-(stdproto :arguments
+(stdproto (:arguments :object)
   (pr "length" (cons (js-lambda () (argobj-length this)) nil) :active)
   (pr "callee" (cons (js-lambda () (argobj-callee this)) nil) :active))
 
@@ -369,7 +379,7 @@
 (defun really-string (val)
   (if (stringp val) val (and (vobj-p val) (stringp (vobj-value val)) (vobj-value val))))
 
-(stdproto :string
+(stdproto (:string :object)
   (pr "length" (cons (js-lambda () (let ((str (really-string this))) (if str (length str) 0))) nil) :active)
 
   (mth "toString" () (or (really-string this) (js-type-error)))
@@ -420,7 +430,7 @@
 (defun typed-value-of (obj type)
   (if (and (vobj-p obj) (typep (vobj-value obj) type)) (vobj-value obj) (js-type-error)))
 
-(stdproto :number
+(stdproto (:number :object)
   (mth "toString" ((radix 10))
     (let ((num (typed-value-of this 'js-number)))
       (if (= radix 10)
@@ -434,7 +444,7 @@
       (make-vobj (ensure-fobj-cls -self-) (to-boolean value)))
   ())
 
-(stdproto :boolean
+(stdproto (:boolean :object)
   (mth "toString" () (if (typed-value-of this 'boolean) "true" "false"))
   (mth "valueOf" () (typed-value-of this 'boolean)))
 
@@ -444,7 +454,7 @@
          (scanner (ppcre:create-scanner
                    pattern :case-insensitive-mode (position #\i flags))))
     (unless (every (lambda (ch) (position ch "igm")) flags)
-      (error "Invalid regular expression flags: ~a" flags))
+      (js-error :syntax-error "Invalid regular expression flags: ~a" flags))
     (setf (reobj-proc obj) (js-lambda (str)
                              (let ((str (to-string str)))
                                (multiple-value-bind (from to) (ppcre:scan scanner str)
@@ -457,7 +467,7 @@
   (init-reobj (make-reobj (ensure-fobj-cls -self-) nil nil nil) pattern flags)
   :regexp)
 
-(stdproto :regexp
+(stdproto (:regexp :object)
   (mth "toString" ()
     (if (reobj-p this)
         (format nil "/~a/~a" (car (reobj-args this)) (cdr (reobj-args this)))
@@ -482,23 +492,29 @@
         (cached-set this "message" message)))
   :error)
 
-(stdproto :error
+(stdproto (:error :object)
   (pr "name" "Error" :enum)
   (pr "message" "Error" :enum)
   (mth "toString" ()
-    (concatenate 'string "Error: " (cached-lookup this "message"))))
+    (concatenate 'string "Error: " (to-string (cached-lookup this "message")))))
 
-(macrolet ((deferror (name)
-             `(stdconstructor ,name (message)
-                (if (eq this *global*)
-                    (js-new -self- message)
-                    (unless (eq message :undefined)
-                      (cached-set this "message" message)))
-                (:clone :error))))
-  (deferror "TypeError")
-  (deferror "SyntaxError")
-  (deferror "TypeError")
-  (deferror "URIError"))
+(macrolet ((deferror (name id)
+             `(progn (stdconstructor ,name (message)
+                       (if (eq this *global*)
+                           (js-new -self- message)
+                           (unless (eq message :undefined)
+                             (cached-set this "message" message)))
+                       ,id)
+                     (stdproto (,id :error)
+                       (mth "toString" ()
+                         (concatenate 'string ,(format nil "~a: " name)
+                                      (to-string (cached-lookup this "message"))))))))
+  (deferror "SyntaxError" :syntax-error)
+  (deferror "ReferenceError" :reference-error)
+  (deferror "TypeError" :type-error)
+  (deferror "URIError" :uri-error)
+  (deferror "EvalError" :eval-error)
+  (deferror "RangeError" :range-error))
 
 (defmacro with-overflow (&body body)
   `(handler-case (progn ,@body)

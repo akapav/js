@@ -1,6 +1,6 @@
 (in-package :js)
 
-;; TODO :delete, :switch
+;; TODO :switch
 
 (defvar *scope* ())
 (defparameter *label-name* nil)
@@ -110,7 +110,7 @@
 (defmacro with-scope (local &body body)
   `(let ((*scope* (cons ,local *scope*))) ,@body))
 
-(defun in-function-scope-p ()
+(defun in-function-scope-p () ;; TODO do not count catch scopes
   (some (lambda (s) (typep s 'simple-scope)) *scope*))
 
 (let ((integers-are-fixnums
@@ -270,16 +270,17 @@
     (expand-if test then else)))
 
 (deftranslate (:try body catch finally)
-  `(,(if finally 'unwind-protect 'prog1)
-     ,(if catch
-          (with-scope (make-simple-scope :vars (list (->usersym (car catch))))
-            (let ((var (->usersym (car catch))))
-              `(handler-case ,(translate body)
-                 (error (,var)
-                   (setf ,var (if (typep ,var 'js-condition) (js-condition-value ,var) (princ-to-string ,var)))
-                   ,(translate (cdr catch))))))
-          (translate body))
-     ,@(and finally (list (translate finally)))))
+  (let ((body (translate body)))
+    `(,(if finally 'unwind-protect 'prog1)
+       ,(if catch
+            (with-scope (make-simple-scope :vars (list (->usersym (car catch))))
+              (let ((var (->usersym (car catch))))
+                `(handler-case ,body
+                   (js-condition (,var)
+                     (setf ,var (js-condition-value ,var))
+                     ,(translate (cdr catch))))))
+            body)
+       ,@(and finally (list (translate finally))))))
 
 (deftranslate (:throw expr)
   `(error 'js-condition :value ,(translate expr)))
@@ -401,7 +402,7 @@
 
 (deftranslate (:return value)
   (unless (in-function-scope-p)
-    (error "return outside of function"))
+    (js-error :syntax-error "Return outside of function."))
   `(return-from function ,(if value (translate value) :undefined)))
 
 (deftranslate (:defun name args body)
@@ -429,8 +430,8 @@
               (if (fobj-p ,mth)
                   (funcall (the function (fobj-proc ,mth)) ,obj ,@(mapcar 'translate args))
                   ,(case (car func)
-                     (:dot `(error "Can not call method ~a in ~a." ,(third func) (to-string ,obj)))
-                     (:sub `(error "Invalid method call on ~a." (to-string ,obj))))))))
+                     (:dot `(js-error :type-error "Can not call method ~a in ~a." ,(third func) (to-string ,obj)))
+                     (:sub `(js-error :type-error "Invalid method call on ~a." (to-string ,obj))))))))
         (t `(funcall (the function (proc ,(translate func))) *global* ,@(mapcar 'translate args)))))
 
 (defun translate-assign (place val)
@@ -501,4 +502,4 @@
                                          ((eq op :--) '1-) ((eq op :++) '1+)) ,ret))
        ,ret)))
 
-(defun see (js) (translate-ast (parse-js:parse-js-string js)))
+(defun see (js) (translate-ast (parse-js-string js)))

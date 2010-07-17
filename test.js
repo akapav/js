@@ -413,6 +413,18 @@ function test_29() {
   $eq(Object.prototype.propertyIsEnumerable("toString"), false);
 }
 
+function test_30() {
+  $eq(new Error("foo").message, "foo");
+  $eq(new Error("foo").toString, Error.prototype.toString);
+  try {throw 1;}
+  catch(e) {var err = e;}
+  $eq(err, 1);
+  try {undefined.prop;}
+  catch(e) {$eq(e.toString, TypeError.prototype.toString);}
+  try {eval("a b c");}
+  catch(e) {$eq(e.toString, SyntaxError.prototype.toString);}
+}
+
 function runTests() {
   var failures = [];
   var run = 0;
