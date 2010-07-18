@@ -438,6 +438,28 @@ function test_31() {
   $eq('foo'.replace(/f(x)?/, '\\1'), 'oo');
 }
 
+function test_32() {
+  var re1 = /foo(bar)?/i;
+  var re2 = /foobar/gm;
+  $eq(re1.ignoreCase, true);
+  $eq(re1.multiline, false);
+  $eq(re1.global, false);
+  $eq(re2.ignoreCase, false);
+  $eq(re2.multiline, true);
+  $eq(re2.global, true);
+  var m = re1.exec("foobar");
+  $eq(m.length, 2);
+  $eq(m[0], "foobar");
+  $eq(m[1], "bar");
+  m = re1.exec("foo");
+  $eq(m.length, 2);
+  $eq(m[0], "foo");
+  $eq(m[1], undefined);
+  $eq(re2.test("foobar"), true);
+  $eq(re2.test("quux"), false);
+  $eq(re2("quux"), null);
+}
+
 function runTests() {
   var failures = [];
   var run = 0;

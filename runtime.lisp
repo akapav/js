@@ -541,11 +541,16 @@
   (mth "toString" () (if (typed-value-of this 'boolean) "true" "false"))
   (mth "valueOf" () (typed-value-of this 'boolean)))
 
+(defun new-regexp (pattern flags)
+  (init-reobj (make-reobj (find-cls :regexp) nil nil nil) pattern flags))
 (defun init-reobj (obj pattern flags)
   (let* ((flags (if (eq flags :undefined) "" (to-string flags)))
          (pattern (to-string pattern))
-         (scanner (handler-case (ppcre:create-scanner
-                                 pattern :case-insensitive-mode (position #\i flags))
+         (multiline (and (position #\m flags) t))
+         (ignore-case (and (position #\i flags) t))
+         (global (and (position #\g flags) t))
+         (scanner (handler-case (ppcre:create-scanner pattern :case-insensitive-mode ignore-case
+                                                      :multi-line-mode multiline)
                     (ppcre:ppcre-syntax-error (e)
                       (js-error :syntax-error (princ-to-string e))))))
     (unless (every (lambda (ch) (position ch "igm")) flags)
@@ -553,10 +558,13 @@
     (setf (reobj-proc obj) (js-lambda (str) (regexp-exec obj str))
           (reobj-scanner obj) scanner
           (reobj-args obj) (cons pattern flags))
+    (cached-set obj "global" global)
+    (cached-set obj "ignoreCase" ignore-case)
+    (cached-set obj "multiline" multiline)
+    (cached-set obj "source" pattern)
+    (cached-set obj "lastIndex" 0)
     obj))
 
-(defun new-regexp (pattern flags)
-  (init-reobj (make-reobj (find-cls :regexp) nil nil nil) pattern flags))
 (defun regexp-global (re)
   (position #\g (cdr (reobj-args re))))
 (defun regexp-exec (re str &optional raw no-global)
@@ -580,8 +588,13 @@
 
 ;; TODO init lastIndex, read standard
 (stdconstructor "RegExp" (pattern flags)
-  (new-regexp pattern flags)
-  :regexp)
+  (if (and (reobj-p pattern) (eq flags :undefined))
+      (if (eq this *global*)
+          pattern
+          (new-regexp (car (reobj-args pattern)) (cdr (reobj-args pattern))))
+      (new-regexp pattern flags))
+  :regexp
+  (pr "length" 2)) ;; Because the standard says so
 
 (stdproto (:regexp :object)
   (mth "toString" ()
@@ -596,7 +609,7 @@
     this)
   (mth "test" (str)
     (if (reobj-p this)
-        (and (ppcre:scan (reobj-scanner this) (to-string str)) t)
+        (not (eq (regexp-exec this (to-string str) t) :null))
         nil)))
 
 (stdconstructor "Error" (message)
