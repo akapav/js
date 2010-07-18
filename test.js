@@ -435,6 +435,7 @@ function test_31() {
   $eq('xdabda'.replace(/d(a)/g, '\\1'), 'xaba');
   $eq('xdabda'.replace(/d(a)/g, function(full, g1, pos) {return pos;}), 'x1b4');
   $eq('xdabda'.replace(/d(a)/g, function(full, g1, pos, all) {return all;}), 'xxdabdabxdabda');
+  $eq('foo'.replace(/f(x)?/, '\\1'), 'oo');
 }
 
 function runTests() {

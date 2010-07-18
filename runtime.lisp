@@ -422,7 +422,7 @@
                     (when (eq start :null) (return))
                     (when (eql start end) (cached-set pattern "lastIndex" (1+ start)))
                     (replace-occurrence start end gstart gend)))))
-      (if parts
+      (if (or parts (> pos 0))
           (progn (when (< pos (length me))
                    (push (subseq me pos) parts))
                  (apply #'concatenate 'string (nreverse parts)))
