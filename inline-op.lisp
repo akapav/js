@@ -65,8 +65,8 @@
 (defnumop :> `(> ,lhs ,rhs))
 (defnumop :<= `(<= ,lhs ,rhs))
 (defnumop :>= `(>= ,lhs ,rhs))
-(defnumop :== `(< ,lhs ,rhs))
-(defnumop :!= `(< ,lhs ,rhs))
+(defnumop :== `(= ,lhs ,rhs))
+(defnumop :!= `(/= ,lhs ,rhs))
 (defnumop :=== `(< ,lhs ,rhs))
 (defnumop :!== `(< ,lhs ,rhs))
 

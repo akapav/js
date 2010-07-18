@@ -349,7 +349,7 @@
          (uses-args (or uses-eval (references-arguments body)))
          (eval-scope (gensym "eval-scope"))
          (base-locals (cons "this" args))
-         (fname (and uses-args (or name (gensym)))))
+         (fname (and uses-args (or name (symbol-name (gensym))))))
     (when name (push name base-locals))
     (when uses-args (push "arguments" base-locals))
     (multiple-value-bind (locals internal) (find-locals body base-locals)
@@ -370,7 +370,7 @@
                                    ,@(mapcar 'translate (lift-defuns body))
                                    :undefined))))
                        (if uses-args
-                           (wrap-function/arguments args body1 fname)
+                           (wrap-function/arguments args body1 (->usersym fname))
                            (wrap-function args body1)))
                  nil)))
           (if (or name fname)

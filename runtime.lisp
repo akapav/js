@@ -731,3 +731,6 @@
 (defun reset ()
   (setf *global* (init-env)))
 (reset)
+
+(defmacro with-js-env (&body body)
+  `(let ((*global* (init-env))) ,@body))
