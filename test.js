@@ -425,6 +425,18 @@ function test_30() {
   catch(e) {$eq(e.toString, SyntaxError.prototype.toString);}
 }
 
+function test_31() {
+  $eq('xaba'.replace('a', 'c'), 'xcba');
+  $eq('xaba'.replace(/a/, 'c'), 'xcba');
+  $eq('xaba'.replace(/a/g, 'c'), 'xcbc');
+  $eq('xaba'.replace(/a/g, function(){return 33;}), 'x33b33');
+  $eq('xdabda'.replace(/d(a)/g, function(full) {return full + 1;}), 'xda1bda1');
+  $eq('xdabda'.replace(/d(a)/g, function(full, g1) {return g1;}), 'xaba');
+  $eq('xdabda'.replace(/d(a)/g, '\\1'), 'xaba');
+  $eq('xdabda'.replace(/d(a)/g, function(full, g1, pos) {return pos;}), 'x1b4');
+  $eq('xdabda'.replace(/d(a)/g, function(full, g1, pos, all) {return all;}), 'xxdabdabxdabda');
+}
+
 function runTests() {
   var failures = [];
   var run = 0;

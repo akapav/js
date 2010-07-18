@@ -84,9 +84,9 @@
 (defun compile-eval (code)
   (funcall (compile nil `(lambda () ,code))))
 
-(defun js-load-file (fname)
-  (with-open-file (str fname)
-    (compile-eval `(locally (declare (optimize speed (safety 0))) (wrap-js ,(translate-ast (parse-js str)))))))
+(defun js-load-file (fname &optional optimize)
+  (let ((code (with-open-file (str fname) `(wrap-js ,(translate-ast (parse-js str))))))
+    (compile-eval (if optimize `(locally (declare (optimize speed (safety 0))) ,code) code))))
 
 ;; TODO support multiline input
 (defun js-repl ()

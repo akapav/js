@@ -166,7 +166,7 @@
 
 ;; TODO reuse class
 (deftranslate (:regexp expr flags)
-  `(load-time-value (init-reobj (make-reobj (find-cls :regexp) nil nil nil) ,expr ,flags)))
+  `(load-time-value (new-regexp ,expr ,flags)))
 
 ;flags
 

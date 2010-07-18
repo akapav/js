@@ -68,6 +68,8 @@
 (defun fvector (&rest elements)
   (let ((len (length elements)))
     (make-array len :fill-pointer len :initial-contents elements :adjustable t)))
+(defun empty-fvector (len)
+  (make-array len :fill-pointer len :initial-element :undefined :adjustable t))
 (defun build-array (vector)
   (make-aobj (find-cls :array) vector))
 
@@ -255,7 +257,7 @@
 (stdconstructor "Array" (&rest args)
   (let* ((len (length args))
          (arr (if (and (= len 1) (integerp (car args)))
-                  (make-array (car args) :initial-element :undefined :fill-pointer (car args) :adjustable t)
+                  (empty-fvector (car args))
                   (make-array len :initial-contents args :fill-pointer len :adjustable t))))
     (make-aobj (ensure-fobj-cls -self-) arr))
   :array)
@@ -273,7 +275,7 @@
     (let* ((elements (loop :for elt :in (cons this others) :collect
                         (if (aobj-p elt) (aobj-arr elt) (vector elt))))
            (size (reduce #'+ elements :key #'length))
-           (arr (make-array size :fill-pointer size :adjustable t))
+           (arr (empty-fvector size))
            (pos 0))
       (dolist (elt elements)
         (loop :for val :across elt :do
@@ -296,7 +298,7 @@
              (added (length elems))
              (diff (- added removed))
              (new-len (- (+ (length vec) added) removed))
-             (result (make-array removed :fill-pointer removed :adjustable t)))
+             (result (empty-fvector removed)))
         (replace result vec :start2 index :end2 (+ index removed))
         (cond ((< diff 0) ;; shrink
                (replace vec vec :start1 (+ index added) :start2 (+ index removed))
@@ -377,6 +379,55 @@
 (defun really-string (val)
   (if (stringp val) val (and (vobj-p val) (stringp (vobj-value val)) (vobj-value val))))
 
+(defun string-replace (me pattern replacement)
+  (let* ((parts ()) (pos 0) (me (to-string me))
+         (replace
+          (if (fobj-p replacement)
+              (lambda (start end gstart gend)
+                (push (to-string (apply (fobj-proc replacement) *global* (subseq me start end)
+                                        (loop :for gs :across gstart :for ge :across gend :for i :from 1
+                                           :collect (if start (subseq me gs ge) :undefined)
+                                           :when (eql i (length gstart)) :append (list start me))))
+                      parts))
+              (let ((repl-str (to-string replacement)))
+                (if (ppcre:scan "\\\\\\d" repl-str)
+                    (let ((tmpl (ppcre:split "\\\\(\\d)" repl-str :with-registers-p t)))
+                      (loop :for cons :on (cdr tmpl) :by #'cddr :do
+                         (setf (car cons) (1- (parse-integer (car cons)))))
+                      (lambda (start end gstart gend)
+                        (declare (ignore start end))
+                        (loop :for piece :in tmpl :do
+                           (if (stringp piece)
+                               (when (> (length piece) 0) (push piece parts))
+                               (let ((start (aref gstart piece)))
+                                 (when start (push (subseq me start (aref gend piece)) parts)))))))
+                    (lambda (start end gstart gend)
+                      (declare (ignore start end gstart gend))
+                      (push repl-str parts)))))))
+    (flet ((replace-occurrence (start end gstart gend)
+             (unless (eql start pos)
+               (push (subseq me pos start) parts))
+             (funcall replace start end gstart gend)
+             (setf pos end)))
+      (cond ((not (reobj-p pattern))
+             (let ((pattern (to-string pattern))
+                   (index (search (to-string pattern) me)))
+               (when index (replace-occurrence index (+ index (length pattern)) #.#() #.#()))))
+            ((not (regexp-global pattern))
+             (multiple-value-bind (start end gstart gend) (regexp-exec pattern me t)
+               (unless (eq start :null) (replace-occurrence start end gstart gend))))
+            (t (cached-set pattern "lastIndex" 0)
+               (loop
+                  (multiple-value-bind (start end gstart gend) (regexp-exec pattern me t)
+                    (when (eq start :null) (return))
+                    (when (eql start end) (cached-set pattern "lastIndex" (1+ start)))
+                    (replace-occurrence start end gstart gend)))))
+      (if parts
+          (progn (when (< pos (length me))
+                   (push (subseq me pos) parts))
+                 (apply #'concatenate 'string (nreverse parts)))
+          me))))
+
 (stdproto (:string :object)
   (pr "length" (cons (js-lambda () (let ((str (really-string this))) (if str (length str) 0))) nil) :active)
 
@@ -384,9 +435,12 @@
   (mth "valueOf" () (or (really-string this) (js-error :type-error "Incompatible type.")))
 
   (mth "charAt" (index)
-    (let ((str (to-string this))
-          (idx (to-integer index)))
+    (let ((str (to-string this)) (idx (to-integer index)))
       (if (< -1 idx (length str)) (string (char str idx)) "")))
+  (mth "charCodeAt" (index)
+    (let ((str (to-string this)) (idx (to-integer index)))
+      (if (< -1 idx (length str)) (char-code (char str idx)) (nan))))
+
   (mth "indexOf" (substr (start 0))
     (or (search (to-string substr) (to-string this) :start2 (to-integer start)) -1))
   (mth "lastIndexOf" (substr start)
@@ -399,10 +453,20 @@
   (mth "substr" ((from 0) len)
     (careful-substr (to-string this) from
                     (if (eq len :undefined) len (+ (to-integer from) (to-integer len)))))
+  (mth "slice" ((from 0) to)
+    (let* ((from (to-integer from)) (str (to-string this))
+           (to (if (eq to :undefined) (length str) (to-integer to))))
+      (when (< from 0) (setf from (+ (length str) from)))
+      (when (< to 0) (setf to (+ (length str) to)))
+      (careful-substr str from to)))
 
   (mth "toUpperCase" ()
     (string-upcase (to-string this)))
   (mth "toLowerCase" ()
+    (string-downcase (to-string this)))
+  (mth "toLocaleUpperCase" ()
+    (string-upcase (to-string this)))
+  (mth "toLocaleLowerCase" ()
     (string-downcase (to-string this)))
 
   (mth "split" (delim)
@@ -413,7 +477,36 @@
            (fvector str)
            (coerce (loop :with step := (length delim) :for beg := 0 :then (+ pos step)
                          :for pos := (search delim str :start2 beg)
-                         :collect (subseq str beg pos) :while pos) 'simple-vector))))))
+                         :collect (subseq str beg pos) :while pos) 'simple-vector)))))
+  (mth "concat" (&rest values) ;; TODO 'The length property of the concat method is 1', whatever sense that makes
+    (apply #'concatenate 'string (cons (to-string this) (mapcar 'to-string values))))
+
+  (mth "localeCompare" (that)
+    (let ((a (to-string this)) (b (to-string that)))
+      (cond ((string< a b) -1)
+            ((string> a b) 1)
+            (t 0))))
+
+  (mth "match" (regexp)
+    (unless (reobj-p regexp) (setf regexp (new-regexp regexp :undefined)))
+    (let ((str (to-string this)))
+      (if (regexp-global regexp)
+          (let ((matches ()))
+            (cached-set regexp "lastIndex" 0)
+            (loop
+               (multiple-value-bind (start end) (regexp-exec regexp str t)
+                 (when (eq start :null) (return))
+                 (when (eql start end) (cached-set regexp "lastIndex" (1+ start)))
+                 (push (subseq str start end) matches)))
+            (build-array (apply 'fvector (nreverse matches))))
+          (regexp-exec regexp str))))
+
+  (mth "replace" (pattern replacement)
+    (string-replace this pattern replacement))
+  (mth "search" (pattern)
+    (unless (reobj-p pattern) (setf pattern (new-regexp (to-string pattern) :undefined)))
+    (values (regexp-exec pattern (to-string this) t t)))
+  )
 
 (stdconstructor "Number" (value)
   (if (eq this *global*)
@@ -451,20 +544,43 @@
 (defun init-reobj (obj pattern flags)
   (let* ((flags (if (eq flags :undefined) "" (to-string flags)))
          (pattern (to-string pattern))
-         (scanner (ppcre:create-scanner
-                   pattern :case-insensitive-mode (position #\i flags))))
+         (scanner (handler-case (ppcre:create-scanner
+                                 pattern :case-insensitive-mode (position #\i flags))
+                    (ppcre:ppcre-syntax-error (e)
+                      (js-error :syntax-error (princ-to-string e))))))
     (unless (every (lambda (ch) (position ch "igm")) flags)
       (js-error :syntax-error "Invalid regular expression flags: ~a" flags))
-    (setf (reobj-proc obj) (js-lambda (str)
-                             (let ((str (to-string str)))
-                               (multiple-value-bind (from to) (ppcre:scan scanner str)
-                                 (if from (subseq str from to) :null))))
+    (setf (reobj-proc obj) (js-lambda (str) (regexp-exec obj str))
           (reobj-scanner obj) scanner
           (reobj-args obj) (cons pattern flags))
     obj))
 
+(defun new-regexp (pattern flags)
+  (init-reobj (make-reobj (find-cls :regexp) nil nil nil) pattern flags))
+(defun regexp-global (re)
+  (position #\g (cdr (reobj-args re))))
+(defun regexp-exec (re str &optional raw no-global)
+  (let ((start 0) (str (to-string str)) (global (and (not no-global) (regexp-global re))))
+    (when global
+      (setf start (cached-lookup re "lastIndex"))
+      (when (> -1 start (length str))
+        (cached-set re "lastIndex" 0)
+        (return-from regexp-exec :null)))
+    (multiple-value-bind (mstart mend gstart gend)
+        (ppcre:scan (reobj-scanner re) (to-string str) :start start)
+      (when global
+        (cached-set re "lastIndex" (if mend mend (1+ start))))
+      (cond ((not mstart) :null)
+            (raw (values mstart mend gstart gend))
+            (t (let ((result (empty-fvector (1+ (length gstart)))))
+                 (setf (aref result 0) (subseq str mstart mend))
+                 (loop :for st :across gstart :for end :across gend :for i :from 1 :do
+                    (when st (setf (aref result i) (subseq str st end))))
+                 (build-array result)))))))
+
+;; TODO init lastIndex, read standard
 (stdconstructor "RegExp" (pattern flags)
-  (init-reobj (make-reobj (ensure-fobj-cls -self-) nil nil nil) pattern flags)
+  (new-regexp pattern flags)
   :regexp)
 
 (stdproto (:regexp :object)
@@ -474,9 +590,7 @@
         (to-string this)))
 
   (mth "exec" (str)
-    (if (reobj-p this)
-        (funcall (reobj-proc this) this (to-string str))
-        nil))
+    (if (reobj-p this) (regexp-exec this str) nil))
   (mth "compile" (expr flags)
     (when (reobj-p this) (init-reobj this expr flags))
     this)
