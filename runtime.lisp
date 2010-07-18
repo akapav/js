@@ -1,7 +1,5 @@
 (in-package :js)
 
-(defun js-type-error () (error "type error"))
-
 (defun default-value (val &optional (hint :string))
   (block nil
     (unless (obj-p val) (return val))
@@ -16,7 +14,7 @@
         (when (obj-p method)
           (let ((res (jscall* method val)))
             (unless (obj-p res) (return res)))))
-      (js-type-error))))
+      (js-error :type-error "Can't convert object to ~a." (symbol-name hint)))))
 
 (deftype js-number ()
   (if *float-traps*
@@ -382,8 +380,8 @@
 (stdproto (:string :object)
   (pr "length" (cons (js-lambda () (let ((str (really-string this))) (if str (length str) 0))) nil) :active)
 
-  (mth "toString" () (or (really-string this) (js-type-error)))
-  (mth "valueOf" () (or (really-string this) (js-type-error)))
+  (mth "toString" () (or (really-string this) (js-error :type-error "Incompatible type.")))
+  (mth "valueOf" () (or (really-string this) (js-error :type-error "Incompatible type.")))
 
   (mth "charAt" (index)
     (let ((str (to-string this))
@@ -428,7 +426,9 @@
   (pr "NEGATIVE_INFINITY" (-infinity)))
 
 (defun typed-value-of (obj type)
-  (if (and (vobj-p obj) (typep (vobj-value obj) type)) (vobj-value obj) (js-type-error)))
+  (if (and (vobj-p obj) (typep (vobj-value obj) type))
+      (vobj-value obj)
+      (js-error :type-error "Incompatible type.")))
 
 (stdproto (:number :object)
   (mth "toString" ((radix 10))
