@@ -65,7 +65,7 @@
 (defnumop :> `(> ,lhs ,rhs))
 (defnumop :<= `(<= ,lhs ,rhs))
 (defnumop :>= `(>= ,lhs ,rhs))
-(defnumop :== `(= ,lhs ,rhs))
+(defexpand :== (:integer :integer) `(= ,lhs ,rhs))
 (defnumop :!= `(/= ,lhs ,rhs))
 (defnumop :=== `(< ,lhs ,rhs))
 (defnumop :!== `(< ,lhs ,rhs))

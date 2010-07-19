@@ -403,7 +403,7 @@
 (deftranslate (:return value)
   (unless (in-function-scope-p)
     (js-error :syntax-error "Return outside of function."))
-  `(return-from function ,(if value (translate value) :undefined)))
+  `(return-from function (values ,(if value (translate value) :undefined))))
 
 (deftranslate (:defun name args body)
   (set-in-scope name (translate-function name args body) t))

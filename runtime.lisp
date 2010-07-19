@@ -135,27 +135,24 @@
 (defmacro stdproto ((id parent) &body props)
   `(setf *std-prototypes* (update-set *std-prototypes* ,id (lambda () (list ,parent ,@props)))))
 
-(defparameter *common-classes*
-  '(:object :arguments :function :array :regexp :type-error :parse-error :reference-error :syntax-error))
-
 (defun init-env ()
-  (let* ((bootstrap (loop :for (name) :in *std-prototypes* :collect (cons name (make-obj nil nil))))
-         (objproto (cdr (assoc :object bootstrap)))
-         (clss (loop :for id :in *common-classes* :collect
-                  (cons id (make-scls () (or (cdr (assoc id bootstrap)) objproto)))))
+  ;; Check whether proto definitions and offset vector are in sync
+  (assert (equal (coerce *proto-offsets* 'list) (mapcar #'car *std-prototypes*)))
+  (let* ((bootstrap (make-array (length *std-prototypes*) :initial-contents
+                                (loop :repeat (length *proto-offsets*) :collect (make-obj nil nil))))
+         (objproto (svref bootstrap (proto-offset :object)))
+         (clss (make-array (length *common-classes*) :initial-contents
+                           (loop :for id :across *common-classes* :collect
+                              (let ((off (proto-offset id)))
+                                (make-scls () (if off (svref bootstrap off) objproto))))))
          (*global* (make-gobj (make-hcls objproto) (make-hash-table :test 'eq) bootstrap clss)))
-    (loop :for (nil . shell) :in bootstrap :for (nil . create) :in *std-prototypes* :do
+    (loop :for shell :across bootstrap :for (nil . create) :in *std-prototypes* :do
        (destructuring-bind (proto-id . props) (funcall create)
-         (obj-from-props (cdr (assoc proto-id bootstrap)) props
+         (obj-from-props (and proto-id (find-proto proto-id)) props
                          (lambda (cls vals) (setf (obj-vals shell) vals (obj-cls shell) cls)))))
     (loop :for (name . func) :in *stdenv-props* :do
        (setf (lookup *global* name) (funcall func)))
     *global*))
-
-(defun find-proto (id)
-  (cdr (assoc id (gobj-protos *global*))))
-(defun find-cls (id)
-  (cdr (assoc id (gobj-common-cls *global*))))
 
 (defmacro stdprop (name value)
   `(addstdprop ,name (lambda () ,value)))
@@ -413,7 +410,7 @@
              (let ((pattern (to-string pattern))
                    (index (search (to-string pattern) me)))
                (when index (replace-occurrence index (+ index (length pattern)) #.#() #.#()))))
-            ((not (regexp-global pattern))
+            ((not (reobj-global pattern))
              (multiple-value-bind (start end gstart gend) (regexp-exec pattern me t)
                (unless (eq start :null) (replace-occurrence start end gstart gend))))
             (t (cached-set pattern "lastIndex" 0)
@@ -490,7 +487,7 @@
   (mth "match" (regexp)
     (unless (reobj-p regexp) (setf regexp (new-regexp regexp :undefined)))
     (let ((str (to-string this)))
-      (if (regexp-global regexp)
+      (if (reobj-global regexp)
           (let ((matches ()))
             (cached-set regexp "lastIndex" 0)
             (loop
@@ -505,8 +502,9 @@
     (string-replace this pattern replacement))
   (mth "search" (pattern)
     (unless (reobj-p pattern) (setf pattern (new-regexp (to-string pattern) :undefined)))
-    (values (regexp-exec pattern (to-string this) t t)))
-  )
+    (values (regexp-exec pattern (to-string this) t t))))
+
+(declare-primitive-prototype string :string)
 
 (stdconstructor "Number" (value)
   (if (eq this *global*)
@@ -531,15 +529,20 @@
           (let ((*print-radix* (to-integer radix))) (princ-to-string (floor num))))))
   (mth "valueOf" () (typed-value-of this 'js-number)))
 
+(declare-primitive-prototype number :number)
+
 (stdconstructor "Boolean" (value)
   (if (eq this *global*)
       (to-boolean value)
       (make-vobj (ensure-fobj-cls -self-) (to-boolean value)))
-  ())
+  :boolean)
 
 (stdproto (:boolean :object)
   (mth "toString" () (if (typed-value-of this 'boolean) "true" "false"))
   (mth "valueOf" () (typed-value-of this 'boolean)))
+
+(declare-primitive-prototype (eql t) :boolean)
+(declare-primitive-prototype (eql nil) :boolean)
 
 (defun new-regexp (pattern flags)
   (init-reobj (make-reobj (find-cls :regexp) nil nil nil) pattern flags))
@@ -557,7 +560,7 @@
       (js-error :syntax-error "Invalid regular expression flags: ~a" flags))
     (setf (reobj-proc obj) (js-lambda (str) (regexp-exec obj str))
           (reobj-scanner obj) scanner
-          (reobj-args obj) (cons pattern flags))
+          (reobj-global obj) global)
     (cached-set obj "global" global)
     (cached-set obj "ignoreCase" ignore-case)
     (cached-set obj "multiline" multiline)
@@ -565,10 +568,8 @@
     (cached-set obj "lastIndex" 0)
     obj))
 
-(defun regexp-global (re)
-  (position #\g (cdr (reobj-args re))))
 (defun regexp-exec (re str &optional raw no-global)
-  (let ((start 0) (str (to-string str)) (global (and (not no-global) (regexp-global re))))
+  (let ((start 0) (str (to-string str)) (global (and (not no-global) (reobj-global re))))
     (when global
       (setf start (cached-lookup re "lastIndex"))
       (when (> -1 start (length str))
@@ -586,12 +587,17 @@
                     (when st (setf (aref result i) (subseq str st end))))
                  (build-array result)))))))
 
-;; TODO init lastIndex, read standard
+(defun regexp-args (re)
+  (values (cached-lookup re "source")
+          (format nil "~:[~;i~]~:[~;g~]~:[~;m~]" (cached-lookup re "ignoreCase")
+                  (cached-lookup re "global") (cached-lookup re "multiline"))))
+
 (stdconstructor "RegExp" (pattern flags)
-  (if (and (reobj-p pattern) (eq flags :undefined))
+  (if (and (eq flags :undefined) (reobj-p pattern))
       (if (eq this *global*)
           pattern
-          (new-regexp (car (reobj-args pattern)) (cdr (reobj-args pattern))))
+          (multiple-value-bind (source flags) (regexp-args pattern)
+            (new-regexp source flags)))
       (new-regexp pattern flags))
   :regexp
   (pr "length" 2)) ;; Because the standard says so
@@ -599,7 +605,8 @@
 (stdproto (:regexp :object)
   (mth "toString" ()
     (if (reobj-p this)
-        (format nil "/~a/~a" (car (reobj-args this)) (cdr (reobj-args this)))
+        (multiple-value-bind (source flags) (regexp-args this)
+          (format nil "/~a/~a" source flags))
         (to-string this)))
 
   (mth "exec" (str)

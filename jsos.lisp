@@ -2,12 +2,31 @@
 
 (defvar *global*)
 
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (defparameter *common-classes*
+    #(:object :arguments :function :array :regexp :type-error :parse-error :reference-error :syntax-error))
+  (defparameter *proto-offsets*
+    #(:object :function :array :arguments :string :number :boolean :regexp :error
+      :syntax-error :reference-error :type-error :uri-error :eval-error :range-error))
+  (defun proto-offset (id)
+    (declare (optimize speed (safety 0)))
+    (loop :for off :of-type fixnum :below (length (the simple-vector *proto-offsets*)) :do
+       (when (eq id (svref *proto-offsets* off)) (return off))))
+  (defun cls-offset (id)
+    (declare (optimize speed (safety 0)))
+    (loop :for off :of-type fixnum :below (length (the simple-vector *common-classes*)) :do
+       (when (eq id (svref *common-classes* off)) (return off)))))
+
+(defmacro find-proto (id)
+  `(svref (gobj-protos *global*) ,(if (keywordp id) (proto-offset id) `(proto-offset ,id))))
+(defmacro find-cls (id)
+  `(svref (gobj-common-cls *global*) ,(if (keywordp id) (cls-offset id) `(cls-offset ,id))))
+
 ;; (Some of this code is *really* unorthogonal, repeating itself a
 ;; lot. This is mostly due to the fact that we are using different
 ;; code paths, some of which can assume previously-checked conditions,
 ;; to optimize.)
 
-;; TODO optimize declarations
 ;; TODO thread-safety (maybe)
 
 ;; TODO give up caching when it fails too often
@@ -29,8 +48,8 @@
   protos common-cls)
 (defstruct (aobj (:constructor make-aobj (cls arr)) (:include obj))
   arr)
-(defstruct (reobj (:constructor make-reobj (cls proc scanner args)) (:include fobj))
-  scanner args)
+(defstruct (reobj (:constructor make-reobj (cls proc scanner global)) (:include fobj))
+  scanner global)
 (defstruct (argobj (:constructor make-argobj (cls list length callee)) (:include obj))
   list length callee)
 
@@ -345,7 +364,7 @@
     ;; We switch to a hash table if this class has 8 'exits' (probably
     ;; being used as a container), and it is not one of the reused classes.
     (when (and (not new-cls) (> (length (scls-children cls)) 8)
-               (not (find cls (gobj-common-cls *global*) :key #'cdr)))
+               (not (find cls (gobj-common-cls *global*) :test #'eq)))
       (setf (scls-children cls) (make-hcls (cls-prototype cls)))
       (hash-obj obj (scls-children cls))
       (setf (gethash prop (obj-vals obj)) (cons val flags))
@@ -494,11 +513,6 @@
        val)
      (defmethod list-props ((obj ,specializer))
        (enumerate-properties (find-proto ,proto-id)))))
-
-(declare-primitive-prototype string :string)
-(declare-primitive-prototype number :number)
-(declare-primitive-prototype (eql t) :boolean)
-(declare-primitive-prototype (eql nil) :boolean)
 
 ;; Utilities
 
