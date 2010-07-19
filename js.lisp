@@ -50,7 +50,7 @@
 
 ;; Indented for use inside of JS code
 (defmacro jscall (func &rest args)
-  `(funcall (the function (proc ,func)) *global* ,@args))
+  `(funcall (the function (proc ,func)) *env* ,@args))
 (defmacro jscall* (func this &rest args)
   `(funcall (the function (proc ,func)) ,this ,@args))
 (defmacro jsmethod (obj name &rest args)

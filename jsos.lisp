@@ -1,6 +1,6 @@
 (in-package :js)
 
-(defvar *global*)
+(defvar *env*)
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defparameter *common-classes*
@@ -18,9 +18,9 @@
        (when (eq id (svref *common-classes* off)) (return off)))))
 
 (defmacro find-proto (id)
-  `(svref (gobj-protos *global*) ,(if (keywordp id) (proto-offset id) `(proto-offset ,id))))
+  `(svref (gobj-protos *env*) ,(if (keywordp id) (proto-offset id) `(proto-offset ,id))))
 (defmacro find-cls (id)
-  `(svref (gobj-common-cls *global*) ,(if (keywordp id) (cls-offset id) `(cls-offset ,id))))
+  `(svref (gobj-common-cls *env*) ,(if (keywordp id) (cls-offset id) `(cls-offset ,id))))
 
 ;; (Some of this code is *really* unorthogonal, repeating itself a
 ;; lot. This is mostly due to the fact that we are using different
@@ -364,7 +364,7 @@
     ;; We switch to a hash table if this class has 8 'exits' (probably
     ;; being used as a container), and it is not one of the reused classes.
     (when (and (not new-cls) (> (length (scls-children cls)) 8)
-               (not (find cls (gobj-common-cls *global*) :test #'eq)))
+               (not (find cls (gobj-common-cls *env*) :test #'eq)))
       (setf (scls-children cls) (make-hcls (cls-prototype cls)))
       (hash-obj obj (scls-children cls))
       (setf (gethash prop (obj-vals obj)) (cons val flags))
@@ -449,10 +449,10 @@
                  value))))))
 
 (defun expand-global-lookup (prop)
-  `(gcache-lookup (load-time-value (cons nil (make-cache (intern-prop ,prop)))) ,*global*))
+  `(gcache-lookup (load-time-value (cons nil (make-cache (intern-prop ,prop)))) ,*env*))
 
 (defun global-lookup (prop)
-  (if-not-found (value (lookup *global* prop))
+  (if-not-found (value (lookup *env* prop))
     (undefined-variable prop)
     value))
 
@@ -472,7 +472,7 @@
     val))
 
 (defun expand-global-set (prop val)
-  `(gcache-set (load-time-value (cons nil (intern-prop ,prop))) ,*global* ,val))
+  `(gcache-set (load-time-value (cons nil (intern-prop ,prop))) ,*env* ,val))
 
 ;; Enumerating
 
@@ -563,7 +563,7 @@
               ((logtest (cdr slot) +slot-nodel+) nil)
               (t (cond ((not (hash-table-p (obj-vals obj)))
                         (hash-obj obj (make-hcls (cls-prototype (obj-cls obj))))) ;; TODO reuse?
-                       ((eq obj *global*) ;; Global slots can be cached, so we have to flag them as deleted
+                       ((eq obj *env*) ;; Global slots can be cached, so we have to flag them as deleted
                         (setf (car slot) :deleted (cdr slot) +slot-active+)))
                  (remhash (intern-prop prop) (obj-vals obj)))))
       t))

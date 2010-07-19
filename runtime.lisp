@@ -145,21 +145,21 @@
                            (loop :for id :across *common-classes* :collect
                               (let ((off (proto-offset id)))
                                 (make-scls () (if off (svref bootstrap off) objproto))))))
-         (*global* (make-gobj (make-hcls objproto) (make-hash-table :test 'eq) bootstrap clss)))
+         (*env* (make-gobj (make-hcls objproto) (make-hash-table :test 'eq) bootstrap clss)))
     (loop :for shell :across bootstrap :for (nil . create) :in *std-prototypes* :do
        (destructuring-bind (proto-id . props) (funcall create)
          (obj-from-props (and proto-id (find-proto proto-id)) props
                          (lambda (cls vals) (setf (obj-vals shell) vals (obj-cls shell) cls)))))
     (loop :for (name . func) :in *stdenv-props* :do
-       (setf (lookup *global* name) (funcall func)))
-    *global*))
+       (setf (lookup *env* name) (funcall func)))
+    *env*))
 
 (defmacro stdprop (name value)
   `(addstdprop ,name (lambda () ,value)))
 (defmacro stdfunc (name args &body body)
   `(addstdprop ,name (lambda () (build-func ,(wrap-js-lambda args body)))))
 
-(addstdprop "this" (lambda () *global*))
+(addstdprop "this" (lambda () *env*))
 (stdprop "undefined" :undefined)
 (stdprop "Infinity" (infinity))
 (stdprop "NaN" (nan))
@@ -344,7 +344,7 @@
       (let ((func (if (eq compare :undefined)
                       (lambda (a b) (string< (to-string a) (to-string b))) ;; TODO less wasteful
                       (let ((proc (proc compare)))
-                        (lambda (a b) (funcall proc *global* a b))))))
+                        (lambda (a b) (funcall proc *env* a b))))))
         (sort (aobj-arr this) func)
         this))))
 
@@ -353,7 +353,7 @@
   (pr "callee" (cons (js-lambda () (argobj-callee this)) nil) :active))
 
 (stdconstructor "String" (value)
-  (if (eq this *global*)
+  (if (eq this *env*)
       (to-string value)
       (make-vobj (ensure-fobj-cls -self-) (to-string value)))
   :string
@@ -381,7 +381,7 @@
          (replace
           (if (fobj-p replacement)
               (lambda (start end gstart gend)
-                (push (to-string (apply (fobj-proc replacement) *global* (subseq me start end)
+                (push (to-string (apply (fobj-proc replacement) *env* (subseq me start end)
                                         (loop :for gs :across gstart :for ge :across gend :for i :from 1
                                            :collect (if start (subseq me gs ge) :undefined)
                                            :when (eql i (length gstart)) :append (list start me))))
@@ -507,7 +507,7 @@
 (declare-primitive-prototype string :string)
 
 (stdconstructor "Number" (value)
-  (if (eq this *global*)
+  (if (eq this *env*)
       (to-number value)
       (make-vobj (ensure-fobj-cls -self-) (to-number value)))
   :number
@@ -532,7 +532,7 @@
 (declare-primitive-prototype number :number)
 
 (stdconstructor "Boolean" (value)
-  (if (eq this *global*)
+  (if (eq this *env*)
       (to-boolean value)
       (make-vobj (ensure-fobj-cls -self-) (to-boolean value)))
   :boolean)
@@ -594,7 +594,7 @@
 
 (stdconstructor "RegExp" (pattern flags)
   (if (and (eq flags :undefined) (reobj-p pattern))
-      (if (eq this *global*)
+      (if (eq this *env*)
           pattern
           (multiple-value-bind (source flags) (regexp-args pattern)
             (new-regexp source flags)))
@@ -620,7 +620,7 @@
         nil)))
 
 (stdconstructor "Error" (message)
-  (if (eq this *global*)
+  (if (eq this *env*)
       (js-new -self- message)
       (unless (eq message :undefined)
         (cached-set this "message" message)))
@@ -634,7 +634,7 @@
 
 (macrolet ((deferror (name id)
              `(progn (stdconstructor ,name (message)
-                       (if (eq this *global*)
+                       (if (eq this *env*)
                            (js-new -self- message)
                            (unless (eq message :undefined)
                              (cached-set this "message" message)))
@@ -749,8 +749,8 @@
     (random 1.0)))
 
 (defun reset ()
-  (setf *global* (init-env)))
+  (setf *env* (init-env)))
 (reset)
 
 (defmacro with-js-env (&body body)
-  `(let ((*global* (init-env))) ,@body))
+  `(let ((*env* (init-env))) ,@body))

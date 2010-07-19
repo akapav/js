@@ -3,7 +3,7 @@
 (defun ray ()
   (with-js-env
     (js-load-file (asdf:system-relative-pathname :js "bench/ray.js"))
-    (time (wrap-js (js-funcall (lookup *global* "renderScene"))))))
+    (time (wrap-js (js-funcall (lookup *env* "renderScene"))))))
 
 (defun slurp-file (file)
   (with-open-file (in file)
@@ -17,4 +17,4 @@
     (let ((file (asdf:system-relative-pathname :js "bench/codemirror.js")))
       (js-load-file file)
       (let ((code (slurp-file file)))
-        (time (wrap-js (js-funcall (lookup *global* "codemirrorBench") code)))))))
+        (time (wrap-js (js-funcall (lookup *env* "codemirrorBench") code)))))))

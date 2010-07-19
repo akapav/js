@@ -94,7 +94,7 @@
              (return (setf (lookup obj name) value)))
            :finally (if (captured-scope-next scope)
                         (set-in-captured-scope name value (captured-scope-next scope))
-                        (setf (lookup *global* name) value))))))
+                        (setf (lookup *env* name) value))))))
 (defmethod set-variable (name valname (scope captured-scope) rest)
   (declare (ignore rest))
   `(set-in-captured-scope ,name ,valname ,scope))
@@ -432,7 +432,7 @@
                   ,(case (car func)
                      (:dot `(js-error :type-error "Can not call method ~a in ~a." ,(third func) (to-string ,obj)))
                      (:sub `(js-error :type-error "Invalid method call on ~a." (to-string ,obj))))))))
-        (t `(funcall (the function (proc ,(translate func))) *global* ,@(mapcar 'translate args)))))
+        (t `(funcall (the function (proc ,(translate func))) *env* ,@(mapcar 'translate args)))))
 
 (defun translate-assign (place val)
   (case (car place)
