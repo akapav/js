@@ -460,6 +460,30 @@ function test_32() {
   $eq(re2("quux"), null);
 }
 
+function test_33() {
+  var a, b;
+  function testcase(x) {
+    switch (x) {
+    default:
+    case 1: a = 1; break;
+    case 2: a = 2;
+    case 3: b = 3;
+      break;
+    case 4: a = 100;
+    }
+  }
+  testcase(1);
+  $eq(a, 1);
+  testcase(2);
+  $eq(a, 2);
+  $eq(b, 3);
+  testcase(4);
+  $eq(a, 100);
+  $eq(b, 3);
+  testcase(5);
+  $eq(a, 1);
+}
+
 function runTests() {
   var failures = [];
   var run = 0;

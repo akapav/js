@@ -178,9 +178,9 @@
 (defun translate@ (form)
   (and form (list (translate form))))
 
-(defun translate/break-continue (label form)
+(defun call/break-continue (label proc)
   (let* ((*break/cont* (cons nil *break/cont*))
-         (translated (translate form)))
+         (result (funcall proc)))
     (let (br cn lb-br lb-cn)
       (dolist (evt (car *break/cont*))
         (cond ((eq evt :break) (setf br t))
@@ -188,7 +188,10 @@
               ((string= (cdr evt) (string label))
                (ecase (car evt) (:break (setf lb-br t)) (:continue (setf lb-cn t))))
               ((cdr *break/cont*) (push evt (second *break/cont*)))))
-      (values translated br cn lb-br lb-cn))))
+      (values result br cn lb-br lb-cn))))
+
+(defun translate/break-continue (label form)
+  (call/break-continue label (lambda () (translate form))))
 
 (defmacro with-label (var &body body)
   `(let ((,var (and *label-name* (->usersym *label-name*)))
@@ -260,6 +263,44 @@
                 ,body
                 (go loop-continue)
               loop-end)))))))
+
+(deftranslate (:switch val body)
+  (with-label label
+    (let ((blocks ()) (cur-block nil) (val-sym (gensym)) (default-case nil))
+      (labels ((finish-block ()
+                 (when cur-block
+                   (setf (third cur-block) (nreverse (mapcar 'translate (third cur-block))))
+                   (push cur-block blocks)))
+               (gather-blocks ()
+                 (dolist (stat body)
+                   (cond ((member (car stat) '(:case :default))
+                          (finish-block)
+                          (setf cur-block (list stat (gensym) ()))
+                          (when (eq (car stat) :default)
+                            (when default-case (js-parse-error "Invalid switch statement."))
+                            (setf default-case cur-block)))
+                         (t (unless cur-block (js-parse-error "Invalid switch statement."))
+                            (push stat (third cur-block)))))
+                 (finish-block)
+                 (unless default-case (push `((:default) ,(gensym) ()) blocks))
+                 (nreverse blocks)))
+        (multiple-value-bind (blocks br cn lb-br lb-cn) (call/break-continue label #'gather-blocks)
+          (declare (ignore lb-br))
+          (when (or cn lb-cn) (parse-js:js-parse-error "Can not continue a switch."))
+          `(let ((,val-sym ,(translate val)))
+             (block ,label
+               (tagbody
+                  (cond ,@(loop :for (case label) :in blocks :unless (eq (car case) :default) :collect
+                             `((!== ,val-sym ,(translate (second case))) (go ,label)))
+                        (t (go ,(second default-case))))
+                  ,@(loop :for (nil label statements) :in blocks :append
+                       (cons label statements))
+                  ,@(and br '(loop-end))))))))))
+          
+(deftranslate (:case)
+  (js-error :syntax-error "Misplaced case label."))
+(deftranslate (:default)
+  (js-error :syntax-error "Misplaced default label."))
 
 (flet ((expand-if (test then else)
          `(if ,(to-boolean-typed (translate test) (ast-type test))
