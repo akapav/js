@@ -238,7 +238,7 @@
                        `(,i (funcall func this ,@(loop :for j :below i :collect `(aref vec ,j)))))
                   (t (apply func this (coerce vec 'list))))))
     (vapply 7)))
-             
+
 (stdproto (:function :object)
   (pr "prototype" (cons (js-lambda () (setf (lookup this "prototype") (simple-obj)))
                         (js-lambda (val) (ensure-slot this "prototype" val +slot-noenum+))) :active)
@@ -467,14 +467,17 @@
     (string-downcase (to-string this)))
 
   (mth "split" (delim)
-    (let ((str (to-string this))
-          (delim (to-string delim)))
+    (let ((str (to-string this)))
       (build-array
-       (if (equal delim "")
-           (fvector str)
-           (coerce (loop :with step := (length delim) :for beg := 0 :then (+ pos step)
-                         :for pos := (search delim str :start2 beg)
-                         :collect (subseq str beg pos) :while pos) 'simple-vector)))))
+       (if (reobj-p delim)
+           (coerce (ppcre:split (reobj-scanner delim) str :sharedp t) 'simple-vector)
+           (let ((delim (to-string delim)))
+             (if (equal delim "")
+                 (fvector str)
+                 (coerce (loop :with step := (length delim) :for beg := 0 :then (+ pos step)
+                            :for pos := (search delim str :start2 beg)
+                            :collect (subseq str beg pos) :while pos) 'simple-vector)))))))
+
   (mth "concat" (&rest values) ;; TODO 'The length property of the concat method is 1', whatever sense that makes
     (apply #'concatenate 'string (cons (to-string this) (mapcar 'to-string values))))
 
