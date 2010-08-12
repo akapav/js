@@ -113,3 +113,7 @@
   (handler-case (parse-js-string string)
     (js-parse-error (e)
       (js-error :syntax-error (princ-to-string e)))))
+
+(defun tests ()
+  (with-js-env
+    (js-load-file (asdf:system-relative-pathname :js "test.js"))))

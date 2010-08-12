@@ -19,7 +19,7 @@
   (let ((found (gensym)))
     `(if-not-found (,found ,(expand-cached-lookup (with-scope-var scope) name))
        ,(lookup-variable name (car rest) (cdr rest))
-       ,found)))
+       (values ,found ,(with-scope-var scope)))))
 (defmethod set-variable (name valname (scope with-scope) rest) ;; TODO hasOwnProperty?
   `(if-not-found (nil ,(expand-cached-lookup (with-scope-var scope) name))
      ,(set-variable name valname (car rest) (cdr rest))
@@ -471,6 +471,10 @@
                   ,(case (car func)
                      (:dot `(js-error :type-error "Can not call method ~a in ~a." ,(third func) (to-string ,obj)))
                      (:sub `(js-error :type-error "Invalid method call on ~a." (to-string ,obj))))))))
+        ((and (eq (car func) :name) (some (lambda (e) (typep e 'with-scope)) *scope*))
+         (let ((fval (gensym)) (objval (gensym)))
+           `(multiple-value-bind (,fval ,objval) ,(translate func)
+              (funcall (the function (proc ,fval)) (or ,objval *env*) ,@(mapcar 'translate args)))))
         (t `(funcall (the function (proc ,(translate func))) *env* ,@(mapcar 'translate args)))))
 
 (defun translate-assign (place val)

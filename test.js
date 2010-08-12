@@ -484,6 +484,12 @@ function test_33() {
   $eq(a, 1);
 }
 
+function test_34() {
+  function a() {return "wrong"}
+  var obj = {u: "right", a: function() {return this.u;}};
+  with (obj) {$eq(a(), "right");}
+}
+
 function runTests() {
   var failures = [];
   var run = 0;
