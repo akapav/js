@@ -1,7 +1,5 @@
 (in-package :js)
 
-(defmacro !this () 'js-user::|this|)
-
 ;; Float special values
 
 #+sbcl
@@ -74,7 +72,7 @@
   (wrap-js-lambda args body))
 
 ;;
-(defmacro !eval (str) ;;todo translate-ast temporary removed
+(defmacro js-eval (str) ;;todo translate-ast temporary removed
   `(wrap-js ,(translate-ast (parse-js-string str))))
 
 (defun compile-eval (code)
@@ -113,7 +111,3 @@
   (handler-case (parse-js-string string)
     (js-parse-error (e)
       (js-error :syntax-error (princ-to-string e)))))
-
-(defun tests ()
-  (with-js-env
-    (js-load-file (asdf:system-relative-pathname :js "test.js"))))

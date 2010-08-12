@@ -708,7 +708,7 @@
   (mth "atan" (arg)
     (my-atan arg))
   (mth "atan2" (x y)
-    (my-atan (!/ x y)))
+    (my-atan (js/ x y)))
 
   (mth "ceil" (arg)
     (math-case arg (:-Inf (-infinity)) (:Inf (infinity)) (t (ceiling arg))))
@@ -757,3 +757,7 @@
 
 (defmacro with-js-env (&body body)
   `(let ((*env* (init-env))) ,@body))
+
+(defun tests ()
+  (with-js-env
+    (js-load-file (asdf:system-relative-pathname :js "test.js"))))

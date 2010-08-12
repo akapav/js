@@ -7,7 +7,7 @@
     (t (error "invalid variable identifier"))))
 
 (defun js-intern (sym)
-  (intern (concatenate 'string "!" (symbol-name sym)) :js))
+  (intern (concatenate 'string "js" (symbol-name sym)) :js))
 
 ;;
 (defmacro with-ignored-style-warnings (&body body)

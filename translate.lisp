@@ -289,7 +289,7 @@
              (block ,label
                (tagbody
                   (cond ,@(loop :for (case label) :in blocks :unless (eq (car case) :default) :collect
-                             `((!=== ,val-sym ,(translate (second case))) (go ,label)))
+                             `((js=== ,val-sym ,(translate (second case))) (go ,label)))
                         (t (go ,(second default-case))))
                   ,@(loop :for (nil label statements) :in blocks :append
                        (cons label statements))

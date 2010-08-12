@@ -51,7 +51,7 @@
   (concatenate 'string (to-string ls) (to-string rs)))
 
 ;; TODO optimize
-(defun !+ (ls rs)
+(defun js+ (ls rs)
   (funcall
    (cond
      ((and (typep ls 'fixnum) (typep rs 'fixnum)) #'+fixnum)
@@ -72,7 +72,7 @@
 		    (-infinity) (infinity) (infinity)
                     (-infinity))
 
-(defun !- (ls rs)
+(defun js- (ls rs)
   (funcall 
    (cond
      ((and (typep ls 'fixnum) (typep rs 'fixnum)) #'-fixnum)
@@ -89,7 +89,7 @@
                     (infinity) (infinity) (-infinity)
                     (infinity) (-infinity))
 
-(defun !* (ls rs)
+(defun js* (ls rs)
   (funcall
    (cond
      ((and (typep ls 'fixnum) (typep rs 'fixnum)) #'*fixnum)
@@ -110,7 +110,7 @@
 		    (nan) (nan) (nan) (nan)
 		    0 0 (infinity) (-infinity))
 
-(defun !/ (ls rs)
+(defun js/ (ls rs)
   (if (and (numberp ls) (numberp rs))
       (/number ls rs)
       (/number.ext (to-number ls) (to-number rs))))
@@ -122,7 +122,7 @@
 		    (nan) (nan) (nan) (nan)
 		    num num (nan) (nan))
 
-(defun !% (ls rs)
+(defun js% (ls rs)
   (funcall
    (cond
      ((and (numberp ls) (numberp rs)) #'mod)
@@ -130,17 +130,17 @@
      (t (constantly (nan)))) ls rs))
 
 ;;
-(defun !=== (ls rs)
+(defun js=== (ls rs)
   (cond ((is-nan ls) nil)
         ((eq ls rs) t)
         ((stringp ls) (and (stringp rs) (string= ls rs)))
         ((numberp ls) (and (numberp rs) (= ls rs)))))
 
-(defun !!== (ls rs)
-  (not (!=== ls rs)))
+(defun js!== (ls rs)
+  (not (js=== ls rs)))
 
 ;;
-(defun !== (ls rs)
+(defun js== (ls rs)
   (cond ((is-nan ls) nil)
         ((eq ls rs) t)
         ((eq ls :null) (eq rs :undefined))
@@ -148,13 +148,13 @@
         ((numberp ls) (let ((rsn (to-number rs)))
                         (and (not (is-nan rsn)) (= ls rsn))))
         ((stringp ls) (string= ls (to-string rs)))
-        ((or (eq ls t) (eq ls nil)) (!== (if ls 1 0) rs))
-        ((or (eq rs t) (eq rs nil)) (!== ls (if rs 1 0)))
-        ((obj-p ls) (cond ((stringp rs) (!== (default-value ls) rs))
-                          ((typep rs 'js-number) (!== (default-value ls :number) rs))))))
+        ((or (eq ls t) (eq ls nil)) (js== (if ls 1 0) rs))
+        ((or (eq rs t) (eq rs nil)) (js== ls (if rs 1 0)))
+        ((obj-p ls) (cond ((stringp rs) (js== (default-value ls) rs))
+                          ((typep rs 'js-number) (js== (default-value ls :number) rs))))))
 
-(defun !!= (ls rs)
-  (not (!== ls rs)))
+(defun js!= (ls rs)
+  (not (js== ls rs)))
 
 ;;
 (trivial-op fixnum <)
@@ -164,7 +164,7 @@
 		    nil nil t nil
 		    t nil nil t)
 
-(defun !< (ls rs)
+(defun js< (ls rs)
   (cond
     ((and (typep ls 'fixnum) (typep rs 'fixnum)) (<fixnum ls rs))
     ((and (numberp ls) (numberp rs)) (<number ls rs))
@@ -181,7 +181,7 @@
 		    nil nil t nil
 		    t nil nil t)
 
-(defun !> (ls rs)
+(defun js> (ls rs)
   (cond
     ((and (typep ls 'fixnum) (typep rs 'fixnum)) (>fixnum ls rs))
     ((and (numberp ls) (numberp rs)) (>number ls rs))
@@ -191,37 +191,37 @@
     (t (when (string> (to-string ls) (to-string rs)) t))))
 
 ;;
-(defun !<= (ls rs)
+(defun js<= (ls rs)
   (unless (or (is-nan ls) (is-nan rs))
-    (not (!> ls rs))))
+    (not (js> ls rs))))
 
-(defun !>= (ls rs)
+(defun js>= (ls rs)
   (unless (or (is-nan ls) (is-nan rs))
-    (not (!< ls rs))))
+    (not (js< ls rs))))
 
 ;;
-(defun !++ (arg)
-  (!+ (to-number arg) 1))
+(defun js++ (arg)
+  (js+ (to-number arg) 1))
 
-(defun !-- (arg)
-  (!- (to-number arg) 1))
+(defun js-- (arg)
+  (js- (to-number arg) 1))
 
 ;; TODO to-int-32
-(defun !>> (a b)
+(defun js>> (a b)
   (ash (to-integer a) (- (to-integer b))))
-(defun !<< (a b)
+(defun js<< (a b)
   (ash (to-integer a) (to-integer b)))
-(defun !>>> (a b)
+(defun js>>> (a b)
   (ash (to-integer a) (- (to-integer b))))
 
 ;;
-(defun !instanceof (ls rs)
+(defun jsinstanceof (ls rs)
   (and (obj-p ls) (fobj-p rs)
        (let ((proto (lookup rs "prototype")))
          (loop :for cur := ls :then (cls-prototype (obj-cls cur)) :while cur :do
             (when (eq cur proto) (return t))))))
 
-(defun !in (prop obj)
+(defun jsin (prop obj)
   (if-not-found (nil (lookup obj prop)) nil t))
 
 (defun js-type-of (exp)

@@ -64,7 +64,7 @@ function spectralnorm(n) {
 }
 .
 
-#+nil (sqrt (!eval "spectralnorm(200);"))
+#+nil (sqrt (js-eval "spectralnorm(200);"))
 
 (sb-sprof:profile-call-counts "JS")
 
@@ -74,4 +74,4 @@ function spectralnorm(n) {
      :report :graph
      :reset t
      :loop nil)
-(js::js-funcall  (!eval "fib;") 30))
+(js::js-funcall  (js-eval "fib;") 30))

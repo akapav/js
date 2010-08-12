@@ -44,7 +44,7 @@
          (typecase ,lh
            (fixnum (+ (the fixnum ,lh) ,rh))
            (double-float (+ (the double-float ,lh) ,rh))
-           (t (!+ ,lh ,rh)))))))
+           (t (js+ ,lh ,rh)))))))
 (defexpand :+ (:number t)
   (unless *float-traps*
     (let ((lh (gensym)) (rh (gensym)))
@@ -52,7 +52,7 @@
          (typecase ,rh
            (fixnum (+ ,lh (the fixnum ,rh)))
            (double-float (+ ,lh (the double-float ,rh)))
-           (t (!+ ,lh ,rh)))))))
+           (t (js+ ,lh ,rh)))))))
 
 (defnumop :- `(- ,lhs ,rhs))
 (defexpand :- (nil :integer) `(- ,rhs))
