@@ -57,6 +57,38 @@
     (symbol 0)
     (obj (to-integer (default-value val :number)))))
 
+(defun to-integer32 (val)
+  "The operator ToInt32 converts its argument to one of 232 integer values in the range −2 31 through 2 31−1,
+inclusive. This operator functions as follows:
+
+1. Call ToNumber on the input argument.
+
+2. If Result(1) is NaN, +0, −0, +∞, or −∞, return +0.
+
+3. Compute sign(Result(1)) * floor(abs(Result(1))).
+
+4. Compute Result(3) modulo 2^32; that is, a finite integer value k of
+Number type with positive sign and less than 2^32 in magnitude such
+the mathematical difference of Result(3) and k is mathematically an
+integer multiple of 2^32.
+
+5. If Result(4) is greater than or equal to 2^31, return Result(4)−
+2^32, otherwise return Result(4).
+"
+  (let ((num (to-number val)))
+    (if (or (eql num (nan))
+            (= 0 num)
+            (eql (infinity) val)
+            (eql (-infinity) val))
+        0
+        (let* ((int (* (if (> num 0) 1 -1)
+                       (floor (abs num))))
+               (int32-pos (mod int (expt 2 32))))
+          (if (>= int32-pos (expt 2 31))
+              (- int32-pos (expt 2 32))
+              int32-pos)))))
+          
+        
 (defun to-boolean (val)
   (etypecase val
     (boolean val)

@@ -95,7 +95,15 @@
      ((and (typep ls 'fixnum) (typep rs 'fixnum)) #'*fixnum)
      ((and (numberp ls) (numberp rs)) #'*number)
      ((and (numberp ls) (numberp rs)) #'*number.ext)
-     (t (constantly (nan)))) ls rs))     
+     (t (constantly (nan)))) ls rs))
+
+(trivial-op fixnum logxor)
+
+(defun !^ (ls rs)
+  (cond
+    ((and (typep ls 'fixnum) (typep rs 'fixnum)) (funcall #'logxorfixnum ls rs))
+    (t (funcall #'logxorfixnum (the fixnum (to-integer32 ls)) (the fixnum (to-integer32 rs))))))
+
 
 ;;
 (defun /number (ls rs)

@@ -78,8 +78,15 @@
 (defun compile-eval (code)
   (funcall (compile nil `(lambda () ,code))))
 
-(defun run (str)
-  (compile-eval `(wrap-js ,(translate-ast (parse-js-string str)))))
+(defun run (str &key (compile t))
+  (let ((form `(wrap-js ,(translate-ast (parse-js-string str)))))
+    (if compile
+        (compile-eval form)
+        (eval form))))
+
+
+(defun translate-js-string (str)
+  (translate-ast (parse-js-string str)))
 
 (defun js-load-file (fname &optional optimize)
   (let ((code (with-open-file (str fname) `(wrap-js ,(translate-ast (parse-js str))))))
