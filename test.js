@@ -490,6 +490,12 @@ function test_34() {
   with (obj) {$eq(a(), "right");}
 }
 
+function test_35() {
+  $eq('3' ^ 4, 7);
+  $eq(3 ^ 4, 7);
+  $eq('12321312312312' ^ '1512312423423423', 1807226439);
+}
+
 function runTests() {
   var failures = [];
   var run = 0;

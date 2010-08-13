@@ -99,11 +99,11 @@
 
 (trivial-op fixnum logxor)
 
-(defun !^ (ls rs)
+
+(defun js^ (ls rs)
   (cond
     ((and (typep ls 'fixnum) (typep rs 'fixnum)) (funcall #'logxorfixnum ls rs))
     (t (funcall #'logxorfixnum (the fixnum (to-integer32 ls)) (the fixnum (to-integer32 rs))))))
-
 
 ;;
 (defun /number (ls rs)
