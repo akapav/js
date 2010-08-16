@@ -160,7 +160,7 @@
 
 (deftranslate (:object properties)
   (expand-static-obj '(find-proto :object) (loop :for (name . val) :in properties :collect
-                                              (cons name (translate val)))))
+                                              (cons (to-string name) (translate val)))))
 
 ;; TODO reuse class
 (deftranslate (:regexp expr flags)
