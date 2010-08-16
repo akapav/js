@@ -342,7 +342,7 @@
 
   (mth "slice" (from to)
     (let* ((len (to-integer (cached-lookup this "length")))
-           (newarr (make-array len :fill-pointer 0 :adjustable t))
+           (newarr (empty-fvector len))
            (ifrom (to-integer from))
            (from (clip-index (if (< ifrom 0) (+ len ifrom) ifrom) len))
            (ito (if (eq to :undefined) len (to-integer to)))
@@ -351,7 +351,7 @@
          (if-not-found (elt (lookup this i))
            nil
            (vector-push-extend elt newarr)))
-      (make-aobj (find-cls :array) newarr)))
+      (build-array newarr)))
 
   (mth "reverse" ()
     (unless-array (build-array (fvector this))
@@ -483,15 +483,17 @@
 
   (mth "split" (delim)
     (let ((str (to-string this)))
-      (build-array
-       (if (reobj-p delim)
-           (coerce (ppcre:split (reobj-scanner delim) str :sharedp t) 'simple-vector)
-           (let ((delim (to-string delim)))
-             (if (equal delim "")
-                 (fvector str)
-                 (coerce (loop :with step := (length delim) :for beg := 0 :then (+ pos step)
-                            :for pos := (search delim str :start2 beg)
-                            :collect (subseq str beg pos) :while pos) 'simple-vector)))))))
+      (if (reobj-p delim)
+          (build-array (apply 'fvector (ppcre:split (reobj-scanner delim) str :sharedp t :omit-unmatched-p nil)))
+          (let ((delim (to-string delim))
+                (arr (empty-fvector 0)))
+            (if (equal delim "")
+                (loop :for ch :across str :do (vector-push-extend (string ch) arr))
+                (loop :for beg := 0 :then (+ pos (length delim))
+                      :for pos := (search delim str :start2 beg) :do
+                   (vector-push-extend (subseq str beg pos) arr)
+                   (unless pos (return))))
+            (build-array arr)))))
 
   (mth "concat" (&rest values) ;; TODO 'The length property of the concat method is 1', whatever sense that makes
     (apply #'concatenate 'string (cons (to-string this) (mapcar 'to-string values))))
