@@ -280,7 +280,7 @@
                          (t (unless cur-block (js-parse-error "Invalid switch statement."))
                             (push stat (third cur-block)))))
                  (finish-block)
-                 (unless default-case (push `((:default) ,(gensym) ()) blocks))
+                 (unless default-case (push (setf default-case `((:default) ,(gensym) ())) blocks))
                  (nreverse blocks)))
         (multiple-value-bind (blocks br cn lb-br lb-cn) (call/break-continue label #'gather-blocks)
           (declare (ignore lb-br))
