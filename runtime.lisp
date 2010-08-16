@@ -340,6 +340,19 @@
         (setf (aref vec 0) val)
         (length vec))))
 
+  (mth "slice" (from to)
+    (let* ((len (to-integer (cached-lookup this "length")))
+           (newarr (make-array len :fill-pointer 0 :adjustable t))
+           (ifrom (to-integer from))
+           (from (clip-index (if (< ifrom 0) (+ len ifrom) ifrom) len))
+           (ito (if (eq to :undefined) len (to-integer to)))
+           (to (clip-index (if (< ito 0) (+ len ito) ito) len)))
+      (loop :for i :from from :below to :do
+         (if-not-found (elt (lookup this i))
+           nil
+           (vector-push-extend elt newarr)))
+      (make-aobj (find-cls :array) newarr)))
+
   (mth "reverse" ()
     (unless-array (build-array (fvector this))
       (setf (aobj-arr this) (nreverse (aobj-arr this)))
@@ -366,17 +379,14 @@
     (string (code-char (to-integer code)))))
 
 (defun clip-index (index len)
-  (setf index (to-integer index))
-  (cond ((< index 0) 0)
-        ((> index len) len)
-        (t index)))
+  (max 0 (min index len)))
 
 (defun careful-substr (str from to)
   (let* ((len (length str))
-         (from (clip-index from len)))
+         (from (clip-index (to-integer from) len)))
     (if (eq to :undefined)
         (subseq str from)
-        (subseq str from (max from (clip-index to len))))))
+        (subseq str from (max from (clip-index (to-integer to) len))))))
 
 (defun really-string (val)
   (if (stringp val) val (and (vobj-p val) (stringp (vobj-value val)) (vobj-value val))))
