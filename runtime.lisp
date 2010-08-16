@@ -185,7 +185,9 @@
 ;; TODO URI encoding/decoding functions
 
 (defun ensure-proto (spec)
-  (cond ((keywordp spec) (find-proto spec))
+  (cond ((keywordp spec) (let ((proto (find-proto spec)))
+                           (ensure-slot proto "constructor" nil +slot-noenum+)
+                           proto))
         ((eq (car spec) :clone)
          (obj-from-props (find-proto (second spec)) (list (pr "constructor" nil))))
         (t (obj-from-props (find-proto :object) (cons (pr "constructor" nil) spec)))))
