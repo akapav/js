@@ -14,3 +14,8 @@
   `(locally #+sbcl (declare (sb-ext:muffle-conditions style-warning))
 	    #-sbcl ()
 	    (progn ,@body)))
+
+(defmacro trunc32 (int)
+  (let ((r1 (gensym)))
+    `(let ((,r1 (ldb (byte 32 0) ,int)))
+       (if (>= ,r1 #.(expt 2 31)) (- ,r1 #.(expt 2 32)) ,r1))))

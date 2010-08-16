@@ -97,13 +97,15 @@
      ((and (numberp ls) (numberp rs)) #'*number.ext)
      (t (constantly (nan)))) ls rs))
 
-(trivial-op fixnum logxor)
-
 
 (defun js^ (ls rs)
-  (cond
-    ((and (typep ls 'fixnum) (typep rs 'fixnum)) (funcall #'logxorfixnum ls rs))
-    (t (funcall #'logxorfixnum (the fixnum (to-integer32 ls)) (the fixnum (to-integer32 rs))))))
+  (logxor (to-int32 ls) (to-int32 rs)))
+(defun |js\|| (ls rs)
+  (logior (to-int32 ls) (to-int32 rs)))
+(defun js& (ls rs)
+  (logand (to-int32 ls) (to-int32 rs)))
+(defun js~ (rs)
+  (lognot (to-int32 rs)))
 
 ;;
 (defun /number (ls rs)
@@ -216,11 +218,11 @@
 
 ;; TODO to-int-32
 (defun js>> (a b)
-  (ash (to-integer a) (- (to-integer b))))
+  (ash (to-int32 a) (- (to-integer b))))
 (defun js<< (a b)
-  (ash (to-integer a) (to-integer b)))
+  (ash (to-int32 a) (to-integer b)))
 (defun js>>> (a b)
-  (ash (to-integer a) (- (to-integer b))))
+  (ash (to-int32 a) (- (to-integer b)))) ;; TODO not conforming to spec!
 
 ;;
 (defun jsinstanceof (ls rs)

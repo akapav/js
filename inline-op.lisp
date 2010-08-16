@@ -70,13 +70,13 @@
 (defnumop :=== `(< ,lhs ,rhs))
 (defnumop :!== `(< ,lhs ,rhs))
 
-(defexpand :& (:integer :integer) `(logand ,lhs ,rhs))
-(defexpand :|\|| (:integer :integer) `(logior ,lhs ,rhs))
-(defexpand :^ (:integer :integer) `(logxor ,lhs ,rhs))
-(defexpand :~ (nil :integer) `(lognot ,rhs))
-(defexpand :>> (:integer :integer) `(ash ,lhs (- ,rhs)))
-(defexpand :<< (:integer :integer) `(ash ,lhs ,rhs))
-(defexpand :>>> (:integer :integer) `(ash ,lhs (- ,rhs))) ;; TODO not correct!
+(defexpand :& (:integer :integer) `(logand (trunc32 ,lhs) (trunc32 ,rhs)))
+(defexpand :|\|| (:integer :integer) `(logior (trunc32 ,lhs) (trunc32 ,rhs)))
+(defexpand :^ (:integer :integer) `(logxor (trunc32 ,lhs) (trunc32 ,rhs)))
+(defexpand :~ (nil :integer) `(lognot (trunc32 ,rhs)))
+(defexpand :>> (:integer :integer) `(ash (trunc32 ,lhs) (- ,rhs)))
+(defexpand :<< (:integer :integer) `(ash (trunc32 ,lhs) ,rhs))
+(defexpand :>>> (:integer :integer) `(ash (trunc32 ,lhs) (- ,rhs))) ;; TODO not correct!
 
 (defexpand :&& (t t)
   (let ((temp (gensym)))
