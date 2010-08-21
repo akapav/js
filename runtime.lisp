@@ -71,8 +71,8 @@
 (defun fvector (&rest elements)
   (let ((len (length elements)))
     (make-array len :fill-pointer len :initial-contents elements :adjustable t)))
-(defun empty-fvector (len)
-  (make-array len :fill-pointer len :initial-element :undefined :adjustable t))
+(defun empty-fvector (len &optional fill-pointer)
+  (make-array len :fill-pointer (or fill-pointer len) :initial-element :undefined :adjustable t))
 (defun build-array (vector)
   (make-aobj (find-cls :array) vector))
 
@@ -342,7 +342,7 @@
 
   (mth "slice" (from to)
     (let* ((len (to-integer (cached-lookup this "length")))
-           (newarr (empty-fvector len))
+           (newarr (empty-fvector len 0))
            (ifrom (to-integer from))
            (from (clip-index (if (< ifrom 0) (+ len ifrom) ifrom) len))
            (ito (if (eq to :undefined) len (to-integer to)))
