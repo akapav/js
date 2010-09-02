@@ -247,8 +247,6 @@
 
 ;; Writing
 
-;; TODO should there also be support for dynamic setters? (stdlib seems to be okay with ro+dynread)
-
 (defun update-class-and-set (obj new-cls slot val)
   (setf (obj-cls obj) new-cls)
   (unless (< slot (length (obj-vals obj)))

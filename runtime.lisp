@@ -537,9 +537,9 @@
   (pr "NEGATIVE_INFINITY" (-infinity)))
 
 (defun typed-value-of (obj type)
-  (if (and (vobj-p obj) (typep (vobj-value obj) type))
-      (vobj-value obj)
-      (js-error :type-error "Incompatible type.")))
+  (cond ((typep obj type) obj)
+        ((and (vobj-p obj) (typep (vobj-value obj) type)) (vobj-value obj))
+        (t (js-error :type-error "Incompatible type."))))
 
 (stdproto (:number :object)
   (mth "toString" ((radix 10))
