@@ -1,5 +1,7 @@
 (in-package :js)
 
+;; TODO saner break/continue handling
+
 (defvar *scope* ())
 (defparameter *label-name* nil)
 (defvar *break/cont* ())
@@ -250,17 +252,21 @@
   (declare (ignore var))
   (with-label label
     (multiple-value-bind (body br cn lb-br lb-cn) (translate/break-continue label body)
-      (declare (ignore br lb-br cn))
-      (let ((props (gensym)))
+      (declare (ignore lb-br))
+      (let ((prop (gensym)))
         `(block ,label
-           (let ((,props (list-props ,(translate obj))))
-             (tagbody
-              loop-continue
-              ,@(and lb-cn (list label))
-                ,(set-in-scope name `(or (pop ,props) (go loop-end)))
-                ,body
-                (go loop-continue)
-              loop-end)))))))
+           (tagbody
+              (js-for-in ,(translate obj)
+                         (lambda (,prop)
+                           ,(set-in-scope name prop)
+                           ,(if (or cn lb-cn)
+                                `(block nil
+                                   (tagbody
+                                      ,body
+                                    ,@(and cn '(loop-continue))
+                                    ,@(and lb-cn (list label))))
+                                body)))
+            ,@(and br '(loop-end))))))))
 
 (deftranslate (:switch val body)
   (with-label label

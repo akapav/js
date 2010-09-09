@@ -474,26 +474,34 @@
 
 ;; Enumerating
 
-(defun enumerate-properties (obj)
-  (let ((set ()))
-    (flet ((enum (obj)
-             (let ((vals (obj-vals obj)))
-               (if (hash-table-p vals)
-                   (with-hash-table-iterator (next vals)
-                     (loop
-                        (multiple-value-bind (more key val) (next)
-                          (unless more (return))
-                          (unless (logtest (cdr val) +slot-noenum+) (pushnew key set)))))
-                   (loop :for (name nil . flags) :in (scls-props (obj-cls obj)) :do
-                      (unless (logtest flags +slot-noenum+) (pushnew name set)))))))
-      (loop :for cur := obj :then (cls-prototype (obj-cls cur)) :while cur :do (enum cur))
-      set)))
+(defmethod js-for-in ((obj obj) func)
+  (let ((stack ()))
+    (flet ((maybe-yield (flags name)
+             (unless (or (logtest flags +slot-noenum+)
+                         (dolist (parent stack)
+                           (when (find-slot* parent name) (return t))))
+               (funcall func name))))
+      (loop :for cur := obj :then (cls-prototype cls) :while cur
+            :for cls := (obj-cls cur) :for vals := (obj-vals cur) :do
+         (if (hash-table-p vals)
+             (with-hash-table-iterator (next vals)
+               (loop (multiple-value-bind (more name val) (next)
+                       (unless more (return))
+                       (maybe-yield (cdr val) name))))
+             (loop :for (name nil . flags) :in (scls-props cls) :do
+                (maybe-yield flags name)))
+         (push cur stack)))))
 
-(defmethod list-props ((obj obj))
-  (enumerate-properties obj))
-(defmethod list-props (obj)
-  (declare (ignore obj))
-  ())
+(defmethod js-for-in ((obj aobj) func)
+  (dotimes (i (length (aobj-arr obj))) (funcall func (princ-to-string i)))
+  (call-next-method))
+
+(defmethod js-for-in ((obj argobj) func)
+  (dotimes (i (argobj-length obj)) (funcall func (princ-to-string i)))
+  (call-next-method))
+
+(defmethod js-for-in (obj func)
+  (declare (ignore obj func)))
 
 ;; Registering prototypes for string, number, and boolean values
 
@@ -509,8 +517,8 @@
      (defmethod (setf lookup) (val (obj ,specializer) prop)
        (declare (ignore prop))
        val)
-     (defmethod list-props ((obj ,specializer))
-       (enumerate-properties (find-proto ,proto-id)))))
+     (defmethod js-for-in ((obj ,specializer) func)
+       (js-for-in (find-proto ,proto-id) func))))
 
 ;; Utilities
 
@@ -549,10 +557,13 @@
     (fobj-new-cls fobj)))
 
 (defun find-slot (obj prop)
+  (find-slot* obj (intern-prop prop)))
+
+(defun find-slot* (obj prop)
   (let ((vals (obj-vals obj)))
     (if (hash-table-p vals)
-        (gethash (intern-prop prop) vals)
-        (lookup-slot (obj-cls obj) (intern-prop prop)))))
+        (gethash prop vals)
+        (lookup-slot (obj-cls obj) prop))))
 
 (defun delete-prop (obj prop)
   (if (obj-p obj)
@@ -565,5 +576,4 @@
                         (setf (car slot) :deleted (cdr slot) +slot-active+)))
                  (remhash (intern-prop prop) (obj-vals obj)))))
       t))
-
 )
