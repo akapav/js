@@ -317,10 +317,11 @@
         (if (= (length vec) 0)
             :undefined
             (vector-pop vec)))))
-  (mth "push" (val)
+  (mth "push" (&rest vals)
     (unless-array 0
       (let ((vec (aobj-arr this)))
-        (vector-push-extend val vec)
+        (dolist (val vals)
+          (vector-push-extend val vec))
         (length vec))))
 
   (mth "shift" ()
