@@ -440,16 +440,16 @@
     `(lambda (js-user::|this| &rest ,argument-list)
        (declare (ignorable js-user::|this|))
        ;; Make sure the argument list covers at least the named args
-       ,@(when args
-           `((if ,argument-list
-                 (loop :for cons :on ,argument-list :repeat ,(length args) :do
-                    (unless (cdr cons) (setf (cdr cons) (list :undefined))))
-                 (setf ,argument-list (make-list ,(length args) :initial-element :undefined)))))
        (let ((js-user::|arguments|
-               (make-argobj (find-cls :arguments) ,argument-list (length ,argument-list) ,fname))
-             ,@(loop :for arg :in arg-names :collect `(,arg (prog1 ,argument-list (pop ,argument-list)))))
-         (declare (ignorable js-user::|arguments| ,@arg-names))
-         (block function ,@body)))))
+               (make-argobj (find-cls :arguments) ,argument-list (length ,argument-list) ,fname)))
+         ,@(when args
+             `((if ,argument-list
+                   (loop :for cons :on ,argument-list :repeat ,(length args) :do
+                      (unless (cdr cons) (setf (cdr cons) (list :undefined))))
+                   (setf ,argument-list (make-list ,(length args) :initial-element :undefined)))))
+         (let ,(loop :for arg :in arg-names :collect `(,arg (prog1 ,argument-list (pop ,argument-list))))
+           (declare (ignorable js-user::|arguments| ,@arg-names))
+           (block function ,@body))))))
 
 (deftranslate (:return value)
   (unless (in-function-scope-p)
