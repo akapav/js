@@ -34,7 +34,7 @@
   #+sbcl '*nan*
   #-(or allegro sbcl) :NaN)
 (defmacro is-nan (val)
-  #+allegro `(excl::nan-p ,val)
+  #+allegro `(and (excl::nan-p ,val) t)
   #+sbcl (let ((name (gensym)))
            `(let ((,name ,val))
               (and (floatp ,name) (sb-ext:float-nan-p ,name))))
