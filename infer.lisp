@@ -467,10 +467,9 @@
 (definfer (:unary-postfix op place)
   (declare (ignore op)) ;; always :++ or :--
   (multiple-value-bind (env argt) (infer place env)
-    (let ((tc (tc nil `(:maybe-int ,argt))))
-      (when (eq (car place) :name)
-        (setf env (assign (second place) tc env)))
-      (values env tc))))
+    (when (eq (car place) :name)
+      (setf env (assign (second place) (tc nil `(:maybe-int ,argt)) env)))
+    (values env argt)))
 (definfer (:array elems)
   (dolist (elem elems) (setf env (infer elem env)))
   (values env (tc :object)))
