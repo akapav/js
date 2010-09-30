@@ -158,7 +158,8 @@
 (deftranslate (:var bindings)
   `(progn ,@(loop :for (name . val) :in bindings
                   :when val :collect (set-in-scope name (translate val))
-                  :else :if (not *scope*) :collect (expand-global-set name :undefined))))
+                  :else :if (not *scope*) :collect `(if-not-found (nil (lookup *env* ,name))
+                                                      (setf (lookup *env* ,name) :undefined)))))
 
 (deftranslate (:object properties)
   (expand-static-obj '(find-proto :object) (loop :for (name . val) :in properties :collect
