@@ -205,16 +205,16 @@
       (declare (ignore br lb-br))
       `(block ,label
          (tagbody
-            ,@(translate@ init)
+            (progn ,@(translate@ init))
           loop-start
             (unless ,(if cond
                          (to-boolean-typed (translate cond) (ast-type cond))
                          t)
               (go loop-end))
-            ,@(and body (list body))
+            (progn ,@(and body (list body)))
           ,@(and lb-cn (list label))
           ,@(and cn '(loop-continue))
-            ,@(translate@ step)
+            (progn ,@(translate@ step))
             (go loop-start)
           loop-end)))))
 
@@ -232,7 +232,7 @@
          (tagbody
           loop-start
           ,@(and label (list label))
-            ,@(and body (list body))
+            (progn ,@(and body (list body)))
           ,@(and lb-cn (list label))
           ,@(and cn '(loop-continue))
             (when ,(to-boolean-typed (translate cond) (ast-type cond))
@@ -263,7 +263,7 @@
                            ,(if (or cn lb-cn)
                                 `(block nil
                                    (tagbody
-                                      ,body
+                                      (progn ,body)
                                     ,@(and cn '(loop-continue))
                                     ,@(and lb-cn (list label))))
                                 body)))
