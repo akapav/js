@@ -269,34 +269,23 @@
                                 body)))
             ,@(and br '(loop-end))))))))
 
-(deftranslate (:switch val body)
+(deftranslate (:switch val cases)
   (with-label label
-    (let ((blocks ()) (cur-block nil) (val-sym (gensym)) (default-case nil))
-      (labels ((finish-block ()
-                 (when cur-block
-                   (setf (third cur-block) (nreverse (mapcar 'translate (third cur-block))))
-                   (push cur-block blocks)))
-               (gather-blocks ()
-                 (dolist (stat body)
-                   (cond ((member (car stat) '(:case :default))
-                          (finish-block)
-                          (setf cur-block (list stat (gensym) ()))
-                          (when (eq (car stat) :default)
-                            (when default-case (js-parse-error "Invalid switch statement."))
-                            (setf default-case cur-block)))
-                         (t (unless cur-block (js-parse-error "Invalid switch statement."))
-                            (push stat (third cur-block)))))
-                 (finish-block)
-                 (unless default-case (push (setf default-case `((:default) ,(gensym) ())) blocks))
-                 (nreverse blocks)))
+    (let ((val-sym (gensym)) (default-case nil))
+      (labels ((gather-blocks ()
+                 (loop :for ((val . body) . rest) :on cases
+                       :for data := (list val (gensym) (mapcar 'translate body)) :collect data
+                       :do (unless val (setf default-case data))
+                       :when (and (not rest) (not default-case))
+                       :collect (setf default-case (list nil (gensym) nil)))))
         (multiple-value-bind (blocks br cn lb-br lb-cn) (call/break-continue label #'gather-blocks)
           (declare (ignore lb-br))
           (when (or cn lb-cn) (parse-js:js-parse-error "Can not continue a switch."))
           `(let ((,val-sym ,(translate val)))
              (block ,label
                (tagbody
-                  (cond ,@(loop :for (case label) :in blocks :unless (eq (car case) :default) :collect
-                             `((js=== ,val-sym ,(translate (second case))) (go ,label)))
+                  (cond ,@(loop :for (case label) :in blocks :when case :collect
+                             `((js=== ,val-sym ,(translate case)) (go ,label)))
                         (t (go ,(second default-case))))
                   ,@(loop :for (nil label statements) :in blocks :append
                        (cons label statements))
