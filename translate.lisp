@@ -1,10 +1,9 @@
 (in-package :js)
 
-;; TODO saner break/continue handling
-
 (defvar *scope* ())
 (defparameter *label-name* nil)
-(defvar *break/cont* ())
+(defvar *break* ())
+(defvar *continue* ())
 
 (defgeneric lookup-variable (name scope rest))
 (defgeneric set-variable (name valname scope rest))
@@ -165,55 +164,45 @@
   (expand-static-obj '(find-proto :object) (loop :for (name . val) :in properties :collect
                                               (cons (to-string name) (translate val)))))
 
-;; TODO reuse class
 (deftranslate (:regexp expr flags)
   `(load-time-value (new-regexp ,expr ,flags)))
 
-;flags
+(defmacro extend-label (var (name &rest expr) &body body)
+  `(let ((,var (cons (cons ,name (lambda () ,@expr)) ,var))) ,@body))
 
 (deftranslate (:label name form)
-  (let ((*label-name* (->usersym name)))
-    (translate form)))
+  (if (member (car form) '(:for :for-in :switch :do :while))
+      ;; These handle their own label
+      (let ((*label-name* name)) (translate form))
+      (let ((block (gensym)))
+        (extend-label *break* (name `(return-from ,block :undefined))
+          `(block ,block ,(translate form))))))
 
 ;; Used in ,@
 (defun translate@ (form)
   (and form (list (translate form))))
 
-(defun call/break-continue (label proc)
-  (let* ((*break/cont* (cons nil *break/cont*))
-         (result (funcall proc)))
-    (let (br cn lb-br lb-cn)
-      (dolist (evt (car *break/cont*))
-        (cond ((eq evt :break) (setf br t))
-              ((eq evt :continue) (setf cn t))
-              ((string= (cdr evt) (string label))
-               (ecase (car evt) (:break (setf lb-br t)) (:continue (setf lb-cn t))))
-              ((cdr *break/cont*) (push evt (second *break/cont*)))))
-      (values result br cn lb-br lb-cn))))
-
-(defun translate/break-continue (label form)
-  (call/break-continue label (lambda () (translate form))))
-
 (defmacro with-label (var &body body)
-  `(let ((,var (and *label-name* (->usersym *label-name*)))
+  `(let ((,var *label-name*)
          (*label-name* nil))
      ,@body))
 
 (defun translate-for (init cond step body)
   (with-label label
-    (multiple-value-bind (body br cn lb-br lb-cn) (translate/break-continue label body)
-      (declare (ignore br lb-br))
-      `(block ,label
+    (let ((continued nil)
+          (break-block (gensym))
+          translated-body)
+      (extend-label *break* (label `(return-from ,break-block :undefined))
+        (extend-label *continue* (label `(go ,(setf continued (or continued (gensym)))))
+          (setf translated-body (translate body))))
+      `(block ,break-block
          (tagbody
             (progn ,@(translate@ init))
           loop-start
-            (unless ,(if cond
-                         (to-boolean-typed (translate cond) (ast-type cond))
-                         t)
+            (unless ,(if cond (to-boolean-typed (translate cond) (ast-type cond)) t)
               (go loop-end))
-            (progn ,@(and body (list body)))
-          ,@(and lb-cn (list label))
-          ,@(and cn '(loop-continue))
+            (progn ,@(and translated-body (list translated-body)))
+          ,@(and continued (list continued))
             (progn ,@(translate@ step))
             (go loop-start)
           loop-end)))))
@@ -226,70 +215,72 @@
 
 (deftranslate (:do cond body)
   (with-label label
-    (multiple-value-bind (body br cn lb-br lb-cn) (translate/break-continue label body)
-      (declare (ignore lb-br))
-      `(block ,label
+    (let ((continued nil)
+          (break-block (gensym))
+          translated-body)
+      (extend-label *break* (label `(return-from ,break-block :undefined))
+        (extend-label *continue* (label `(go ,(setf continued (or continued (gensym)))))
+          (setf translated-body (translate body))))
+      `(block ,break-block
          (tagbody
           loop-start
-          ,@(and label (list label))
-            (progn ,@(and body (list body)))
-          ,@(and lb-cn (list label))
-          ,@(and cn '(loop-continue))
+            (progn ,@(and translated-body (list translated-body)))
+          ,@(and continued (list continued))
             (when ,(to-boolean-typed (translate cond) (ast-type cond))
-              (go loop-start))
-          ,@(and br '(loop-end)))))))
+              (go loop-start)))))))
 
 (deftranslate (:break label)
-  (push (if label (cons :break label) :break) (car *break/cont*))
-  (if label
-      `(return-from ,(->usersym label))
-      `(go loop-end)))
+  (loop :for (lbl . thunk) :in *break* :do
+     (when (or (not label) (equal label lbl))
+       (return (funcall thunk)))
+     ;; These should be caught by parser. This is just a sanity check.
+     :finally (error "Break without matching context.")))
 
 (deftranslate (:continue label)
-  (push (if label (cons :continue label) :continue) (car *break/cont*))
-  `(go ,(if label (->usersym label) 'loop-continue)))
+  (loop :for (lbl . thunk) :in *continue* :do
+     (when (or (not label) (equal label lbl))
+       (return (funcall thunk)))
+     :finally (error "Continue without matching context.")))
 
 (deftranslate (:for-in var name obj body)
   (declare (ignore var))
   (with-label label
-    (multiple-value-bind (body br cn lb-br lb-cn) (translate/break-continue label body)
-      (declare (ignore lb-br))
-      (let ((prop (gensym)))
-        `(block ,label
-           (tagbody
-              (js-for-in ,(translate obj)
-                         (lambda (,prop)
-                           ,(set-in-scope name prop)
-                           ,(if (or cn lb-cn)
-                                `(block nil
-                                   (tagbody
-                                      (progn ,body)
-                                    ,@(and cn '(loop-continue))
-                                    ,@(and lb-cn (list label))))
-                                body)))
-            ,@(and br '(loop-end))))))))
+    (let ((continued nil)
+          (break-block (gensym))
+          translated-body
+          (prop (gensym)))
+      (extend-label *break* (label `(return-from ,break-block :undefined))
+        (extend-label *continue* (label `(go ,(setf continued (or continued (gensym)))))
+          (setf translated-body (translate body))))
+      `(block ,break-block
+         (js-for-in ,(translate obj)
+                    (lambda (,prop)
+                      ,(set-in-scope name prop)
+                      ,(if continued
+                           `(tagbody (progn ,translated-body) ,continued)
+                           translated-body)))))))
 
 (deftranslate (:switch val cases)
   (with-label label
-    (let ((val-sym (gensym)) (default-case nil))
-      (labels ((gather-blocks ()
-                 (loop :for ((val . body) . rest) :on cases
-                       :for data := (list val (gensym) (mapcar 'translate body)) :collect data
-                       :do (unless val (setf default-case data))
-                       :when (and (not rest) (not default-case))
-                       :collect (setf default-case (list nil (gensym) nil)))))
-        (multiple-value-bind (blocks br cn lb-br lb-cn) (call/break-continue label #'gather-blocks)
-          (declare (ignore lb-br))
-          (when (or cn lb-cn) (parse-js:js-parse-error "Can not continue a switch."))
-          `(let ((,val-sym ,(translate val)))
-             (block ,label
-               (tagbody
-                  (cond ,@(loop :for (case label) :in blocks :when case :collect
-                             `((js=== ,val-sym ,(translate case)) (go ,label)))
-                        (t (go ,(second default-case))))
-                  ,@(loop :for (nil label statements) :in blocks :append
-                       (cons label statements))
-                  ,@(and br '(loop-end))))))))))
+    (let ((break-block (gensym))
+          (val-sym (gensym))
+          (default-case nil)
+          blocks)
+      (extend-label *break* (label `(return-from ,break-block :undefined))
+        (setf blocks
+              (loop :for ((val . body) . rest) :on cases
+                    :for data := (list val (gensym) (mapcar 'translate body)) :collect data
+                    :do (unless val (setf default-case data))
+                    :when (and (not rest) (not default-case))
+                    :collect (setf default-case (list nil (gensym) nil)))))
+      `(let ((,val-sym ,(translate val)))
+         (block ,break-block
+           (tagbody
+              (cond ,@(loop :for (case label) :in blocks :when case :collect
+                         `((js=== ,val-sym ,(translate case)) (go ,label)))
+                    (t (go ,(second default-case))))
+              ,@(loop :for (nil label statements) :in blocks :append
+                   (cons label statements))))))))
           
 (deftranslate (:case)
   (js-error :syntax-error "Misplaced case label."))
