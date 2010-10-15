@@ -1,6 +1,6 @@
 (in-package :js)
 
-(defun default-value (val &optional (hint :string))
+(defun default-value (val &optional (hint :number))
   (block nil
     (unless (obj-p val) (return val))
     (when (vobj-p val) (return (vobj-value val)))
@@ -21,7 +21,6 @@
       '(or number (member :Inf :-Inf :NaN))
       'number))
 
-;; TODO these might be much faster as methods (profile)
 (defun to-string (val)
   (etypecase val
     (string val)
@@ -32,7 +31,7 @@
                      (t (format nil "~,,,,,,'eE" val))))
     (boolean (if val "true" "false"))
     (symbol (ecase val (:undefined "undefined") (:null "null")))
-    (obj (to-string (default-value val)))))
+    (obj (to-string (default-value val :string)))))
 
 (defun to-number (val)
   (etypecase val

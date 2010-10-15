@@ -1,102 +1,81 @@
 (in-package :js)
 
-;; TODO try operators as clos methods
+(defmacro complicated-numeric-op (ls rs op nan
+                                  inf-inf inf-minf minf-inf minf-minf
+                                  num-inf num-minf inf-num minf-num)
+  `(let ((ls ,ls) (rs ,rs))
+     ,(if *float-traps*
+          `(cond
+             ((and (numberp ls) (numberp rs)) (,op ls rs))
+             ((or (is-nan ls) (is-nan rs)) ,nan)
+             ((and (eq ls ,(infinity)) (eq rs ,(infinity))) ,inf-inf)
+             ((and (eq ls ,(infinity)) (eq rs ,(-infinity))) ,inf-minf)
+             ((and (eq ls ,(-infinity)) (eq rs ,(infinity))) ,minf-inf)
+             ((and (eq ls ,(-infinity)) (eq rs ,(-infinity))) ,minf-minf)
+             ((eq rs ,(infinity)) ,num-inf)
+             ((eq rs ,(-infinity)) ,num-minf)
+             ((eq ls ,(infinity)) ,inf-num)
+             ((eq ls ,(-infinity)) ,minf-num))
+          `(,op ls rs))))
 
-(defmacro trivial-op (type op)
-  (let ((name (intern (concatenate
-		       'string (symbol-name op) (symbol-name type))))
-	(ls (gensym))
-	(rs (gensym)))
-    `(defun ,name (,ls ,rs)
-       (declare (,type ,ls ,rs))
-       (,op ,ls ,rs))))
-
-(defmacro extended-number-op ((op &key var (nan (nan)))
-			      inf-inf inf-minf minf-inf minf-minf
-			      num-inf num-minf inf-num minf-num)
-  (let* ((namestr (concatenate 'string (symbol-name op) (symbol-name 'number)))
-	 (name (intern namestr))
-	 (nameext (intern (concatenate 'string namestr "." (symbol-name 'ext))))
-	 (ls (or var (gensym)))
-	 (rs (gensym)))
-    (if *float-traps*
-        `(defun ,nameext (,ls ,rs)
-           (cond
-             ((and (numberp ,ls) (numberp ,rs)) (,name ,ls ,rs))
-             ((or (is-nan ,ls) (is-nan ,rs)) ,nan)
-             ((and (eq ,ls ,(infinity)) (eq ,rs ,(infinity))) ,inf-inf)
-             ((and (eq ,ls ,(infinity)) (eq ,rs ,(-infinity))) ,inf-minf)
-             ((and (eq ,ls ,(-infinity)) (eq ,rs ,(infinity))) ,minf-inf)
-             ((and (eq ,ls ,(-infinity)) (eq ,rs ,(-infinity))) ,minf-minf)
-             ((eq ,rs ,(infinity)) ,num-inf)
-             ((eq ,rs ,(-infinity)) ,num-minf)
-             ((eq ,ls ,(infinity)) ,inf-num)
-             ((eq ,ls ,(-infinity)) ,minf-num)
-             (t (error (format nil "internal error in ~A~%" ',op)))))
-        `(defun ,nameext (,ls ,rs)
-           (declare (number ,ls ,rs))
-           (,name ,ls ,rs)))))
-
-;;
-
-(trivial-op fixnum +)
-(trivial-op number +)
-
-(extended-number-op (+)
-		    (infinity) (nan) (nan) (-infinity)
-		    (infinity) (-infinity) (infinity)
-                    (-infinity))
-
-(defun +string (ls rs)
-  (concatenate 'string (to-string ls) (to-string rs)))
-
-;; TODO optimize
 (defun js+ (ls rs)
-  (funcall
-   (cond
-     ((and (typep ls 'fixnum) (typep rs 'fixnum)) #'+fixnum)
-     ((and (numberp ls) (numberp rs)) #'+number)
-     ;;;todo: fast string concat when both are strings
-     ((and (numberp ls) (numberp rs)) #'+number.ext)
-     ((and (numberp ls) (eq rs :undefined)) (constantly (nan)))
-     ((and (eq ls :undefined) (eq rs :undefined)) (constantly (nan)))
-     ((and (eq ls :undefined) (eq rs :undefined)) (constantly (nan)))
-     (t #'+string)) ls rs))
+  (cond ((and (numberp ls) (numberp rs)) (+ ls rs))
+        ((and (stringp ls) (stringp rs)) (concatenate 'string ls rs))
+        (t (let ((ls (default-value ls)) (rs (default-value rs)))
+             (cond ((stringp ls) (concatenate 'string ls (to-string rs)))
+                   ((stringp rs) (concatenate 'string (to-string ls) rs))
+                   ((and (numberp ls) (numberp rs)) (+ ls rs))
+                   (t (complicated-numeric-op
+                       (to-number ls) (to-number rs) + (nan)
+                       (infinity) (nan) (nan) (-infinity) (infinity)
+                       (-infinity) (infinity) (-infinity))))))))
 
-;;
-(trivial-op fixnum -)
-(trivial-op number -)
+(defun js++ (arg)
+  (js+ (to-number arg) 1))
 
-(extended-number-op (-)
-		    (nan) (infinity) (-infinity) (nan)
-		    (-infinity) (infinity) (infinity)
-                    (-infinity))
+(defmacro maybe-complicated-numeric-op (ls rs op &rest specs)
+  `(let ((ls ,ls) (rs ,rs))
+     (if (and (numberp ls) (numberp rs))
+         (,op ls rs)
+         (complicated-numeric-op (to-number ls) (to-number rs) ,op ,@specs))))
 
 (defun js- (ls rs)
-  (funcall 
-   (cond
-     ((and (typep ls 'fixnum) (typep rs 'fixnum)) #'-fixnum)
-     ((and (numberp ls) (numberp rs)) #'-number)
-     ((and (numberp ls) (numberp rs)) #'-number.ext)
-     (t (constantly (nan)))) ls rs))
+  (maybe-complicated-numeric-op
+   ls rs - (nan)
+   (nan) (infinity) (-infinity) (nan) (-infinity)
+   (infinity) (infinity) (-infinity)))
 
-;;
-(trivial-op fixnum *)
-(trivial-op number *)
-
-(extended-number-op (*)
-		    (infinity) (-infinity) (-infinity)
-                    (infinity) (infinity) (-infinity)
-                    (infinity) (-infinity))
+(defun js-- (arg)
+  (js- (to-number arg) 1))
 
 (defun js* (ls rs)
-  (funcall
-   (cond
-     ((and (typep ls 'fixnum) (typep rs 'fixnum)) #'*fixnum)
-     ((and (numberp ls) (numberp rs)) #'*number)
-     ((and (numberp ls) (numberp rs)) #'*number.ext)
-     (t (constantly (nan)))) ls rs))
+  (maybe-complicated-numeric-op
+   ls rs * (nan)
+   (infinity) (-infinity) (-infinity) (infinity) (infinity)
+   (-infinity) (infinity) (-infinity)))
 
+(defun sign-of (val)
+  (cond ((eq val (-infinity)) nil)
+        ((eq val (infinity)) t)
+        ((is-nan val) t)
+        ((integerp val) (>= val 0))
+        (t (float-sign val)))) ;; Doesn't work for -0 on all implementations (SBCL works, ACL doesn't)
+
+(defun js/ (ls rs)
+  (let ((ls (to-number ls)) (rs (to-number rs)))
+    (if (zerop rs)
+        (if (eq (sign-of ls) (sign-of rs)) (infinity) (-infinity))
+        (complicated-numeric-op
+         ls rs / (nan)
+         (nan) (nan) (nan) (nan) 0 0 (infinity) (-infinity)))))
+
+(defun js% (ls rs)
+  (let ((ls (to-number ls)) (rs (to-number rs)))
+    (if (zerop rs)
+        (nan)
+        (complicated-numeric-op
+         ls rs mod (nan)
+         (nan) (nan) (nan) (nan) ls ls (nan) (nan)))))
 
 (defun js^ (ls rs)
   (logxor (to-int32 ls) (to-int32 rs)))
@@ -107,39 +86,13 @@
 (defun js~ (rs)
   (lognot (to-int32 rs)))
 
-;;
-(defun /number (ls rs)
-  (declare (number ls rs))
-  (if (zerop rs)
-      (cond ((zerop ls) (nan))
-	    ((minusp ls) (-infinity))
-	    (t (infinity)))
-      (coerce (/ ls rs) 'double-float)))
+(defun js>> (a b)
+  (ash (to-int32 a) (- (to-integer b))))
+(defun js<< (a b)
+  (ash (to-int32 a) (to-integer b)))
+(defun js>>> (a b)
+  (ash (to-int32 a) (- (to-integer b)))) ;; TODO not conforming to spec!
 
-(extended-number-op (/)
-		    (nan) (nan) (nan) (nan)
-		    0 0 (infinity) (-infinity))
-
-(defun js/ (ls rs)
-  (if (and (numberp ls) (numberp rs))
-      (/number ls rs)
-      (/number.ext (to-number ls) (to-number rs))))
-
-;;
-(defun %number (ls rs) (mod ls rs))
-
-(extended-number-op (% :var num)
-		    (nan) (nan) (nan) (nan)
-		    num num (nan) (nan))
-
-(defun js% (ls rs)
-  (funcall
-   (cond
-     ((and (numberp ls) (numberp rs)) #'mod)
-     ((and (numberp ls) (numberp rs)) #'%number.ext)
-     (t (constantly (nan)))) ls rs))
-
-;;
 (defun js=== (ls rs)
   (cond ((is-nan ls) nil)
         ((eq ls rs) t)
@@ -166,65 +119,23 @@
 (defun js!= (ls rs)
   (not (js== ls rs)))
 
-;;
-(trivial-op fixnum <)
-(trivial-op number <)
 
-(extended-number-op (< :nan nil)
-		    nil nil t nil
-		    t nil nil t)
+(defmacro complicated-comparision-op (ls rs op &rest specs)
+  (let ((str-op (intern (format nil "~a~a" :string op))))
+    `(let ((ls (default-value ,ls)) (rs (default-value ,rs)))
+       (if (and (stringp ls) (stringp rs))
+           (,str-op ls rs)
+           (complicated-numeric-op (to-number ls) (to-number rs) ,op nil ,@specs)))))
 
 (defun js< (ls rs)
-  (cond
-    ((and (typep ls 'fixnum) (typep rs 'fixnum)) (<fixnum ls rs))
-    ((and (numberp ls) (numberp rs)) (<number ls rs))
-    ((and (numberp ls) (numberp rs)) (<number.ext ls rs))
-    ((and (numberp ls) (stringp rs)) (<number.ext ls (to-number rs)))
-    ((and (stringp ls) (numberp rs)) (<number.ext (to-number ls) rs))
-    (t (when (string< (to-string ls) (to-string rs)) t))))
-
-;;
-(trivial-op fixnum >)
-(trivial-op number >)
-
-(extended-number-op (> :nan nil)
-		    nil nil t nil
-		    t nil nil t)
-
+  (complicated-comparision-op ls rs < nil nil t nil t nil nil t))
 (defun js> (ls rs)
-  (cond
-    ((and (typep ls 'fixnum) (typep rs 'fixnum)) (>fixnum ls rs))
-    ((and (numberp ls) (numberp rs)) (>number ls rs))
-    ((and (numberp ls) (numberp rs)) (>number.ext ls rs))
-    ((and (numberp ls) (stringp rs)) (>number.ext ls (to-number rs)))
-    ((and (stringp ls) (numberp rs)) (>number.ext (to-number ls) rs))
-    (t (when (string> (to-string ls) (to-string rs)) t))))
-
-;;
+  (complicated-comparision-op ls rs > nil nil t nil t nil nil t))
 (defun js<= (ls rs)
-  (unless (or (is-nan ls) (is-nan rs))
-    (not (js> ls rs))))
-
+  (complicated-comparision-op ls rs <= t t nil t nil t t nil))
 (defun js>= (ls rs)
-  (unless (or (is-nan ls) (is-nan rs))
-    (not (js< ls rs))))
+  (complicated-comparision-op ls rs >= t t nil t nil t t nil))
 
-;;
-(defun js++ (arg)
-  (js+ (to-number arg) 1))
-
-(defun js-- (arg)
-  (js- (to-number arg) 1))
-
-;; TODO to-int-32
-(defun js>> (a b)
-  (ash (to-int32 a) (- (to-integer b))))
-(defun js<< (a b)
-  (ash (to-int32 a) (to-integer b)))
-(defun js>>> (a b)
-  (ash (to-int32 a) (- (to-integer b)))) ;; TODO not conforming to spec!
-
-;;
 (defun jsinstanceof (ls rs)
   (and (obj-p ls) (fobj-p rs)
        (let ((proto (lookup rs "prototype")))
