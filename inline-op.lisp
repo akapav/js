@@ -55,8 +55,10 @@
            (t (js+ ,lh ,rh)))))))
 
 (defnumop :- `(- ,lhs ,rhs))
-(defexpand :- (nil :integer) `(- ,rhs))
-(defexpand :- (nil :number) (unless *float-traps* `(- ,rhs)))
+(defexpand :- (nil t)
+  (let ((val (gensym)))
+    `(let ((,val (to-number ,rhs)))
+       (if (zerop ,val) (- 0d0) (js- 0 ,val)))))
 
 (defnumop :* `(* ,lhs ,rhs))
 (defnumop :% `(mod ,lhs ,rhs))

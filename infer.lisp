@@ -461,7 +461,8 @@
                    (when (eq (car place) :name)
                      (setf env (assign (second place) tc env)))
                    (values env tc)))
-      ((:- :+) (values env (tc nil `(:maybe-int ,argt))))
+      (:+ (values env (tc nil `(:maybe-int ,argt))))
+      (:- (values env (tc :number)))
       (:~ (values env (tc :integer))))))
 (definfer (:unary-postfix op place)
   (declare (ignore op)) ;; always :++ or :--

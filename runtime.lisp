@@ -89,7 +89,7 @@
                                           captured-locals))))
     (declare (special *scope*))
     (dolist (local new-locals) (setf (lookup env-obj (symbol-name local)) :undefined))
-    (compile-eval (translate-ast parsed))))
+    (or (compile-eval (translate-ast parsed)) :undefined)))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   ;; Ensures safe and predictable redefinitions
@@ -179,7 +179,7 @@
 (stdfunc "isNaN" (val)
   (is-nan (to-number val)))
 (stdfunc "eval" (str)
-  (compile-eval (translate (parse/err (to-string str)))))
+  (or (compile-eval (translate (parse/err (to-string str)))) :undefined))
 
 ;; TODO URI encoding/decoding functions
 
@@ -532,7 +532,7 @@
       (make-vobj (ensure-fobj-cls -self-) (to-number value)))
   :number
   (pr "MAX_VALUE" most-positive-double-float)
-  (pr "MIN_VALUE" most-negative-double-float)
+  (pr "MIN_VALUE" least-positive-double-float)
   (pr "POSITIVE_INFINITY" (infinity))
   (pr "NEGATIVE_INFINITY" (-infinity)))
 
