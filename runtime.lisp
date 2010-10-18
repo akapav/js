@@ -21,6 +21,13 @@
       '(or number (member :Inf :-Inf :NaN))
       'number))
 
+(defun read-num (str)
+  (let ((result (with-input-from-string (in str) (read-js-number in))))
+    (case result
+      (:-infinity (-infinity))
+      (:infinity (infinity))
+      (t result))))
+
 (defun to-string (val)
   (etypecase val
     (string val)
@@ -38,7 +45,7 @@
     (js-number val)
     (string (cond ((string= val "Infinity") (infinity))
                   ((string= val "-Infinity") (-infinity))
-                  (t (or (with-input-from-string (in val) (read-js-number in)) (nan)))))
+                  (t (or (read-num val) (nan)))))
     (boolean (if val 1 0))
     (symbol (ecase val (:undefined (nan)) (:null 0)))
     (obj (to-number (default-value val :number)))))
@@ -50,7 +57,7 @@
                      ((eq val (infinity)) most-positive-fixnum)
                      ((eq val (-infinity)) most-negative-fixnum)
                      (t (truncate val))))
-    (string (let ((read (with-input-from-string (in val) (read-js-number in))))
+    (string (let ((read (read-num val)))
               (etypecase read (null 0) (integer read) (number (floor read)))))
     (boolean (if val 1 0))
     (symbol 0)
@@ -175,7 +182,7 @@
   (let ((val (to-string val)))
     (cond ((string= val "Infinity") (infinity))
           ((string= val "-Infinity") (-infinity))
-          (t (or (with-input-from-string (in val) (read-js-number in)) (nan))))))
+          (t (or (read-num val) (nan))))))
 (stdfunc "isNaN" (val)
   (is-nan (to-number val)))
 (stdfunc "eval" (str)

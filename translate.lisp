@@ -481,7 +481,9 @@
   (translate-assign place (translate (if (eq op t) val (list :binary op place val)))))
 
 (deftranslate (:num num)
-  (if (integerp num) num (coerce num 'double-float)))
+  (etypecase num
+    (keyword (ecase num (:infinity (infinity)) (:-infinity (-infinity))))
+    (number num)))
 
 (deftranslate (:string str) str)
 
