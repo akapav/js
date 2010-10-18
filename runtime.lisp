@@ -188,7 +188,14 @@
 (stdfunc "eval" (str)
   (or (compile-eval (translate (parse/err (to-string str)))) :undefined))
 
-;; TODO URI encoding/decoding functions
+(stdfunc "encodeURI" (str)
+  (url-encode:url-encode (to-string str) "%/?:@&=+$,#"))
+(stdfunc "encodeURIComponent" (str)
+  (url-encode:url-encode (to-string str) "%/?:@&=+$,"))
+(stdfunc "decodeURI" (str)
+  (url-encode:url-decode (to-string str) "/?:@&=+$,#"))
+(stdfunc "decodeURIComponent" (str)
+  (url-encode:url-decode (to-string str) ""))
 
 (defun ensure-proto (spec)
   (cond ((keywordp spec) (let ((proto (find-proto spec)))
