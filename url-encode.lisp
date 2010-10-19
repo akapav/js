@@ -1,8 +1,12 @@
 (defpackage :url-encode
   (:use :cl)
-  (:export :url-decode :url-encode))
+  (:export #:url-decode #:url-encode #:url-error))
 
 (in-package :url-encode)
+
+(define-condition url-error (simple-error) ())
+(defun url-error (format &rest args)
+  (error 'url-error :format-control format :format-arguments args))
 
 (defun char-utf-8-byte-length (char)
   (let ((code (char-code char)))
@@ -59,7 +63,7 @@ starting with a given byte."
         ((= (logand byte #b11100000) #b11000000) 2)
         ((= (logand byte #b11110000) #b11100000) 3)
         ((= (logand byte #b11111000) #b11110000) 4)
-        (t (error "Invalid UTF-8 byte: 0x~X" byte))))
+        (t (url-error "Invalid UTF-8 byte: 0x~X" byte))))
 
 (defun get-utf-8-character (bytes group-size &aux (start 0))
   "Given an array of bytes and the amount of bytes to use,
@@ -73,13 +77,13 @@ extract the character they denote."
                (let ((b (gensym)))
                  `(let ((,b ,byte))
                     (unless (= (logand ,b #b11000000) #b10000000)
-                      (error "Invalid byte 0x~X inside a character." ,b))
+                      (url-error "Invalid byte 0x~X inside a character." ,b))
                     (ldb (byte 6 0) ,b))))
              (test-overlong (byte min-size)
                (let ((b (gensym)))
                  `(let ((,b ,byte))
                     (unless (> ,b ,min-size)
-                      (error "Overlong UTF-8 byte sequence found."))
+                      (url-error "Overlong UTF-8 byte sequence found."))
                     ,b))))
     (ecase group-size
       (1 (next-byte))
@@ -104,7 +108,7 @@ extract the character they denote."
          (macrolet ((hex ()
                       '(let ((big (digit-char-p (read-char in nil #\x) 16))
                              (small (digit-char-p (read-char in nil #\x) 16)))
-                        (unless (and big small) (error "Junk in URL."))
+                        (unless (and big small) (url-error "Junk in URL."))
                         (+ small (ash big 4))))
                     (out (x) `(progn (setf (schar buf pos) ,x) (incf pos))))
            (case ch
@@ -117,7 +121,7 @@ extract the character they denote."
                           (t (setf (aref utf-buf 0) code)
                              (loop :for i :from 1 :below group :do
                                 (unless (eql (read-char in nil nil) #\%)
-                                  (error "Nonsense UTF-8 code in URL."))
+                                  (url-error "Nonsense UTF-8 code in URL."))
                                 (setf (aref utf-buf i) (hex)))
                              (out (code-char (get-utf-8-character utf-buf group)))))))
              (t (out ch))))
