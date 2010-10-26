@@ -2,7 +2,7 @@
 (in-package :net.svrg.js-system)
 
 (defsystem :js
-  :depends-on (:parse-js :cl-ppcre)
+  :depends-on (:parse-js :cl-ppcre :local-time)
   :serial t
   :components
   ((:file "packages")

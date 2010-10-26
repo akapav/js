@@ -71,8 +71,7 @@
 (defmacro js-lambda (args &body body)
   (wrap-js-lambda args body))
 
-;;
-(defmacro js-eval (str) ;;todo translate-ast temporary removed
+(defmacro js-eval (str)
   `(wrap-js ,(translate-ast (parse-js-string str))))
 
 (defun compile-eval (code)

@@ -4,10 +4,10 @@
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defparameter *common-classes*
-    #(:object :arguments :function :array :regexp :type-error :parse-error :reference-error
-      :syntax-error :uri-error))
+    #(:object :arguments :function :array :regexp :date :type-error :parse-error
+      :reference-error :syntax-error :uri-error))
   (defparameter *proto-offsets*
-    #(:object :function :array :arguments :string :number :boolean :regexp :error
+    #(:object :function :array :arguments :string :number :boolean :regexp :date :error
       :syntax-error :reference-error :type-error :uri-error :eval-error :range-error))
   (defun proto-offset (id)
     (declare (optimize speed (safety 0)))
@@ -51,6 +51,8 @@
   arr)
 (defstruct (reobj (:constructor make-reobj (cls proc scanner global)) (:include fobj))
   scanner global)
+(defstruct (dobj (:constructor make-dobj (cls time zone)) (:include obj))
+  time zone)
 (defstruct (argobj (:constructor make-argobj (cls list length callee)) (:include obj))
   list length callee)
 
