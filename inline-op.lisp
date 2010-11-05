@@ -78,7 +78,7 @@
 (defexpand :~ (nil :integer) `(lognot (trunc32 ,rhs)))
 (defexpand :>> (:integer :integer) `(ash (trunc32 ,lhs) (- ,rhs)))
 (defexpand :<< (:integer :integer) `(ash (trunc32 ,lhs) ,rhs))
-(defexpand :>>> (:integer :integer) `(ash (trunc32 ,lhs) (- ,rhs))) ;; TODO not correct!
+(defexpand :>>> (:integer :integer) `(bitshift32 (trunc32 ,lhs) (- ,rhs)))
 
 (defexpand :&& (t t)
   (let ((temp (gensym)))

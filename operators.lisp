@@ -91,7 +91,12 @@
 (defun js<< (a b)
   (ash (to-int32 a) (to-int32 b)))
 (defun js>>> (a b)
-  (ash (to-int32 a) (- (to-int32 b)))) ;; TODO not conforming to spec!
+  (bitshift32 (to-int32 a) (to-int32 b)))
+
+(defun bitshift32 (a b)
+  (if (< a 0)
+      (ash (ldb (byte 32 0) a) (- b))
+      (ash a (- b))))
 
 (defun js=== (ls rs)
   (cond ((is-nan ls) nil)
