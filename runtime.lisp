@@ -28,8 +28,11 @@
       (:infinity (infinity))
       (t result))))
 
+(defgeneric js-to-string (val)
+  (:method (val) (error "No string conversion defined for value ~a" val)))
+
 (defun to-string (val)
-  (etypecase val
+  (typecase val
     (string val)
     (js-number (cond ((is-nan val) "NaN")
                      ((eq val (infinity)) "Infinity")
@@ -38,20 +41,25 @@
                      (t (format nil "~,,,,,,'eE" val))))
     (boolean (if val "true" "false"))
     (symbol (ecase val (:undefined "undefined") (:null "null")))
-    (obj (to-string (default-value val :string)))))
+    (obj (to-string (default-value val :string)))
+    (t (js-to-string val))))
+
+(defgeneric js-to-number (val)
+  (:method (val) (error "No number conversion defined for value ~a" val)))
 
 (defun to-number (val)
-  (etypecase val
+  (typecase val
     (js-number val)
     (string (cond ((string= val "Infinity") (infinity))
                   ((string= val "-Infinity") (-infinity))
                   (t (or (read-num val) (nan)))))
     (boolean (if val 1 0))
     (symbol (ecase val (:undefined (nan)) (:null 0)))
-    (obj (to-number (default-value val :number)))))
+    (obj (to-number (default-value val :number)))
+    (t (js-to-number val))))
 
 (defun to-integer (val)
-  (etypecase val
+  (typecase val
     (integer val)
     (js-number (cond ((is-nan val) 0)
                      ((eq val (infinity)) most-positive-fixnum)
@@ -61,18 +69,23 @@
               (etypecase read (null 0) (integer read) (number (floor read)))))
     (boolean (if val 1 0))
     (symbol 0)
-    (obj (to-integer (default-value val :number)))))
+    (obj (to-integer (default-value val :number)))
+    (t (floor (to-number val)))))
 
 (defun to-int32 (val)
   (trunc32 (to-integer val)))
 
+(defgeneric js-to-boolean (val)
+  (:method (val) (declare (ignore val)) t))
+
 (defun to-boolean (val)
-  (etypecase val
+  (typecase val
     (boolean val)
     (number (not (or (is-nan val) (zerop val))))
     (string (not (string= val "")))
     (symbol (case val (:Inf t) (:-Inf t) (t nil)))
-    (obj t))) ;; TODO check standard
+    (obj t)
+    (t (js-to-boolean val))))
 
 (defun fvector (&rest elements)
   (let ((len (length elements)))

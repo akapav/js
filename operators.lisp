@@ -87,11 +87,11 @@
   (lognot (to-int32 rs)))
 
 (defun js>> (a b)
-  (ash (to-int32 a) (- (to-integer b))))
+  (ash (to-int32 a) (- (to-int32 b))))
 (defun js<< (a b)
-  (ash (to-int32 a) (to-integer b)))
+  (ash (to-int32 a) (to-int32 b)))
 (defun js>>> (a b)
-  (ash (to-int32 a) (- (to-integer b)))) ;; TODO not conforming to spec!
+  (ash (to-int32 a) (- (to-int32 b)))) ;; TODO not conforming to spec!
 
 (defun js=== (ls rs)
   (cond ((is-nan ls) nil)
@@ -145,10 +145,12 @@
 (defun jsin (prop obj)
   (if-not-found (nil (lookup obj prop)) nil t))
 
-(defun js-type-of (exp)
-  (etypecase exp
-    (string "string")
-    (js-number "number")
-    (fobj "function")
-    (obj "object")
-    (symbol (ecase exp ((t nil) "boolean") (:undefined "undefined") (:null "object")))))
+(defgeneric js-type-of (expr)
+  (:method ((expr string)) "string")
+  (:method ((expr number)) "number")
+  (:method ((expr symbol))
+    (ecase expr ((t nil) "boolean") (:undefined "undefined") (:null "object")
+                ((:NaN :Inf :-Inf) "number")))
+  (:method ((expr fobj)) "function")
+  (:method ((expr obj)) "object")
+  (:method (expr) (error "No type-of defined for value ~a" expr)))

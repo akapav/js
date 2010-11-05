@@ -83,7 +83,6 @@
         (compile-eval form)
         (eval form))))
 
-
 (defun translate-js-string (str)
   (translate-ast (parse-js-string str)))
 

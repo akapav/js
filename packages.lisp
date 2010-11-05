@@ -1,9 +1,9 @@
 (defpackage :net.svrg.javascript
   (:nicknames :js)
-  (:shadow :array)
   (:use :cl :parse-js)
-  (:export #:!eval #:js-load-file #:js-repl #:run
-           #:*env* #:with-js-env #:reset))
+  (:export #:js-eval #:js-load-file #:js-repl #:run
+           #:*env* #:with-js-env #:reset
+           #:js-to-string #:js-to-number #:js-to-boolean))
 
 (defpackage :net.svrg.js-user
   (:nicknames :js-user)
