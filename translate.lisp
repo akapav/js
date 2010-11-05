@@ -407,21 +407,21 @@
               funcval))))))
 
 (defun wrap-function (args body)
-  `(lambda (js-user::|this|
+  `(lambda (js-var::|this|
             &optional ,@(loop :for arg :in args :collect
                            `(,(->usersym arg) :undefined))
             &rest extra-args)
      (declare (ignore extra-args)
-              (ignorable js-user::|this| ,@(mapcar '->usersym args)))
+              (ignorable js-var::|this| ,@(mapcar '->usersym args)))
      (block function ,@body)))
 
 (defun wrap-function/arguments (args body fname)
   (let ((argument-list (gensym "arguments"))
         (arg-names (mapcar #'->usersym args)))
-    `(lambda (js-user::|this| &rest ,argument-list)
-       (declare (ignorable js-user::|this|))
+    `(lambda (js-var::|this| &rest ,argument-list)
+       (declare (ignorable js-var::|this|))
        ;; Make sure the argument list covers at least the named args
-       (let ((js-user::|arguments|
+       (let ((js-var::|arguments|
                (make-argobj (find-cls :arguments) ,argument-list (length ,argument-list) ,fname)))
          ,@(when args
              `((if ,argument-list
@@ -429,7 +429,7 @@
                       (unless (cdr cons) (setf (cdr cons) (list :undefined))))
                    (setf ,argument-list (make-list ,(length args) :initial-element :undefined)))))
          (let ,(loop :for arg :in arg-names :collect `(,arg (prog1 ,argument-list (pop ,argument-list))))
-           (declare (ignorable js-user::|arguments| ,@arg-names))
+           (declare (ignorable js-var::|arguments| ,@arg-names))
            (block function ,@body))))))
 
 (deftranslate (:return value)

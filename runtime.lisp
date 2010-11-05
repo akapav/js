@@ -254,7 +254,7 @@
   :object)
 
 (stdproto (:object nil)
-  (mth "toString" () "[object Object]")
+  (mth "toString" () (if (obj-p this) "[object Object]" (to-string this)))
   (mth "toLocaleString" () (jsmethod this "toString"))
   (mth "valueOf" () this)
 

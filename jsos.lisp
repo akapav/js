@@ -44,7 +44,7 @@
 (defstruct (cfobj (:constructor make-cfobj (cls proc new-cls make-new &optional vals)) (:include fobj))
   make-new)
 (defstruct (gobj (:constructor make-gobj (cls vals protos common-cls)) (:include obj))
-  protos common-cls)
+  protos common-cls user-protos)
 (defstruct (aobj (:constructor make-aobj (cls arr)) (:include obj))
   arr)
 (defstruct (reobj (:constructor make-reobj (cls proc scanner global)) (:include fobj))
@@ -531,7 +531,7 @@
   (let* ((vals (make-array (max 2 (length props))))
          (cls (make-scls (loop :for off :from 0 :for (name value . flags) :in props
                                :do (setf (svref vals off) value)
-                               :collect (cons (intern-prop name) (cons off flags)))
+                               :collect (cons (intern-prop name) (cons off (or flags +slot-dflt+))))
                          proto)))
     (funcall make cls vals)))
 

@@ -72,7 +72,7 @@
   (wrap-js-lambda args body))
 
 (defun compile-eval (code)
-  (funcall (compile nil `(lambda () ,code))))
+  (funcall (compile nil `(lambda () (with-ignored-style-warnings ,code)))))
 
 (defun translate-js-string (str)
   (translate-ast (parse-js-string str)))
