@@ -41,12 +41,15 @@
   value)
 (defstruct (fobj (:constructor make-fobj (cls proc new-cls &optional vals)) (:include obj))
   proc new-cls)
+(defstruct (cfobj (:constructor make-cfobj (cls proc new-cls make-new &optional vals)) (:include fobj))
+  make-new)
 (defstruct (gobj (:constructor make-gobj (cls vals protos common-cls)) (:include obj))
   protos common-cls)
 (defstruct (aobj (:constructor make-aobj (cls arr)) (:include obj))
   arr)
 (defstruct (reobj (:constructor make-reobj (cls proc scanner global)) (:include fobj))
   scanner global)
+#+js-dates
 (defstruct (dobj (:constructor make-dobj (cls time zone)) (:include obj))
   time zone)
 (defstruct (argobj (:constructor make-argobj (cls list length callee)) (:include obj))
@@ -539,10 +542,11 @@
                                              ,proto))))
        (make-obj ,cls (vector ,@(mapcar #'cdr props))))))
 
-(defun js-new (func &rest args) ;; TODO check standard
+(defun js-new (func &rest args)
   (unless (fobj-p func)
     (js-error :type-error "~a is not a constructor." (to-string func)))
-  (let* ((this (make-obj (ensure-fobj-cls func)))
+  (let* ((cls (ensure-fobj-cls func))
+         (this (if (cfobj-p func) (funcall (cfobj-make-new func) cls) (make-obj cls)))
          (result (apply (the function (proc func)) this args)))
     (if (obj-p result) result this)))
 

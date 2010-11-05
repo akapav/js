@@ -229,16 +229,19 @@
   (setf (lookup proto "constructor") self)
   self)
 
-;; TODO prevent useless this objects from being created for many of these
 (defmacro stdconstructor (name args &body body/rest)
   (destructuring-bind (body proto &rest props) body/rest
-    `(addstdprop ,name (lambda ()
-                         (let ((-self- (make-fobj nil nil nil nil)))
-                           (build-constructor
-                            -self-
-                            (ensure-proto ,(if (keywordp proto) proto `(list ,@proto)))
-                            (list ,@props)
-                            ,(wrap-js-lambda args (list body))))))))
+    (let ((make-new (assoc :make-new props)))
+      (when make-new (setf props (remove make-new props)))
+      `(addstdprop ,name (lambda ()
+                           (let ((-self- ,(if make-new
+                                              `(make-cfobj nil nil nil ,(second make-new) nil)
+                                              '(make-fobj nil nil nil nil))))
+                             (build-constructor
+                              -self-
+                              (ensure-proto ,(if (keywordp proto) proto `(list ,@proto)))
+                              (list ,@props)
+                              ,(wrap-js-lambda args (list body)))))))))
 
 (defmacro stdobject (name &body props)
   `(addstdprop ,name (lambda ()
@@ -263,7 +266,8 @@
   (let ((body (format nil "(function (~{~a~^, ~}) {~A});"
                       (butlast args) (car (last args)))))
     (compile-eval (translate (parse/err body))))
-  :function)
+  :function
+  (:make-new (constantly nil)))
 
 (defun vec-apply (func this vec)
   (macrolet ((vapply (n)
@@ -290,8 +294,11 @@
          (arr (if (and (= len 1) (integerp (car args)))
                   (empty-fvector (car args))
                   (make-array len :initial-contents args :fill-pointer len :adjustable t))))
-    (make-aobj (ensure-fobj-cls -self-) arr))
-  :array)
+    (if (eq this *env*)
+        (make-aobj (ensure-fobj-cls -self-) arr)
+        (progn (setf (aobj-arr this) arr) this)))
+  :array
+  (:make-new #'make-aobj))
 
 (defmacro unless-array (default &body body)
   `(if (aobj-p this) (progn ,@body) ,default))
@@ -390,7 +397,7 @@
   (mth "sort" (compare)
     (unless-array (build-array (fvector this))
       (let ((func (if (eq compare :undefined)
-                      (lambda (a b) (string< (to-string a) (to-string b))) ;; TODO less wasteful
+                      (lambda (a b) (string< (to-string a) (to-string b)))
                       (let ((proc (proc compare)))
                         (lambda (a b) (funcall proc *env* a b))))))
         (sort (aobj-arr this) func)
@@ -403,8 +410,9 @@
 (stdconstructor "String" (value)
   (if (eq this *env*)
       (to-string value)
-      (make-vobj (ensure-fobj-cls -self-) (to-string value)))
+      (progn (setf (vobj-value this) (to-string value)) this))
   :string
+  (:make-new #'make-vobj)
   (mth "fromCharCode" (code)
     (string (code-char (to-integer code)))))
 
@@ -525,7 +533,7 @@
                    (unless pos (return))))
             (build-array arr)))))
 
-  (mth "concat" (&rest values) ;; TODO 'The length property of the concat method is 1', whatever sense that makes
+  (mth "concat" (&rest values)
     (apply #'concatenate 'string (cons (to-string this) (mapcar 'to-string values))))
 
   (mth "localeCompare" (that)
@@ -559,8 +567,9 @@
 (stdconstructor "Number" (value)
   (if (eq this *env*)
       (to-number value)
-      (make-vobj (ensure-fobj-cls -self-) (to-number value)))
+      (progn (setf (vobj-value this) (to-number value)) this))
   :number
+  (:make-new #'make-vobj)
   (pr "MAX_VALUE" most-positive-double-float)
   (pr "MIN_VALUE" least-positive-double-float)
   (pr "POSITIVE_INFINITY" (infinity))
@@ -584,8 +593,9 @@
 (stdconstructor "Boolean" (value)
   (if (eq this *env*)
       (to-boolean value)
-      (make-vobj (ensure-fobj-cls -self-) (to-boolean value)))
-  :boolean)
+      (progn (setf (vobj-value this) (to-boolean value)) this))
+  :boolean
+  (:make-new #'make-vobj))
 
 (stdproto (:boolean :object)
   (mth "toString" () (if (typed-value-of this 'boolean) "true" "false"))
@@ -647,9 +657,12 @@
       (if (eq this *env*)
           pattern
           (multiple-value-bind (source flags) (regexp-args pattern)
-            (new-regexp source flags)))
-      (new-regexp pattern flags))
+            (init-reobj this source flags)))
+      (if (eq this *env*)
+          (new-regexp pattern flags)
+          (init-reobj this pattern flags)))
   :regexp
+  (:make-new #'make-reobj)
   (pr "length" 2)) ;; Because the standard says so
 
 (stdproto (:regexp :object)
@@ -682,20 +695,20 @@
                         (hours :none) (minutes :none) (seconds :none) (ms :none))
   (if (eq this *env*)
       (to-string (js-new -self-))
-      (make-dobj (find-cls :date)
-                 (cond ((eq year :none) (local-time:now))
-                       ((eq month :none)
-                        (let ((val (default-value year)))
-                          (if (stringp val)
-                              (parse-date-string val)
-                              (catch 'maybe-int (date-from-milliseconds (maybe-int val))))))
-                       ;; TODO local timezone
-                       (t (catch 'maybe-int
-                            (local-time:encode-timestamp
-                             (* 1000000 (maybe-int ms)) (maybe-int seconds) (maybe-int minutes) (maybe-int hours)
-                             (maybe-int date 1) (1+ (maybe-int month)) (maybe-int year)))))
-                 local-time:*default-timezone*))
+      (let ((time (cond ((eq year :none) (local-time:now))
+                        ((eq month :none)
+                         (let ((val (default-value year)))
+                           (if (stringp val)
+                               (parse-date-string val)
+                               (catch 'maybe-int (date-from-milliseconds (maybe-int val))))))
+                        (t (catch 'maybe-int
+                             (local-time:encode-timestamp
+                              (* 1000000 (maybe-int ms)) (maybe-int seconds) (maybe-int minutes) (maybe-int hours)
+                              (maybe-int date 1) (1+ (maybe-int month)) (maybe-int year)))))))
+        (setf (dobj-time this) time (dobj-zone this) local-time:*default-timezone*)
+        this))
   :date
+  (:make-new #'make-dobj)
   (pr "length" 7)
   (mth "parse" (value)
     (let ((parsed (parse-date-string (to-string value))))
