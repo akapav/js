@@ -1,8 +1,7 @@
-(defpackage :net.svrg.js-system (:use :cl :asdf))
-(in-package :net.svrg.js-system)
+(when (asdf:find-system :local-time nil) (push :js-dates *features*))
 
-(defsystem :js
-  :depends-on (:parse-js :cl-ppcre :local-time)
+(asdf:defsystem :js
+  :depends-on (:parse-js :cl-ppcre #+js-dates :local-time)
   :serial t
   :components
   ((:file "packages")

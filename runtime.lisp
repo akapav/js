@@ -656,6 +656,7 @@
         (not (eq (regexp-exec this (to-string str) t) :null))
         nil)))
 
+#+js-dates(locally
 (defun maybe-int (x &optional (default 0))
   (if (eq x :none)
       default
@@ -824,6 +825,7 @@
   (mth "setUTCSeconds" (sec) (date-setter this :sec sec :utc t))
   (mth "setMilliseconds" (ms) (date-setter this :nsec ms :apply (* 1000000)))
   (mth "setUTCMilliseconds" (ms) (date-setter this :nsec ms :apply (* 1000000) :utc t)))
+)
 
 (stdconstructor "Error" (message)
   (if (eq this *env*)
