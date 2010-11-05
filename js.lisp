@@ -71,39 +71,11 @@
 (defmacro js-lambda (args &body body)
   (wrap-js-lambda args body))
 
-(defmacro js-eval (str)
-  `(wrap-js ,(translate-ast (parse-js-string str))))
-
 (defun compile-eval (code)
   (funcall (compile nil `(lambda () ,code))))
 
-(defun run (str &key (compile t))
-  (let ((form `(wrap-js ,(translate-ast (parse-js-string str)))))
-    (if compile
-        (compile-eval form)
-        (eval form))))
-
 (defun translate-js-string (str)
   (translate-ast (parse-js-string str)))
-
-(defun js-load-file (fname &optional optimize)
-  (let ((code (with-open-file (str fname) `(wrap-js ,(translate-ast (parse-js str))))))
-    (compile-eval (if optimize `(locally (declare (optimize speed (safety 0))) ,code) code))))
-
-;; TODO support multiline input
-(defun js-repl ()
-  (format t "~%JS repl (#q to quit)~%> ")
-  (loop :for line := (read-line) :do
-     (when (equal line "#q") (return))
-     (handler-case
-         (let ((result (compile-eval (translate-ast (parse/err line)))))
-           (unless (eq result :undefined)
-             (format t "~a~%" (to-string result))))
-       (js-condition (e)
-         (format t "! ~a~%" (to-string (js-condition-value e))))
-       (error (e)
-         (format t "!! ~a~%" e)))
-     (format t "> ")))
 
 ;; Conditions
 

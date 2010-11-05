@@ -28,11 +28,7 @@
 ;; code paths, some of which can assume previously-checked conditions,
 ;; to optimize.)
 
-;; TODO thread-safety (maybe)
-
-;; TODO give up caching when it fails too often
-
-(locally (declare (optimize speed (safety 0)))
+(declaim (optimize speed (safety 0)))
 
 (defstruct cls prototype)
 (defstruct (scls (:constructor make-scls (props prototype)) (:include cls))
@@ -112,7 +108,6 @@
   (js-error :type-error "~a has no properties." (to-string obj)))
 
 (defun index-in-range (index len)
-  (declare (optimize speed (safety 0)))
   (if (and (typep index 'fixnum) (>= index 0) (< index len))
       index
       (let ((index (to-string index)) index-int)
@@ -583,4 +578,3 @@
                         (setf (car slot) :deleted (cdr slot) +slot-active+)))
                  (remhash (intern-prop prop) (obj-vals obj)))))
       t))
-)
