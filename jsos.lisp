@@ -112,10 +112,14 @@
   (js-error :type-error "~a has no properties." (to-string obj)))
 
 (defun index-in-range (index len)
+  (declare (optimize speed (safety 0)))
   (if (and (typep index 'fixnum) (>= index 0) (< index len))
       index
       (let ((index (to-string index)) index-int)
-        (if (and (every #'digit-char-p index) ;; TODO faster check
+        (declare (string index))
+        (if (and (loop :for ch :across index :do
+                    (unless (<= #.(char-code #\0) (char-code ch) #.(char-code #\9)) (return nil))
+                    :finally (return t))
                  (progn (setf index-int (parse-integer index)) (>= index-int 0) (< index-int len)))
             index-int
             nil))))
