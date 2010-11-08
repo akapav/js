@@ -479,14 +479,14 @@
 
 ;; Enumerating
 
-(defmethod js-for-in ((obj obj) func)
+(defmethod js-for-in ((obj obj) func &optional shallow)
   (let ((stack ()))
     (flet ((maybe-yield (flags name)
              (unless (or (logtest flags +slot-noenum+)
                          (dolist (parent stack)
                            (when (find-slot* parent name) (return t))))
                (funcall func name))))
-      (loop :for cur := obj :then (cls-prototype cls) :while cur
+      (loop :for cur := obj :then (and shallow (cls-prototype cls)) :while cur
             :for cls := (obj-cls cur) :for vals := (obj-vals cur) :do
          (if (hash-table-p vals)
              (with-hash-table-iterator (next vals)
@@ -497,16 +497,18 @@
                 (maybe-yield flags name)))
          (push cur stack)))))
 
-(defmethod js-for-in ((obj aobj) func)
+(defmethod js-for-in ((obj aobj) func &optional shallow)
+  (declare (ignore shallow))
   (dotimes (i (length (aobj-arr obj))) (funcall func (princ-to-string i)))
   (call-next-method))
 
-(defmethod js-for-in ((obj argobj) func)
+(defmethod js-for-in ((obj argobj) func &optional shallow)
+  (declare (ignore shallow))
   (dotimes (i (argobj-length obj)) (funcall func (princ-to-string i)))
   (call-next-method))
 
-(defmethod js-for-in (obj func)
-  (declare (ignore obj func)))
+(defmethod js-for-in (obj func &optional shallow)
+  (declare (ignore obj func shallow)))
 
 ;; Registering prototypes for string, number, and boolean values
 
@@ -522,8 +524,8 @@
      (defmethod (setf lookup) (val (obj ,specializer) prop)
        (declare (ignore prop))
        val)
-     (defmethod js-for-in ((obj ,specializer) func)
-       (js-for-in (find-proto ,proto-id) func))))
+     (defmethod js-for-in ((obj ,specializer) func &optional shallow)
+       (js-for-in (find-proto ,proto-id) func shallow))))
 
 ;; Utilities
 

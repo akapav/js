@@ -3,6 +3,8 @@
 (defmacro js-eval (str)
   `(wrap-js ,(translate-ast (parse-js-string str))))
 
+(defmacro void (&body body)
+  `(progn ,@body :undefined))
 
 (defun run (str &key (compile t))
   (let ((form `(wrap-js ,(translate-ast (parse-js-string str)))))
@@ -30,13 +32,39 @@
      (format t "> ")))
 
 (defun find-user-proto (id)
-  (or (cdr (assoc id (gobj-user-protos *env*)))
+  (or (second (assoc id (gobj-user-protos *env*)))
+      (error "No prototype ~a defined." id)))
+(defun find-user-class (id)
+  (or (cddr (assoc id (gobj-user-protos *env*)))
       (error "No prototype ~a defined." id)))
 (defun add-user-proto (id obj)
-  (let ((found (assoc id (gobj-user-protos *env*))))
+  (let ((found (assoc id (gobj-user-protos *env*)))
+        (cls (make-scls nil obj)))
     (if found
-        (setf (cdr found) obj)
-        (push (cons id obj) (gobj-user-protos *env*)))))
+        (setf (cdr found) (cons obj cls))
+        (push (list* id obj cls) (gobj-user-protos *env*)))))
+
+(defun js-obj (&optional proto-id struct-type)
+  (let ((cls (if proto-id (find-user-class proto-id) (find-cls :object))))
+    (if struct-type
+        (funcall (default-constructor-name struct-type) cls)
+        (make-obj cls))))
+
+(defmacro js-call (f this &rest arguments)
+  `(funcall (proc ,f) ,this ,@arguments))
+
+(defun js-array (vec)
+  (assert (and (vectorp vec) (adjustable-array-p vec)))
+  (build-array vec))
+
+(deftype js-array () 'aobj)
+(defun js-array-length (x) (length (aobj-arr x)))
+(defun js-aref (x index) (aref (aobj-arr x) index))
+(defun js-array-vec (x) (aobj-arr x))
+
+(deftype js-obj () 'obj)
+(defun js-get (x prop) (lookup x prop))
+(defun (setf js-get) (val x prop) (setf (lookup x prop) val))
 
 (defmacro integrate-type (specializer &body defs)
   `(locally ()
@@ -53,8 +81,8 @@
                      (declare (ignore wcache)) val)
                    (defmethod (setf lookup) (val (obj ,specializer) prop)
                      (declare (ignore prop)) val)
-                   (defmethod js-for-in ((,arg ,specializer) func)
-                     (js-for-in (find-user-proto (progn ,@body)) func)))
+                   (defmethod js-for-in ((,arg ,specializer) func &optional shallow)
+                     (js-for-in (find-user-proto (progn ,@body)) func shallow)))
                 `(defmethod ,(ecase id (:string 'js-to-string) (:number 'js-to-number)
                                        (:boolean 'js-to-boolean) (:typeof 'js-type-of))
                      ((,arg ,specializer)) ,@body))))))
@@ -73,7 +101,7 @@
     `(defstruct (,name (:include obj) (:constructor ,(default-constructor-name name) (cls)) ,@opts) ,@slots)))
 
 (defmacro defconstructor (name args &body defs)
-  (let ((proto (gensym))
+  (let ((proto (gensym)) (self (gensym))
         proto-props cons-props proto-id type
         (body (pop defs)))
     (loop :for (id . def) :in defs :do
@@ -82,12 +110,12 @@
          (:proto-id (setf proto-id (car def)))
          (:properties (setf cons-props def))
          (:type (setf type (car def)))))
-    `(let ((-self- ,(if type
+    `(let ((,self ,(if type
                         `(make-cfobj nil nil nil #',(default-constructor-name type) nil)
                         '(make-fobj nil nil nil nil)))
            (,proto (ensure-proto (list ,@proto-props))))
-       (build-constructor -self- ,proto (list ,@cons-props) ,(wrap-js-lambda args (list body)))
-       (setf (lookup *env* ,name) -self-)
+       (build-constructor ,self ,proto (list ,@cons-props) ,(wrap-js-lambda args (list body)))
+       (setf (lookup *env* ,name) ,self)
        ,@(when proto-id `((add-user-proto ,proto-id ,proto))))))
 
 (defmacro defobject (name &body props)

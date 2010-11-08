@@ -5,9 +5,14 @@
            #:*env* #:with-js-env #:reset
            #:to-number #:to-string #:to-integer #:to-boolean
            #:js-to-string #:js-to-number #:js-to-boolean #:js-type-of
-           #:this #:-self- #:js-lambda #:js-def #:js-defun #:js-error #:js-new
+           #:this #:js-lambda #:js-def #:js-defun #:void
+           #:js-error #:js-condition #:js-condition-value
+           #:js-call
+           #:js-array #:js-array-length #:js-aref #:js-array-vec
+           #:js-obj #:js-get #:js-for-in
            #:integrate-type #:defproto #:defobjstruct
-           #:defconstructor #:defobject #:.method #:.prop #:.activeprop))
+           #:defconstructor #:defobject #:.method #:.prop #:.activeprop
+           #:nan #:infinity #:-infinity #:is-nan))
 
 (defpackage :net.svrg.js-var
   (:nicknames :js-var)

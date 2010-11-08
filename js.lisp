@@ -40,7 +40,6 @@
               (and (floatp ,name) (sb-ext:float-nan-p ,name))))
   #-(or allegro sbcl) `(eq ,val :NaN))
 
-
 ;; Intended for from-lisp use
 (defun js-funcall (func &rest args)
   (wrap-js
