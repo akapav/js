@@ -16,20 +16,27 @@
   (let ((code (with-open-file (str fname) `(wrap-js ,(translate-ast (parse-js str))))))
     (compile-eval (if optimize `(locally (declare (optimize speed (safety 0))) ,code) code))))
 
-;; TODO support multiline input
 (defun js-repl ()
   (format t "~%JS repl (#q to quit)~%> ")
-  (loop :for line := (read-line) :do
-     (when (equal line "#q") (return))
-     (handler-case
+  (let ((accum "") continue)
+    (loop :for line := (read-line) :do
+       (when (equal line "#q") (return))
+       (if continue
+           (setf line (setf accum (concatenate 'string accum '(#\newline) line))
+                 continue nil)
+           (setf accum line))
+       (handler-case
          (let ((result (compile-eval (translate-ast (parse/err line)))))
            (unless (eq result :undefined)
              (format t "~a~%" (to-string result))))
-       (js-condition (e)
-         (format t "! ~a~%" (to-string (js-condition-value e))))
-       (error (e)
-         (format t "!! ~a~%" e)))
-     (format t "> ")))
+         (js-condition (e)
+           (let ((str (to-string (js-condition-value e))))
+             (if (equal (subseq str 0 35) "SyntaxError: Unexpected token 'EOF'")
+                 (setf continue t)
+                 (format t "! ~a~%" (to-string (js-condition-value e))))))
+         (error (e)
+           (format t "!! ~a~%" e)))
+       (format t (if continue "  " "> ")))))
 
 (defun find-user-proto (id)
   (or (second (assoc id (gobj-user-protos *env*)))
