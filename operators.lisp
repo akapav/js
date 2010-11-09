@@ -130,8 +130,12 @@
     `(let ((ls (default-value ,ls)) (rs (default-value ,rs)))
        (if (and (stringp ls) (stringp rs))
            (,str-op ls rs)
-           (complicated-numeric-op (to-number ls) (to-number rs) ,op nil ,@specs)))))
-
+           (let ((ls (to-number ls)) (rs (to-number rs)))
+             ,(let ((compl `(complicated-numeric-op (to-number ls) (to-number rs) ,op nil ,@specs)))
+                (if *float-traps*
+                    compl
+                    `(unless (or (is-nan ls) (is-nan rs)) ,compl))))))))
+                    
 (defun js< (ls rs)
   (complicated-comparision-op ls rs < nil nil t nil t nil nil t))
 (defun js> (ls rs)
