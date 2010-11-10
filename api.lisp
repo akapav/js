@@ -39,13 +39,13 @@
        (format t (if continue "  " "> ")))))
 
 (defun find-user-proto (id)
-  (or (second (assoc id (gobj-user-protos *env*)))
+  (or (second (assoc id (gobj-user-protos *env*) :test #'eq))
       (error "No prototype ~a defined." id)))
 (defun find-user-class (id)
-  (or (cddr (assoc id (gobj-user-protos *env*)))
+  (or (cddr (assoc id (gobj-user-protos *env*) :test #'eq))
       (error "No prototype ~a defined." id)))
 (defun add-user-proto (id obj)
-  (let ((found (assoc id (gobj-user-protos *env*)))
+  (let ((found (assoc id (gobj-user-protos *env*) :test #'eq))
         (cls (make-scls nil obj)))
     (if found
         (setf (cdr found) (cons obj cls))
