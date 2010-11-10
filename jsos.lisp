@@ -4,8 +4,8 @@
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defparameter *common-classes*
-    #(:object :arguments :function :array :regexp #+js-dates :date :type-error :parse-error
-      :reference-error :syntax-error :uri-error))
+    #(:object :arguments :function :array :regexp #+js-dates :date :error :type-error
+      :parse-error :reference-error :syntax-error :uri-error :range-error))
   (defparameter *proto-offsets*
     #(:object :function :array :arguments :string :number :boolean :regexp #+js-dates :date :error
       :syntax-error :reference-error :type-error :uri-error :eval-error :range-error))
