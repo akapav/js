@@ -6,8 +6,12 @@
 (defmacro void (&body body)
   `(progn ,@body :undefined))
 
-(defun run (str &key (compile t))
-  (let ((form `(wrap-js ,(translate-ast (parse-js-string str)))))
+(defun run (str &key (compile t) (wrap-parse-errors nil))
+  (let* ((ast (handler-bind ((js-parse-error
+                              (lambda (e) (when wrap-parse-errors
+                                            (js-error :syntax-error (princ-to-string e))))))
+                (if (streamp str) (parse-js str) (parse-js-string str))))
+         (form `(wrap-js ,(translate-ast ast))))
     (if compile
         (compile-eval form)
         (eval form))))
