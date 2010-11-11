@@ -139,7 +139,7 @@
 (defmacro .method (name args &body body)
   `(list ,name (build-func ,(wrap-js-lambda args body))))
 
-(defmacro .prop (name &body value) `(list ,name ,value))
+(defmacro .prop (name value) `(list ,name ,value))
 
 (defmacro .activeprop (name &body read/write)
   (let (read write)
