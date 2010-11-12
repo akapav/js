@@ -401,7 +401,51 @@
                       (let ((proc (proc compare)))
                         (lambda (a b) (funcall proc *env* a b))))))
         (sort (aobj-arr this) func)
-        this))))
+        this)))
+
+  (mth "indexOf" (elt (from 0))
+    (unless-array -1
+      (loop :with vec := (aobj-arr this) :for i :from (max 0 (to-integer from)) :below (length vec) :do
+         (when (js=== (aref vec i) elt) (return i))
+         :finally (return -1))))
+  (mth "lastIndexOf" (elt (from :end))
+    (unless-array -1
+      (loop :with vec := (aobj-arr this) :with max := (1- (length vec))
+            :for i :from (if (eq from :end) max (min max (to-integer from))) :downto 0 :do
+         (when (js=== elt (aref vec i)) (return i))
+         :finally (return -1))))
+
+  (mth "every" (f (this* *env*))
+    (unless-array t
+      (loop :for elt :across (aobj-arr this) :for i :from 0 :do
+         (unless (funcall (proc f) this* elt i this) (return nil))
+         :finally (return t))))
+  (mth "some" (f (this* *env*))
+    (unless-array nil
+      (loop :for elt :across (aobj-arr this) :for i :from 0 :do
+         (when (funcall (proc f) this* elt i this) (return t))
+         :finally (return nil))))
+
+  (mth "filter" (f (this* *env*))
+    (unless-array (build-array (empty-fvector 0))
+      (let* ((vec (aobj-arr this))
+             (newvec (empty-fvector (length vec) 0)))
+        (loop :for elt :across vec :for i :from 0 :do
+           (when (funcall (proc f) this* elt i this) (vector-push-extend elt newvec)))
+        (build-array newvec))))
+
+  (mth "forEach" (f (this* *env*))
+    (unless-array :undefined
+      (loop :for elt :across (aobj-arr this) :for i :from 0 :do
+         (funcall (proc f) this* elt i this))
+      :undefined))
+  (mth "map" (f (this* *env*))
+    (unless-array (build-array (empty-fvector 0))
+      (let* ((vec (aobj-arr this))
+             (newvec (empty-fvector (length vec))))
+        (loop :for elt :across vec :for i :from 0 :do
+           (setf (aref newvec i) (funcall (proc f) this* elt i this)))
+        (build-array newvec)))))
 
 (stdproto (:arguments :object)
   (pr "length" (cons (js-lambda () (argobj-length this)) nil) :active)
