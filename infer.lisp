@@ -9,7 +9,7 @@
 ;;  ast-type (ast)
 ;;    Returns the type (if any) of the given AST node.
 
-(in-package :js)
+(in-package :cl-js)
 
 ;; A type-cell, an updatable structure that is used to track the
 ;; widest type of something.

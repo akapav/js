@@ -1,10 +1,10 @@
 (when (asdf:find-system :local-time nil) (pushnew :js-dates *features*))
 
-(asdf:defsystem :js
+(asdf:defsystem :cl-js
   :depends-on (:parse-js :cl-ppcre #+js-dates :local-time)
   :serial t
   :components
-  ((:file "packages")
+  ((:file "package")
    (:file "utils")
    (:file "js")
    (:file "jsos")

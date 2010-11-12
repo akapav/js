@@ -1,4 +1,4 @@
-(in-package :js)
+(in-package :cl-js)
 
 ;; Float special values
 

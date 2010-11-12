@@ -1,4 +1,4 @@
-(in-package :js)
+(in-package :cl-js)
 
 (defun default-value (val &optional (hint :number))
   (block nil
@@ -105,10 +105,10 @@
          (env-obj (car (captured-scope-objs scope)))
          (captured-locals (captured-scope-local-vars scope))
          (new-locals (and (not (eq captured-locals :null))
-                          (set-difference (mapcar '->usersym (find-locals (second parsed)))
-                                          captured-locals))))
+                          (set-difference (find-locals (second parsed)) captured-locals
+                                          :key #'string=))))
     (declare (special *scope*))
-    (dolist (local new-locals) (setf (lookup env-obj (symbol-name local)) :undefined))
+    (dolist (local new-locals) (setf (lookup env-obj local) :undefined))
     (or (compile-eval (translate-ast parsed)) :undefined)))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
@@ -265,7 +265,7 @@
 (stdconstructor "Function" (&rest args)
   (let ((body (format nil "(function (~{~a~^, ~}) {~A});"
                       (butlast args) (car (last args)))))
-    (compile-eval (translate (parse/err body))))
+    (compile-eval (translate-ast (parse/err body))))
   :function
   (:make-new (constantly nil)))
 
@@ -991,4 +991,4 @@
 
 (defun tests ()
   (with-js-env
-    (js-load-file (asdf:system-relative-pathname :js "test.js"))))
+    (js-load-file (asdf:system-relative-pathname :cl-js "test.js"))))

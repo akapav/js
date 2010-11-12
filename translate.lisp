@@ -1,9 +1,14 @@
-(in-package :js)
+(in-package :cl-js)
 
 (defvar *scope* ())
 (defparameter *label-name* nil)
 (defvar *break* ())
 (defvar *continue* ())
+(defvar *symbol-table*)
+
+(defun as-sym (name)
+  (or (gethash name *symbol-table*)
+      (setf (gethash name *symbol-table*) (make-symbol name))))
 
 (defgeneric lookup-variable (name scope rest))
 (defgeneric set-variable (name valname scope rest))
@@ -28,12 +33,12 @@
 
 (defstruct simple-scope vars)
 (defmethod lookup-variable (name (scope simple-scope) rest)
-  (let ((sym (->usersym name)))
+  (let ((sym (as-sym name)))
     (if (member sym (simple-scope-vars scope))
         sym
         (lookup-variable name (car rest) (cdr rest)))))
 (defmethod set-variable (name valname (scope simple-scope) rest)
-  (let ((sym (->usersym name)))
+  (let ((sym (as-sym name)))
     (if (member sym (simple-scope-vars scope))
         `(setf ,sym ,valname)
         (set-variable name valname (car rest) (cdr rest)))))
@@ -41,13 +46,13 @@
 (defstruct (arguments-scope (:include simple-scope)) args)
 (defmethod lookup-variable (name (scope arguments-scope) rest)
   (declare (ignore rest))
-  (if (member (->usersym name) (arguments-scope-args scope))
-      `(car ,(->usersym name))
+  (if (member (as-sym name) (arguments-scope-args scope))
+      `(car ,(as-sym name))
       (call-next-method)))
 (defmethod set-variable (name valname (scope arguments-scope) rest)
   (declare (ignore rest))
-  (if (member (->usersym name) (arguments-scope-args scope))
-      `(setf (car ,(->usersym name)) ,valname)
+  (if (member (as-sym name) (arguments-scope-args scope))
+      `(setf (car ,(as-sym name)) ,valname)
       (call-next-method)))
 
 (defstruct captured-scope vars local-vars objs next)
@@ -61,16 +66,16 @@
       (typecase level
         (simple-scope
          (setf varnames (union varnames (simple-scope-vars level)))
-         (when (eq locals :null) (setf locals (simple-scope-vars level))))
+         (when (eq locals :null) (setf locals (mapcar 'symbol-name (simple-scope-vars level)))))
         (with-scope (push (with-scope-var level) objs))
         (captured-scope (setf next level))))
     `(make-captured-scope
-      :vars (list ,@(loop :for var :in varnames :collect
-                       `(list ',var (lambda () ,(lookup-var (symbol-name var)))
-                              (lambda (,val-arg) ,(set-in-scope (symbol-name var) val-arg)))))
+      :vars (list ,@(loop :for var :in varnames :for name := (symbol-name var) :collect
+                       `(list ',name (lambda () ,(lookup-var name))
+                              (lambda (,val-arg) ,(set-in-scope name val-arg)))))
       :local-vars ',locals :objs (list ,@(nreverse objs)) :next ,next)))
 (defun lookup-in-captured-scope (name scope)
-  (let ((var (assoc (->usersym name) (captured-scope-vars scope))))
+  (let ((var (assoc name (captured-scope-vars scope) :test #'string=)))
     (if var
         (funcall (second var))
         (loop :for obj :in (captured-scope-objs scope) :do
@@ -84,7 +89,7 @@
   (declare (ignore rest))
   `(lookup-in-captured-scope ,name ,scope))
 (defun set-in-captured-scope (name value scope)
-  (let ((var (assoc (->usersym name) (captured-scope-vars scope))))
+  (let ((var (assoc name (captured-scope-vars scope) :test #'string=)))
     (if var
         (funcall (third var) value)
         (loop :for obj :in (captured-scope-objs scope) :do
@@ -127,7 +132,8 @@
         `(the ,typing ,result)
         result)))
 (defun translate-ast (ast)
-  (translate (infer-types ast)))
+  (let ((*symbol-table* (make-hash-table :test 'equal)))
+    (translate (infer-types ast))))
 
 (defmacro deftranslate ((type &rest arguments) &body body)
   (let ((form-arg (gensym)))
@@ -299,8 +305,8 @@
   (let ((body (translate body)))
     `(,(if finally 'unwind-protect 'prog1)
        ,(if catch
-            (with-scope (make-simple-scope :vars (list (->usersym (car catch))))
-              (let ((var (->usersym (car catch))))
+            (with-scope (make-simple-scope :vars (list (as-sym (car catch))))
+              (let ((var (as-sym (car catch))))
                 `(handler-case ,body
                    (js-condition (,var)
                      (setf ,var (js-condition-value ,var))
@@ -379,9 +385,9 @@
     (when name (push name base-locals))
     (when uses-args (push "arguments" base-locals))
     (multiple-value-bind (locals internal) (find-locals body base-locals)
-      (setf locals (mapcar '->usersym locals) internal (mapcar '->usersym internal))
+      (setf locals (mapcar 'as-sym locals) internal (mapcar 'as-sym internal))
       (with-scope (if uses-args
-                      (make-arguments-scope :vars locals :args (mapcar '->usersym args))
+                      (make-arguments-scope :vars locals :args (mapcar 'as-sym args))
                       (make-simple-scope :vars locals))
         (when uses-eval
           (push (make-with-scope :var eval-scope) *scope*))
@@ -396,32 +402,32 @@
                                    ,@(mapcar 'translate (lift-defuns body))
                                    :undefined))))
                        (if uses-args
-                           (wrap-function/arguments args body1 (->usersym fname))
+                           (wrap-function/arguments args body1 (as-sym fname))
                            (wrap-function args body1)))
                  nil)))
           (if (or name fname)
-              (let ((n (->usersym (or name fname))))
+              (let ((n (as-sym (or name fname))))
                 `(let (,n)
                    (declare (ignorable ,n))
                    (setf ,n ,funcval)))
               funcval))))))
 
 (defun wrap-function (args body)
-  `(lambda (js-var::|this|
+  `(lambda (,(as-sym "this")
             &optional ,@(loop :for arg :in args :collect
-                           `(,(->usersym arg) :undefined))
+                           `(,(as-sym arg) :undefined))
             &rest extra-args)
      (declare (ignore extra-args)
-              (ignorable js-var::|this| ,@(mapcar '->usersym args)))
+              (ignorable ,(as-sym "this") ,@(mapcar 'as-sym args)))
      (block function ,@body)))
 
 (defun wrap-function/arguments (args body fname)
   (let ((argument-list (gensym "arguments"))
-        (arg-names (mapcar #'->usersym args)))
-    `(lambda (js-var::|this| &rest ,argument-list)
-       (declare (ignorable js-var::|this|))
+        (arg-names (mapcar #'as-sym args)))
+    `(lambda (,(as-sym "this") &rest ,argument-list)
+       (declare (ignorable ,(as-sym "this")))
        ;; Make sure the argument list covers at least the named args
-       (let ((js-var::|arguments|
+       (let ((,(as-sym "arguments")
                (make-argobj (find-cls :arguments) ,argument-list (length ,argument-list) ,fname)))
          ,@(when args
              `((if ,argument-list
@@ -429,7 +435,7 @@
                       (unless (cdr cons) (setf (cdr cons) (list :undefined))))
                    (setf ,argument-list (make-list ,(length args) :initial-element :undefined)))))
          (let ,(loop :for arg :in arg-names :collect `(,arg (prog1 ,argument-list (pop ,argument-list))))
-           (declare (ignorable js-var::|arguments| ,@arg-names))
+           (declare (ignorable ,(as-sym "arguments") ,@arg-names))
            (block function ,@body))))))
 
 (deftranslate (:return value)

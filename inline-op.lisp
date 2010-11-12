@@ -1,4 +1,4 @@
-(in-package :js)
+(in-package :cl-js)
 
 (defgeneric expand-op (op lht rht lhs rhs)
   (:method (op lht rht lhs rhs)

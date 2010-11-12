@@ -1,5 +1,4 @@
-(defpackage :net.svrg.javascript
-  (:nicknames :js)
+(defpackage :cl-js
   (:use :cl :parse-js)
   (:export #:js-eval #:js-load-file #:js-repl #:run
            #:*env* #:with-js-env #:reset
@@ -13,7 +12,3 @@
            #:integrate-type #:defproto #:defobjstruct
            #:defconstructor #:defobject #:.method #:.prop #:.activeprop
            #:nan #:infinity #:-infinity #:is-nan))
-
-(defpackage :net.svrg.js-var
-  (:nicknames :js-var)
-  (:use))

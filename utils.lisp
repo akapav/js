@@ -1,13 +1,7 @@
-(in-package :js)
-
-(defun ->usersym (obj)
-  (typecase obj
-    (symbol obj)
-    (string (intern obj :js-var))
-    (t (error "invalid variable identifier"))))
+(in-package :cl-js)
 
 (defun js-intern (sym)
-  (intern (concatenate 'string (symbol-name :js) (symbol-name sym)) :js))
+  (intern (concatenate 'string (symbol-name :js) (symbol-name sym)) :cl-js))
 
 (defmacro with-ignored-style-warnings (&body body)
   `(locally #+sbcl (declare (sb-ext:muffle-conditions style-warning)) ,@body))

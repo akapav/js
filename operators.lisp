@@ -1,4 +1,4 @@
-(in-package :js)
+(in-package :cl-js)
 
 (defmacro complicated-numeric-op (ls rs op nan
                                   inf-inf inf-minf minf-inf minf-minf

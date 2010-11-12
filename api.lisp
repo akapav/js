@@ -1,4 +1,4 @@
-(in-package :js)
+(in-package :cl-js)
 
 (defmacro js-eval (str)
   `(wrap-js ,(translate-ast (parse-js-string str))))
@@ -113,7 +113,7 @@
   `(setf (lookup *env* ,name) (build-func (js-lambda ,args ,@body))))
 
 (defun default-constructor-name (structname)
-  (intern (format nil "%make-new-~a-~a" (symbol-name structname) (package-name (symbol-package structname))) :js))
+  (intern (format nil "%make-new-~a-~a" (symbol-name structname) (package-name (symbol-package structname))) :cl-js))
 
 (defmacro defobjstruct (name &body slots)
   (multiple-value-bind (name opts)
