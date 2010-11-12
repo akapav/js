@@ -7,7 +7,7 @@
            #:js-to-string #:js-to-number #:js-to-boolean #:js-type-of
            #:this #:js-lambda #:js-def #:js-defun #:void
            #:js-error #:js-condition #:js-condition-value
-           #:js-call
+           #:js-func #:js-call #:js-null
            #:js-array #:js-array-length #:js-aref #:js-array-vec
            #:js-obj #:js-get #:js-for-in
            #:integrate-type #:defproto #:defobjstruct

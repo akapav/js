@@ -66,9 +66,6 @@
         (funcall (default-constructor-name struct-type) cls)
         (make-obj cls))))
 
-(defmacro js-call (f this &rest arguments)
-  `(funcall (proc ,f) ,this ,@arguments))
-
 (defun js-array (vec)
   (assert (and (vectorp vec) (adjustable-array-p vec)))
   (build-array vec))
@@ -81,6 +78,13 @@
 (deftype js-obj () 'obj)
 (defun js-get (x prop) (lookup x prop))
 (defun (setf js-get) (val x prop) (setf (lookup x prop) val))
+
+(deftype js-func () 'fobj)
+(defmacro js-call (f this &rest arguments)
+  `(funcall (proc ,f) ,this ,@arguments))
+
+(defun js-null (x)
+  (or (eq x :null) (eq x :undefined)))
 
 (defmacro integrate-type (specializer &body defs)
   `(locally ()
