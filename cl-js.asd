@@ -9,6 +9,7 @@
    (:file "js")
    (:file "jsos")
    (:file "url-encode")
+   (:file "deflib")
    (:file "runtime")
    (:file "infer")
    (:file "inline-op")

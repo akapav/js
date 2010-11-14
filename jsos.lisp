@@ -3,25 +3,35 @@
 (defvar *env*)
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
-  (defparameter *common-classes*
-    #(:object :arguments :function :array :regexp #+js-dates :date :error :type-error
-      :parse-error :reference-error :syntax-error :uri-error :range-error))
-  (defparameter *proto-offsets*
-    #(:object :function :array :arguments :string :number :boolean :regexp #+js-dates :date :error
-      :syntax-error :reference-error :type-error :uri-error :eval-error :range-error))
-  (defun proto-offset (id)
+  (defparameter *std-types*
+    #(:object :function :array :string :arguments :regexp #+js-dates :date :error :type-error
+      :reference-error :syntax-error :uri-error :range-error :eval-error :boolean :number))
+  (defun type-offset (id)
     (declare (optimize speed (safety 0)))
-    (loop :for off :of-type fixnum :below (length (the simple-vector *proto-offsets*)) :do
-       (when (eq id (svref *proto-offsets* off)) (return off))))
-  (defun cls-offset (id)
-    (declare (optimize speed (safety 0)))
-    (loop :for off :of-type fixnum :below (length (the simple-vector *common-classes*)) :do
-       (when (eq id (svref *common-classes* off)) (return off)))))
+    (loop :for off :of-type fixnum :below (length (the simple-vector *std-types*)) :do
+       (when (eq id (svref *std-types* off)) (return off)))))
 
 (defmacro find-proto (id)
-  `(svref (gobj-protos *env*) ,(if (keywordp id) (proto-offset id) `(proto-offset ,id))))
+  (let ((std (and (keywordp id) (position id *std-types* :test #'eq))))
+    (if std
+        `(svref (gobj-proto-vec *env*) ,std)
+        `(lookup-prototype ,id))))
 (defmacro find-cls (id)
-  `(svref (gobj-common-cls *env*) ,(if (keywordp id) (cls-offset id) `(cls-offset ,id))))
+  (let ((std (and (keywordp id) (position id *std-types* :test #'eq))))
+    (if std
+        `(svref (gobj-class-vec *env*) ,std)
+        `(lookup-class ,id))))
+(defun lookup-prototype (id)
+  (let ((std (position id *std-types* :test #'eq)))
+    (or (and std (svref (gobj-proto-vec *env*) std))
+        (second (assoc id (gobj-proto-list *env*) :test #'eq))
+        (error "No prototype ~a defined." id))))
+(defun lookup-class (id)
+  (let ((std (position id *std-types* :test #'eq)))
+    (or (and std (svref (gobj-class-vec *env*) std))
+        (cddr (assoc id (gobj-proto-list *env*) :test #'eq))
+        (error "No prototype ~a defined." id))))
+
 
 ;; (Some of this code is *really* unorthogonal, repeating itself a
 ;; lot. This is mostly due to the fact that we are using different
@@ -43,8 +53,8 @@
   proc new-cls)
 (defstruct (cfobj (:constructor make-cfobj (cls proc new-cls make-new &optional vals)) (:include fobj))
   make-new)
-(defstruct (gobj (:constructor make-gobj (cls vals protos common-cls)) (:include obj))
-  protos common-cls user-protos)
+(defstruct (gobj (:constructor make-gobj (cls vals proto-vec class-vec)) (:include obj))
+  proto-vec class-vec proto-list)
 (defstruct (aobj (:constructor make-aobj (cls arr)) (:include obj))
   arr)
 (defstruct (reobj (:constructor make-reobj (cls proc scanner global)) (:include fobj))
@@ -367,7 +377,7 @@
     ;; We switch to a hash table if this class has 8 'exits' (probably
     ;; being used as a container), and it is not one of the reused classes.
     (when (and (not new-cls) (or (nthcdr 8 (scls-children cls)) (nthcdr 40 (scls-props cls)))
-               (not (find cls (gobj-common-cls *env*) :test #'eq)))
+               (not (find cls (gobj-class-vec *env*) :test #'eq)))
       (setf (scls-children cls) (make-hcls (cls-prototype cls)))
       (hash-obj obj (scls-children cls))
       (setf (gethash prop (obj-vals obj)) (cons val flags))
@@ -529,14 +539,6 @@
 
 ;; Utilities
 
-(defun obj-from-props (proto props &optional (make #'make-obj))
-  (let* ((vals (make-array (max 2 (length props))))
-         (cls (make-scls (loop :for off :from 0 :for (name value . flags) :in props
-                               :do (setf (svref vals off) value)
-                               :collect (cons (intern-prop name) (cons off (or flags +slot-dflt+))))
-                         proto)))
-    (funcall make cls vals)))
-
 (defun expand-static-obj (proto props)
   (let ((cls (gensym)))
     `(let ((,cls (load-time-value (make-scls ',(loop :for off :from 0 :for (name) :in props :collect
@@ -552,7 +554,7 @@
          (result (apply (the function (proc func)) this args)))
     (if (obj-p result) result this)))
 
-(defun simple-obj ()
+(defun simple-obj () ;; TODO replace with js-obj
   (make-obj (find-cls :object)))
 
 (defun ensure-fobj-cls (fobj)
