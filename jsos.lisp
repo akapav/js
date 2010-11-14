@@ -366,7 +366,7 @@
   (let ((new-cls (cdr (assoc prop (scls-children cls) :test #'eq))) slot)
     ;; We switch to a hash table if this class has 8 'exits' (probably
     ;; being used as a container), and it is not one of the reused classes.
-    (when (and (not new-cls) (> (length (scls-children cls)) 8)
+    (when (and (not new-cls) (or (nthcdr 8 (scls-children cls)) (nthcdr 40 (scls-props cls)))
                (not (find cls (gobj-common-cls *env*) :test #'eq)))
       (setf (scls-children cls) (make-hcls (cls-prototype cls)))
       (hash-obj obj (scls-children cls))
