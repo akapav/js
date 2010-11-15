@@ -1,0 +1,486 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/transitional.dtd">
+<html>
+<head>
+  <title>CL-JavaScript</title>
+  <style type="text/css">
+    body {margin: 0; padding: 0; max-width: 55em;}
+    #wrap {margin: 2em; padding: 1em 3em; -moz-border-radius: 30px; -webkit-border-radius: 30px; border-radius: 30px; background-color: #fcfcfc;}
+    h1, h2, h3 {font-family: tahoma, sans-serif;}
+    p.news {padding-left: 1em; text-indent: -1em;}
+    p.news span {font-weight: bold;}
+    p.def {font-family: monospace; font-weight: bold;}
+    p.def span {color: #555; font-weight: normal}
+    .desc {padding-left: 1em;}
+    a {text-decoration: none;}
+    ul {padding: 0; margin: 0; margin-left: 1.5em;}
+  </style>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+</head>
+<body>
+<div id="wrap">
+  <h1><a style="color: black" href="http://marijnhaverbeke.nl/cl-javascript">CL-JavaScript</a></h1>
+
+  <p>JavaScript is the new BASIC—a universal scripting language.
+  CL-JavaScript allows you to add user scripting to your Common Lisp
+  application without requiring your poor users to learn Common Lisp.
+  It is a JavaScript to Common Lisp translator, runtime, and standard
+  library. We aim to be <a
+  href="http://bclary.com/2004/11/07/">ECMAScript 3</a>
+  compatible.</p>
+
+  <p>By using the Lisp compiler to compile JavaScript (and by using
+  some clever tricks for the things that Lisp normally isn't good at),
+  this implementation manages to be faster than most of the 2009
+  generation of JavaScript engines. The new generation (V8,
+  Jägermonkey) beat it by, depending on the benchmark, a factor 4 or
+  so.</p>
+
+  <h2>Contents</h2>
+
+  <ul>
+    <li><a href="#news">News</a></li>
+    <li><a href="#code">Code</a></li>
+    <li><a href="#dependencies">Dependencies</a></li>
+    <li><a href="#support">Support</a></li>
+    <li><a href="#quickstart">Quickstart</a></li>
+    <li><a href="#reference">Reference</a>
+    <ul>
+      <li><a href="#running">Running Code</a></li>
+      <li><a href="#values">JavaScript Values</a></li>
+      <li><a href="#exceptions">Exceptions</a></li>
+      <li><a href="#environment">The Environment</a></li>
+      <li><a href="#utilities">Utilities</a></li>
+      <li><a href="#libraries">Libraries</a></li>
+    </ul>
+    </li>
+  </ul>
+
+  <h2 id="news">News</h2>
+
+  <p class="news"><span>15-11-2010</span>: It seems I have finally
+  documented this library.</p>
+
+  <h2 id="code">Code</h2>
+
+  <p>CL-JavaScript was created by Alan Pavičić, Iva Jurišić, and
+  Marijn Haverbeke. It is released under a <a href="LICENSE">MIT-style
+  licence</a>.</p>
+
+  <p>Development takes place on <a
+  href="http://github.com/akapav/js">github</a>. Any releases we make
+  are listed under <a href="#news">News</a>.</p>
+
+  <h2 id="dependencies">Dependencies</h2>
+
+  <p>CL-JavaScript depends on <a
+  href="http://marijnhaverbeke.nl/parse-js">parse-js</a>, <a
+  href="http://weitz.de/cl-ppcre/">CL-PPCRE</a>, and optionally <a
+  href="http://common-lisp.net/project/local-time/">local-time</a>
+  (you won't have a <code>Date</code> object if your ASDF can not find
+  local-time).</p>
+
+  <p>Because <em>emulating</em> IEEE 754 floating point special values
+  (NaN, Infinity) in software is painfully inefficient, CL-JavaScript
+  includes some non-portable code to directly use machine floats in
+  SBCL and Allegro Common Lisp. There is fallback code present for
+  other implementations, but since the developers don't develop on
+  those, that might not be very well tested. It is recommended, if you
+  really want to use the system on another implementation, to try and
+  add native float support for that implementation.</p>
+
+  <h2 id="support">Support</h2>
+
+  <p>When you have a problem, please either open an issue on <a
+  href="https://github.com/akapav/js/issues">github</a>, or send <a
+  href="mailto:marijnh@gmail.com">the maintainer</a> an e-mail.</p>
+
+  <h2 id="quickstart">Quickstart</h2>
+
+  <p>First, load the system:</p>
+
+  <pre>cl-user> (asdf:oos 'asdf:load-op :cl-js)
+cl-user> (use-package :cl-js)</pre>
+
+  <p>We can start a JavaScript REPL to convince ourselves that yes, we
+  really do have JavaScript in our Common Lisp.</p>
+
+  <pre>cl-user> (js-repl)
+JS repl (#q to quit)
+> 1 + 1
+2
+> function fac(x) { return x <= 1 ? x : x * fac(x - 1); }
+[object Object]
+> fac(10)
+3628800
+> #q
+cl-user></pre>
+
+  <p>Well, that seems to work. Next up: defining our own library.</p>
+
+  <pre>cl-user> (defparameter *mylib* (empty-lib))
+cl-user> (add-to-lib *mylib*
+           (.func "plusOne" (x) (1+ (to-number x)))
+           (.object "numbers"
+             (.value "one" 1)
+             (.value "two" "2")))
+cl-user> (with-js-env (*mylib*)
+           (run-js "plusOne(numbers.two)"))
+3</pre>
+
+  <p>Note the <code>to-number</code> call. This will invoke
+  JavaScripts number-conversion. For a library like this, you are, of
+  course, better off just doing something like this:</p>
+
+  <pre>cl-user> (run-js "
+  function plusOne(x){return x + 1;}
+  var numbers = {one: 1, two: '2'};")</pre>
+
+  <p>But, in general, what you want to do is write <em>glue</em> code,
+  providing a JavaScript API for your application. For this, the
+  library does its best to provide a practical interface for defining
+  JavaScript environments.</p>
+
+  <h2 id="reference">Reference</h2>
+
+  <h3 id="running">Running Code</h3>
+
+  <p class="def" id="run-js"><span>function</span> run-js (code &amp;key (compile t) wrap-parse-errors optimize)</p>
+
+  <p class="desc">Runs the given code. <code>code</code> can be a
+  string or a stream. <code>compile</code> and <code>optimize</code>
+  determine whether the code should be compiled, and if, whether it
+  should be optimized, before it is run. When
+  <code>wrap-parse-errors</code> is given, parse errors are wrapped in
+  <a href="#js-condition"><code>js-condition</code></a> objects, and
+  can be caught by JavaScript <code>catch</code> forms.</p>
+
+  <p class="def" id="run-js-file"><span>function</span> run-js-file (file &amp;key (compile t) wrap-parse-errors optimize)</p>
+
+  <p class="desc">Runs the code from the given file. The keyword
+  arguments are passed through to <a
+  href="#run-js"><code>run-js</code></a>.</p>
+
+  <p class="def" id="js-repl"><span>function</span> js-repl (&amp;key (handle-errors t))</p>
+
+  <p class="desc">Starts an interactive JavaScript REPL. If
+  <code>handle-errors</code> is <code>t</code>, all errors will be
+  caught and printed. If it is <code>nil</code>, all errors are let
+  through. If it has any other value, only errors of type <a
+  href="#js-condition"><code>js-condition</code></a> are handled and
+  printed.</p>
+
+  <h3 id="values">JavaScript Values</h3>
+
+  <p>Values in a JavaScript environment are represented as
+  follows:</p>
+
+  <p><code>null</code> and <code>undefined</code> are the Lisp
+  keywords <code>:null</code> and <code>:undefined</code>. The type
+  <code>js-null</code> is provided, which includes both these values.
+  <code>js-null</code> is also a predicate function (shortcut for
+  <code>(typep x 'js-null)</code>).</p>
+
+  <p>Booleans are Lisp booleans (<code>nil</code> and <code>t</code>).</p>
+
+  <p>Numbers are represented as Lisp numbers (integers and
+  double-floats). On implementations where no support for representing
+  NaN and Infinity as floats has been added, these are represented by
+  the values <code>:NaN</code>, <code>:Inf</code>, and
+  <code>:-Inf</code>. The <code>js-number</code> type helps abstract
+  this—matching only numbers on those implementations where no
+  keywords are needed, and both numbers and these three keywords on
+  others.</p>
+
+  <p>The macros <code>nan</code>, <code>infinity</code>, and
+  <code>-infinity</code> are provided to create special number values.
+  The predicate <code>is-nan</code> can be used to check whether a
+  value is NaN.</p>
+
+  <p>Strings are plain Lisp strings.</p>
+
+  <p>Objects are a custom struct type—<code>js-obj</code>. The
+  <code>js-func</code> and <code>js-array</code> types are subtypes of
+  this.</p>
+
+  <p class="def" id="js-obj"><span>function</span> js-obj (&amp;optional prototype type)</p>
+
+  <p class="desc">Creates a JavaScript object. Optionally, a prototype
+  id (more about that <a href="#prototype">later</a>) and a type (as
+  in <a href="#define-js-obj"><code>define-js-obj</code></a>) can be
+  given.</p>
+
+  <p class="def" id="js-prop"><span>function</span> js-prop (obj propname)</p>
+
+  <p class="desc">Retrieves a property from an object. A
+  <code>setf</code> variant is provided for setting properties.</p>
+
+  <p class="def" id="js-array"><span>function</span> js-array (vector)</p>
+
+  <p class="desc">Creates a new JavaScript array. <code>vector</code>
+  must be an adjustable vector with a fill pointer.</p>
+
+  <p class="def" id="js-array-length"><span>function</span> js-array-length (array)</p>
+
+  <p class="desc">Retrieve the length of a JavaScript array.</p>
+
+  <p class="def" id="js-aref"><span>function</span> js-aref (array index)</p>
+
+  <p class="desc">Access an element in an array. There is a
+  <code>setf</code> variant as well.</p>
+
+  <p class="def" id="js-call"><span>macro</span> js-call (func this &amp;rest args)</p>
+
+  <p class="desc">Call a JavaScript function value.</p>
+
+  <p class="def" id="js-method"><span>macro</span> js-method (object name &amp;rest args)</p>
+
+  <p class="desc">Call a method in a JavaScript object.</p>
+
+  <p class="def" id="js-func"><span>macro</span> js-func (args &amp;body body)</p>
+
+  <p class="desc">Creates a JavaScript function object from a
+  <code>lambda</code>-like specification. Inside the body
+  <code>this</code> will be bound, in addition to the specified
+  arguments. The argument list is mangled to conform to JavaScript
+  calling conventions—each paramter will become optional, with an
+  implicit default of <code>:undefined</code>, unless you specify your
+  own default. A <code>&amp;rest</code> clause is allowed, but
+  <code>&amp;key</code> and <code>&amp;optional</code> can't be
+  used.</p>
+
+  <h3 id="exceptions">Exceptions</h3>
+
+  <p>JavaScript exceptions are raised as Lisp conditions of the
+  <code>js-condition</code> type. A JavaScript <code>catch</code>
+  block will catch these (and only these).</p>
+
+  <p class="def" id="js-condition-value"><span>method</span> js-condition-value (condition)</p>
+
+  <p class="desc">Returns the JavaScript value associated with the
+  given condition.</p>
+
+  <p class="def" id="js-error"><span>function</span> js-error (type message &amp;rest args)</p>
+
+  <p class="desc">Raises a JavaScript error (value of type
+  <code>Error</code>) . <code>type</code> must be prototype id
+  (<code>:error</code>, <code>:type-error</code>,
+  <code>:syntax-error</code>, <code>:range-error</code>,
+  <code>:uri-error</code>, and <code>:eval-error</code> are provided
+  by the standard lib). <code>message</code> can be a format string
+  into which <code>args</code> will be interpolated.</p>
+
+  <h3 id="environment">The Environment</h3>
+
+  <p class="def" id="env"><span>variable</span> *env*</p>
+
+  <p class="desc">The variable that holds the current environment.
+  Starts out unbound (though <a href="#run-js"><code>run-js</code></a>
+  and <a href="#js-repl"><code>js-repl</code></a> will give it a
+  default value automatically when they find it unbound).</p>
+
+  <p class="def" id="with-js-env"><span>macro</span> with-js-env ((&amp;rest libraries) &amp;body body)</p>
+
+  <p class="desc">Runs <code>body</code> with <a
+  href="#env"><code>*env*</code></a> bound to a fresh environment,
+  which was created by loading the standard library plus the given
+  libraries.</p>
+
+  <p class="def" id="create-env"><span>function</span> create-env (&amp;rest libraries)</p>
+
+  <p class="desc">Creates a new environment, loading the given libraries.</p>
+
+  <p class="def" id="add-to-env"><span>function</span> add-to-env (env &amp;rest libraries)</p>
+
+  <p class="desc">Extends <code>env</code> with the given libraries,
+  then returns it.</p>
+
+  <h3 id="utilities">Utilities</h3>
+
+  <p class="def" id="void"><span>macro</span> void (&amp;body body)</p>
+
+  <p class="desc">Executes the body, returns
+  <code>:undefined</code>.</p>
+
+  <p class="def" id="to-string">
+    <span>function</span> to-string (value)<br/>
+    <span>function</span> to-number (value)<br/>
+    <span>function</span> to-integer (value)<br/>
+    <span>function</span> to-boolean (value)</p>
+
+  <p class="desc">Invokes the standard JavaScript type conversion
+  algorithm on the given value.</p>
+
+  <h3 id="libraries">Libraries</h3>
+
+  <p>CL-JavaScript works with first-class libraries. These are
+  specifications of a set of variables, prototypes, and constructors
+  that can be instantiated into an environment to make their
+  definitions available there.</p>
+
+  <p class="def" id="printlib"><span>variable</span> *printlib*</p>
+
+  <p class="desc">A tiny library value containing only a
+  <code>print</code> function.</p>
+
+  <p class="def" id="empty-lib"><span>function</span> empty-lib ()</p>
+
+  <p class="desc">Returns a fresh, empty library specification
+  object.</p>
+
+  <p class="def" id="add-to-lib"><span>macro</span> add-to-lib (lib &amp;body body)</p>
+
+  <p class="desc">Add the definitions found in <code>body</code> to
+  the given library.</p>
+
+  <p>Defining the content of a library is done with a family of macros
+  starting with a period. These all take a <code>&amp;body</code> in
+  which lists starting with a keyword can be used to set options. For
+  example:</p>
+
+  <pre>(.object "Math"
+  (:slot-default :noenum)
+  (.value "E" (exp 1)))</pre>
+
+  <p>Here, the <code>:slot-default</code> option is given, causing all
+  slots defined in the <code>Math</code> object to not be enumerable.</p>
+
+  <p>All defining forms that allow slots to be defined inside of them
+  accept the <code>:slot-default</code> option. All forms that define
+  slots accept the <code>:slot</code> option. Both of these expect a
+  list of keywords (<code>:enum</code>, <code>:noenum</code>,
+  <code>:ro</code>, <code>:rw</code>, <code>:del</code>,
+  <code>:nodel</code>) which specify slot properties (enumerabe,
+  read-only, and deletable). Properties that are not specified are
+  inherited from the context (as an under-the-covers special
+  variable). By default, properties are enumerable, read-write, and
+  deletable, except in prototypes, where they are not enumerable.</p>
+
+  <p class="def" id="prototype"><span>macro</span> .prototype (id &amp;body body)</p>
+
+  <p class="desc">Creates a new prototype and associates it with the
+  given ID. All non-option forms appearing in the body are evaluated,
+  and can add properties to the prototpe. A <code>:parent</code>
+  option (which should hold a prototype-id) can be used to make this
+  prototype inherit from another prototype.</p>
+
+  <p class="def" id="constructor"><span>macro</span> .constructor (name args &amp;body body)</p>
+
+  <p class="desc">Declares a constructor with the given argument list
+  (interpreted as in <a href="#js-func"><code>js-func</code></a>) and
+  body. A <code>:prototype</code> option may appear in the body, and
+  is used to determine what prototype objects created with this
+  constructor should get. If it holds a keyword, that is the ID of the
+  prototype to use, if it holds a list of slot definitions, a new prototype
+  object is created and given those slots.</p>
+
+  <p class="desc">If this constructor should not create regular
+  objects, you can give it a <code>:type</code> option containing the
+  name of a type defined with <a
+  href="#define-js-obj"><code>define-js-obj</code></a>. When the
+  constructor is invoked with <code>new</code>, you will then get an
+  object of that type as <code>this</code> variable, rather than a
+  plain object.</p>
+
+  <p class="desc">Finally, a <code>:properties</code> option can be
+  passed, within which properties for the constructor itself can be
+  defined (as in <code>String.fromCharCode</code>).</p>
+
+  <p class="def" id="value"><span>macro</span> .value (name &amp;body value)</p>
+
+  <p class="desc">Defines a simple value property. When this appears
+  at the top level, it defines a global variable. When it appears
+  inside another form, it adds a property to that definition.</p>
+
+  <p class="def" id="object"><span>macro</span> .object (name &amp;body body)</p>
+
+  <p class="desc">This defines an object property. The
+  <code>body</code> contains property definitons for this object, and
+  optionally a <code>:parent</code> option, as in <a
+  href="#prototype"><code>.prototype</code></a>, to give the object a
+  specific prototype.</p>
+
+  <p class="def" id="func"><span>macro</span> .func (name args &amp;body body)</p>
+
+  <p class="desc">Adds a function (top-level) or method.
+  <code>args</code> is an argument list as in <a
+  href="#js-func"><code>js-func</code></a>. The given body becomes the
+  body of the function. A <code>:properties</code> option can be used
+  to give the function object itself properties.</p>
+
+  <p class="def" id="active"><span>macro</span> .active (name &amp;body body)</p>
+
+  <p class="desc">This macro is used to add 'active' properties to
+  objects. Active properties are things that can be approached like
+  regular properties, but execute some function when read or written.
+  The <code>:read</code> and <code>:write</code> options can be used
+  to specify the bodies of the functions, like this:</p>
+
+  <pre class="desc">(.active "preciousProperty"
+  (:read () "my precious!")
+  (:write (value) (js-error :error "How dare you touch my precious!")))</pre>
+
+  <p class="desc">(The argument lists are compulsory, even though they are always
+  the same.)</p>
+
+  <p class="def" id="active-r"><span>macro</span> .active-r (name &amp;body body)</p>
+
+  <p class="desc">This is a shortcut for an <a
+  href="#active"><code>.active</code></a> property with only a
+  <code>:read</code> entry (meaning writes to the slot will be
+  ignored).</p>
+
+  <p>The following two macros should not be used inside library
+  definitions, but at the top level (they are global in their
+  effect).</p>
+
+  <p class="def" id="define-js-obj"><span>macro</span> define-js-obj (name &amp;body slots)</p>
+
+  <p class="desc">Defines a struct type fit for holding JavaScript
+  object values. The way to use this is to specify the type name you
+  use here as the <code>:type</code> option of a <a
+  href="#constructor"><code>.constructor</code></a> form, and then
+  fill in your custom slots in this constructor.</p>
+
+  <p class="def" id="integrate-type"><span>macro</span> integrate-type (specializer &amp;body options)</p>
+
+  <p class="desc">A type defined by <a
+  href="#define-js-obj"><code>define-js-obj</code></a> is a 'real'
+  JavaScript object, to which clients can add properties. Sometimes,
+  it is preferable to use Lisp objects 'as they are', because wrapping
+  is too expensive. This macro allows you to do that.</p>
+
+  <p class="desc">To be able to use a value as a JavaScript value, a
+  bunch of methods have to specialized on it, so that JavaScript
+  operations (<code>typeof</code>, <code>String(x)</code>) will know
+  what to do with it.</p>
+
+  <p class="desc"><code>specializer</code> should be a valid method
+  specializer that can be used to recognize the type you want to
+  integrate.</p>
+
+  <p class="desc">All options appearing under this macro can take
+  either the form of a single value, or an argument list (of a single
+  symbol) and then a body. The <code>:string</code> option determines
+  how the type is converted to string (default is <code>"[object
+  Object]"</code>). The <code>:number</code> option converts to
+  numbers (default <code>NaN</code>). The <code>:boolean</code> option
+  to booleans (default <code>true</code>). <code>typeof</code> is used
+  to determine the string returned by the <code>typeof</code> operator
+  (default <code>"foreign"</code>). When a <code>:proto-id</code> form
+  is given, it is used to locate a prototype in which properties for
+  these values are looked up.</p>
+
+  <p class="desc">An example:</p>
+
+  <pre class="desc">(integrate-type complex
+  (:number (val) (realpart val))
+  (:string (val) (format nil "~a+~ai" (realpart val) (imagpart val)))
+  (:typeof "complex")
+  (:proto-id :number)) ;; or add a custom prototype
+
+/* ... and in your library ... */
+(.func "complex" (real imag)
+  (complex (to-number real) (to-number imag)))</pre>
+
+</div>
+</body></html>
