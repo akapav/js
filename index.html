@@ -4,9 +4,10 @@
   <title>CL-JavaScript</title>
   <style type="text/css">
     body {margin: 0; padding: 0; max-width: 55em;}
-    #wrap {margin: 2em; padding: 1em 3em; -moz-border-radius: 30px; -webkit-border-radius: 30px; border-radius: 30px; background-color: #fcfcfc;}
+    #wrap {margin: 2em; padding: 1em 3em; -moz-border-radius: 30px; -webkit-border-radius: 30px; border-radius: 30px;
+           background-color: #fcfcfc; border: 1px solid #ddd;}
     h1, h2, h3 {font-family: tahoma, sans-serif;}
-    p.news {padding-left: 1em; text-indent: -1em;}
+    p.news {padding-left: 2em; text-indent: -2em;}
     p.news span {font-weight: bold;}
     p.def {font-family: monospace; font-weight: bold;}
     p.def span {color: #555; font-weight: normal}
@@ -32,7 +33,7 @@
   some clever tricks for the things that Lisp normally isn't good at),
   this implementation manages to be faster than most of the 2009
   generation of JavaScript engines. The new generation (V8,
-  Jägermonkey) beat it by, depending on the benchmark, a factor 4 or
+  Jägermonkey) beats it by, depending on the benchmark, a factor 4 or
   so.</p>
 
   <h2>Contents</h2>
@@ -57,6 +58,12 @@
 
   <h2 id="news">News</h2>
 
+  <p class="news"><span>15-11-2010</span>: <strong><a
+  href="http://marijnhaverbeke.nl/cl-javascript-0.10.11.tgz">Version
+  0.10.11</a></strong>: The first release on the new project page. Our
+  API can be considered more or less stable now, and there are no
+  serious gaps left in our ECMAScript 3 support.</p>
+
   <p class="news"><span>15-11-2010</span>: It seems I have finally
   documented this library.</p>
 
@@ -68,7 +75,9 @@
 
   <p>Development takes place on <a
   href="http://github.com/akapav/js">github</a>. Any releases we make
-  are listed under <a href="#news">News</a>.</p>
+  are listed under <a href="#news">News</a>. The latest release is
+  always linked from <a
+  href="http://marijnhaverbeke.nl/cl-javascript.tgz">cl-javascript.tgz</a>.</p>
 
   <h2 id="dependencies">Dependencies</h2>
 
