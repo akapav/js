@@ -1,9 +1,9 @@
 (in-package :cl-js)
 
 (defun ray ()
-  (with-js-env
-    (js-load-file (asdf:system-relative-pathname :cl-js "bench/ray.js"))
-    (time (wrap-js (js-funcall (lookup *env* "renderScene"))))))
+  (with-js-env (*printlib*)
+    (run-js-file (asdf:system-relative-pathname :cl-js "bench/ray.js"))
+    (time (wrap-js (js-funcall (js-prop *env* "renderScene"))))))
 
 (defun slurp-file (file)
   (with-open-file (in file)
@@ -13,8 +13,8 @@
                  :else :collect buf :into all))))
 
 (defun codemirror ()
-  (with-js-env
+  (with-js-env (*printlib*)
     (let ((file (asdf:system-relative-pathname :cl-js "bench/codemirror.js")))
-      (js-load-file file)
+      (run-js-file file)
       (let ((code (slurp-file file)))
-        (time (wrap-js (js-funcall (lookup *env* "codemirrorBench") code)))))))
+        (time (wrap-js (js-funcall (js-prop *env* "codemirrorBench") code)))))))

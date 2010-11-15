@@ -106,17 +106,17 @@
 (defstruct (cache (:constructor make-cache (prop)))
   (op #'cache-miss) prop cls a1 a2)
 
-(defmethod static-lookup ((obj obj) cache)
+(defmethod static-js-prop ((obj obj) cache)
   (funcall (the function (cache-op cache)) obj obj cache))
-(defmethod static-lookup (obj cache)
+(defmethod static-js-prop (obj cache)
   (declare (ignore cache))
   (js-error :type-error "~a has no properties." (to-string obj)))
 
 (defun do-lookup (obj start prop)
   (simple-lookup obj start (intern-prop (if (stringp prop) prop (to-string prop)))))
-(defmethod lookup ((obj obj) prop)
+(defmethod js-prop ((obj obj) prop)
   (do-lookup obj obj prop))
-(defmethod lookup (obj prop)
+(defmethod js-prop (obj prop)
   (declare (ignore prop))
   (js-error :type-error "~a has no properties." (to-string obj)))
 
@@ -132,13 +132,13 @@
             index-int
             nil))))
 
-(defmethod lookup ((obj aobj) prop)
+(defmethod js-prop ((obj aobj) prop)
   (let* ((vec (aobj-arr obj))
          (index (index-in-range prop (length vec))))
     (if index
         (aref vec index)
         (do-lookup obj obj prop))))
-(defmethod lookup ((obj argobj) prop)
+(defmethod js-prop ((obj argobj) prop)
   (let ((lst (argobj-list obj))
         (index (index-in-range prop (argobj-length obj))))
     (if index
@@ -256,7 +256,7 @@
             (ret #'%deep-lookup nil proto-cls (simple-lookup this proto2 prop))))))))
 
 (defun expand-cached-lookup (obj prop)
-  `(static-lookup ,obj (load-time-value (make-cache (intern-prop ,prop)))))
+  `(static-js-prop ,obj (load-time-value (make-cache (intern-prop ,prop)))))
 (defmacro cached-lookup (obj prop)
   (expand-cached-lookup obj prop))
 
@@ -401,22 +401,22 @@
               (setf (svref (obj-vals obj) (car slot)) val)
               (scls-add-slot obj cls prop val flags))))))
 
-(defmethod (setf static-lookup) (val (obj obj) wcache)
+(defmethod (setf static-js-prop) (val (obj obj) wcache)
   (funcall (the function (wcache-op wcache)) obj wcache val))
-(defmethod (setf static-lookup) (val obj wcache)
+(defmethod (setf static-js-prop) (val obj wcache)
   (declare (ignore wcache val))
   (js-error :type-error "~a has no properties." (to-string obj)))
 
-(defmethod (setf lookup) (val (obj obj) prop)
+(defmethod (setf js-prop) (val (obj obj) prop)
   ;; Uses meta-set since the overhead isn't big, and duplicating all
   ;; that logic is error-prone.
   (meta-set obj (intern-prop (if (stringp prop) prop (to-string prop))) val)
   val)
-(defmethod (setf lookup) (val obj prop)
+(defmethod (setf js-prop) (val obj prop)
   (declare (ignore prop val))
   (js-error :type-error "~a has no properties." (to-string obj)))
 ;; TODO sparse storage, clever resizing
-(defmethod (setf lookup) (val (obj aobj) prop)
+(defmethod (setf js-prop) (val (obj aobj) prop)
   (let ((index (index-in-range prop most-positive-fixnum)))
     (if index
         (let ((arr (aobj-arr obj)))
@@ -424,7 +424,7 @@
             (adjust-array arr (1+ index) :fill-pointer (1+ index) :initial-element :undefined))
           (setf (aref arr index) val))
         (call-next-method val obj prop))))
-(defmethod (setf lookup) (val (obj argobj) prop)
+(defmethod (setf js-prop) (val (obj argobj) prop)
   (let ((lst (argobj-list obj))
         (index (index-in-range prop (argobj-length obj))))
     (if index
@@ -432,7 +432,7 @@
         (call-next-method val obj prop))))
 
 (defun expand-cached-set (obj prop val)
-  `(setf (static-lookup ,obj (load-time-value (make-wcache (intern-prop ,prop)))) ,val))
+  `(setf (static-js-prop ,obj (load-time-value (make-wcache (intern-prop ,prop)))) ,val))
 (defmacro cached-set (obj prop val)
   (expand-cached-set obj prop val))
 
@@ -457,7 +457,7 @@
             ((setf slot (gethash (cache-prop cache) (obj-vals obj)))
              (setf (car gcache) slot)
              (read-slot))
-            (t (if-not-found (value (static-lookup obj cache))
+            (t (if-not-found (value (static-js-prop obj cache))
                  (undefined-variable (cache-prop cache))
                  value))))))
 
@@ -465,7 +465,7 @@
   `(gcache-lookup (load-time-value (cons nil (make-cache (intern-prop ,prop)))) ,*env*))
 
 (defun global-lookup (prop)
-  (if-not-found (value (lookup *env* prop))
+  (if-not-found (value (js-prop *env* prop))
     (undefined-variable prop)
     value))
 
@@ -524,14 +524,14 @@
 
 (defmacro declare-primitive-prototype (specializer proto-id)
   `(progn
-     (defmethod static-lookup ((obj ,specializer) cache)
+     (defmethod static-js-prop ((obj ,specializer) cache)
        (funcall (the function (cache-op cache)) obj (find-proto ,proto-id) cache))
-     (defmethod lookup ((obj ,specializer) prop)
+     (defmethod js-prop ((obj ,specializer) prop)
        (do-lookup obj (find-proto ,proto-id) prop))
-     (defmethod (setf static-lookup) (val (obj ,specializer) wcache)
+     (defmethod (setf static-js-prop) (val (obj ,specializer) wcache)
        (declare (ignore wcache))
        val)
-     (defmethod (setf lookup) (val (obj ,specializer) prop)
+     (defmethod (setf js-prop) (val (obj ,specializer) prop)
        (declare (ignore prop))
        val)
      (defmethod js-for-in ((obj ,specializer) func &optional shallow)
@@ -554,14 +554,11 @@
          (result (apply (the function (proc func)) this args)))
     (if (obj-p result) result this)))
 
-(defun simple-obj () ;; TODO replace with js-obj
-  (make-obj (find-cls :object)))
-
 (defun ensure-fobj-cls (fobj)
-  (let ((proto (lookup fobj "prototype"))) ;; Active property in function prototype ensures this is always bound
+  (let ((proto (js-prop fobj "prototype"))) ;; Active property in function prototype ensures this is always bound
     (unless (obj-p proto)
-      (setf proto (simple-obj))
-      (setf (lookup proto "constructor") fobj))
+      (setf proto (js-obj))
+      (setf (js-prop proto "constructor") fobj))
     (unless (and (fobj-new-cls fobj) (eq (cls-prototype (fobj-new-cls fobj)) proto))
       (setf (fobj-new-cls fobj) (make-scls () proto)))
     (fobj-new-cls fobj)))

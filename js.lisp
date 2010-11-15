@@ -46,14 +46,12 @@
     (apply (the function (proc func)) nil args)))
 
 ;; Indented for use inside of JS code
-(defmacro jscall (func &rest args)
-  `(funcall (the function (proc ,func)) *env* ,@args))
-(defmacro jscall* (func this &rest args)
+(defmacro js-call (func this &rest args)
   `(funcall (the function (proc ,func)) ,this ,@args))
-(defmacro jsmethod (obj name &rest args)
+(defmacro js-method (obj name &rest args)
   (let ((o (gensym)))
     `(let ((,o ,obj))
-       (jscall* ,(expand-cached-lookup o name) ,o ,@args))))
+       (js-call ,(expand-cached-lookup o name) ,o ,@args))))
 
 (defun wrap-js-lambda (args body)
   (let ((other nil))

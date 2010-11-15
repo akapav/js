@@ -79,7 +79,7 @@
     (if var
         (funcall (second var))
         (loop :for obj :in (captured-scope-objs scope) :do
-           (if-not-found (val (lookup obj name))
+           (if-not-found (val (js-prop obj name))
              nil
              (return val))
            :finally (return (if (captured-scope-next scope)
@@ -93,12 +93,12 @@
     (if var
         (funcall (third var) value)
         (loop :for obj :in (captured-scope-objs scope) :do
-           (if-not-found (nil (lookup obj name))
+           (if-not-found (nil (js-prop obj name))
              nil
-             (return (setf (lookup obj name) value)))
+             (return (setf (js-prop obj name) value)))
            :finally (if (captured-scope-next scope)
                         (set-in-captured-scope name value (captured-scope-next scope))
-                        (setf (lookup *env* name) value))))))
+                        (setf (js-prop *env* name) value))))))
 (defmethod set-variable (name valname (scope captured-scope) rest)
   (declare (ignore rest))
   `(set-in-captured-scope ,name ,valname ,scope))
@@ -158,13 +158,13 @@
   (expand-cached-lookup (translate obj) attr))
 
 (deftranslate (:sub obj attr)
-  `(lookup ,(translate obj) ,(translate attr)))
+  `(js-prop ,(translate obj) ,(translate attr)))
 
 (deftranslate (:var bindings)
   `(progn ,@(loop :for (name . val) :in bindings
                   :when val :collect (set-in-scope name (translate val))
-                  :else :if (not *scope*) :collect `(if-not-found (nil (lookup *env* ,name))
-                                                      (setf (lookup *env* ,name) :undefined)))))
+                  :else :if (not *scope*) :collect `(if-not-found (nil (js-prop *env* ,name))
+                                                      (setf (js-prop *env* ,name) :undefined)))))
 
 (deftranslate (:object properties)
   (expand-static-obj '(find-proto :object) (loop :for (name . val) :in properties :collect
@@ -464,7 +464,7 @@
            `(let* ((,obj ,(translate (second func)))
                    (,mth ,(case (car func)
                             (:dot (expand-cached-lookup obj (third func)))
-                            (:sub `(lookup ,obj ,(translate (third func)))))))
+                            (:sub `(js-prop ,obj ,(translate (third func)))))))
               (if (fobj-p ,mth)
                   (funcall (the function (fobj-proc ,mth)) ,obj ,@(mapcar 'translate args))
                   ,(case (car func)

@@ -147,12 +147,12 @@
 
 (defun jsinstanceof (ls rs)
   (and (obj-p ls) (fobj-p rs)
-       (let ((proto (lookup rs "prototype")))
+       (let ((proto (js-prop rs "prototype")))
          (loop :for cur := ls :then (cls-prototype (obj-cls cur)) :while cur :do
             (when (eq cur proto) (return t))))))
 
 (defun jsin (prop obj)
-  (if-not-found (nil (lookup obj prop)) nil t))
+  (if-not-found (nil (js-prop obj prop)) nil t))
 
 (defgeneric js-type-of (expr)
   (:method ((expr string)) "string")

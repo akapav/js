@@ -1,26 +1,26 @@
 (in-package :cl-js)
 
-(defmacro js-eval (str)
-  `(wrap-js ,(translate-ast (parse-js-string str))))
-
 (defmacro void (&body body)
   `(progn ,@body :undefined))
 
-(defun run (str &key (compile t) (wrap-parse-errors nil))
+(defun run-js (str &key (compile t) (wrap-parse-errors nil) (optimize nil))
+  (unless (boundp '*env*) (setf *env* (create-env *printlib*)))
   (let* ((ast (handler-bind ((js-parse-error
                               (lambda (e) (when wrap-parse-errors
                                             (js-error :syntax-error (princ-to-string e))))))
                 (if (streamp str) (parse-js str) (parse-js-string str))))
-         (form `(wrap-js ,(translate-ast ast))))
+         (form `(wrap-js ,(translate-ast ast)))
+         (form (if optimize `(locally (declare (optimize speed (safety 0))) ,form) form)))
     (if compile
         (compile-eval form)
         (eval form))))
 
-(defun js-load-file (fname &optional optimize)
-  (let ((code (with-open-file (str fname) `(wrap-js ,(translate-ast (parse-js str))))))
-    (compile-eval (if optimize `(locally (declare (optimize speed (safety 0))) ,code) code))))
+(defun run-js-file (file &key (compile t) (wrap-parse-errors nil) (optimize nil))
+  (with-open-file (in file)
+    (run-js in :compile compile :wrap-parse-errors wrap-parse-errors :optimize optimize)))
 
 (defun js-repl (&key (handle-errors t))
+  (unless (boundp '*env*) (setf *env* (create-env *printlib*)))
   (format t "~%JS repl (#q to quit)~%> ")
   (let ((accum "") continue)
     (flet ((handle-js-condition (e)
@@ -47,6 +47,10 @@
                  (format t "~a~%" (to-string result))))))
          (format t (if continue "  " "> "))))))
 
+(defun tests ()
+  (with-js-env (*printlib*)
+    (run-js-file (asdf:system-relative-pathname :cl-js "test.js"))))
+
 (defun js-obj (&optional proto-id struct-type)
   (let ((cls (if proto-id (find-cls proto-id) (find-cls :object))))
     (if struct-type
@@ -57,89 +61,20 @@
   (assert (and (vectorp vec) (adjustable-array-p vec)))
   (build-array vec))
 
+(deftype js-obj () 'obj)
+(deftype js-func () 'fobj)
 (deftype js-array () 'aobj)
+
 (defun js-array-length (x) (length (aobj-arr x)))
 (defun js-aref (x index) (aref (aobj-arr x) index))
+(defun (setf js-aref) (val x index)
+  (setf (aref (aobj-arr x) index) val))
 (defun js-array-vec (x) (aobj-arr x))
-
-(deftype js-obj () 'obj)
-(defun js-get (x prop) (lookup x prop))
-(defun (setf js-get) (val x prop) (setf (lookup x prop) val))
-
-(deftype js-func () 'fobj)
-(defmacro js-call (f this &rest arguments)
-  `(funcall (proc ,f) ,this ,@arguments))
 
 (defun js-null (x)
   (or (eq x :null) (eq x :undefined)))
 
-(defmacro integrate-type (specializer &body defs)
-  `(locally ()
-     ,@(loop :for (id arg . body) :in defs :collect
-          (multiple-value-bind (arg body)
-              (if body (values (car arg) body) (values (gensym) (list arg)))
-            (if (eq id :proto-id)
-                `(locally ()
-                   (defmethod static-lookup ((,arg ,specializer) cache)
-                     (funcall (the function (cache-op cache)) ,arg (find-proto (progn ,@body)) cache))
-                   (defmethod lookup ((,arg ,specializer) prop)
-                     (do-lookup ,arg (find-proto (progn ,@body)) prop))
-                   (defmethod (setf static-lookup) (val (obj ,specializer) wcache)
-                     (declare (ignore wcache)) val)
-                   (defmethod (setf lookup) (val (obj ,specializer) prop)
-                     (declare (ignore prop)) val)
-                   (defmethod js-for-in ((,arg ,specializer) func &optional shallow)
-                     (js-for-in (find-proto (progn ,@body)) func shallow)))
-                `(defmethod ,(ecase id (:string 'js-to-string) (:number 'js-to-number)
-                                       (:boolean 'js-to-boolean) (:typeof 'js-type-of))
-                     ((,arg ,specializer)) ,@body))))))
+(deftype js-null () '(or (eql :null) (eql :undefined)))
 
-(defmacro js-def (name value)
-  `(setf (lookup *env* ,name) ,value))
-(defmacro js-defun (name args &body body)
-  `(setf (lookup *env* ,name) (build-func (js-lambda ,args ,@body))))
-
-(defun default-constructor-name (structname)
-  (intern (format nil "%make-new-~a-~a" (symbol-name structname) (package-name (symbol-package structname))) :cl-js))
-
-(defmacro defobjstruct (name &body slots)
-  (multiple-value-bind (name opts)
-      (if (consp name) (values (car name) (cdr name)) (values name ()))
-    `(defstruct (,name (:include obj) (:constructor ,(default-constructor-name name) (cls)) ,@opts) ,@slots)))
-
-(defmacro defconstructor (name args &body defs)
-  (let ((proto (gensym)) (self (gensym))
-        proto-props cons-props proto-id type
-        (body (pop defs)))
-    (loop :for (id . def) :in defs :do
-       (ecase id
-         (:prototype (setf proto-props def))
-         (:proto-id (setf proto-id (car def)))
-         (:properties (setf cons-props def))
-         (:type (setf type (car def)))))
-    `(let ((,self ,(if type
-                        `(make-cfobj nil nil nil #',(default-constructor-name type) nil)
-                        '(make-fobj nil nil nil nil)))
-           (,proto (ensure-proto (list ,@proto-props))))
-       (build-constructor ,self ,proto (list ,@cons-props) ,(wrap-js-lambda args (list body)))
-       (setf (lookup *env* ,name) ,self)
-       ,@(when proto-id `((add-user-proto ,proto-id ,proto))))))
-
-(defmacro defobject (name &body props)
-  `(setf (lookup *env* ,name) (obj-from-props (find-proto :object) (list ,@props))))
-
-(defmacro defproto (id &body props)
-  `(add-user-proto ,id (obj-from-props (find-proto :object) (list ,@props))))
-
-(defmacro .method (name args &body body)
-  `(list ,name (build-func ,(wrap-js-lambda args body))))
-
-(defmacro .prop (name value) `(list ,name ,value))
-
-(defmacro .activeprop (name &body read/write)
-  (let (read write)
-    (loop :for (id args . body) :in read/write :do
-       (ecase id
-         (:read (setf read (wrap-js-lambda args body)))
-         (:write (setf write (wrap-js-lambda args body)))))
-    `(list* ,name (cons ,read ,write) +slot-active+)))
+(defmacro js-func ((&rest args) &body body)
+  `(build-func (js-lambda ,args ,@body)))

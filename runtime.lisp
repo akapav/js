@@ -6,13 +6,13 @@
     (when (vobj-p val) (return (vobj-value val)))
     (let ((first "toString") (second "valueOf"))
       (when (eq hint :number) (rotatef first second))
-      (let ((method (lookup val first)))
+      (let ((method (js-prop val first)))
         (when (obj-p method)
-          (let ((res (jscall* method val)))
+          (let ((res (js-call method val)))
             (unless (obj-p res) (return res)))))
-      (let ((method (lookup val second)))
+      (let ((method (js-prop val second)))
         (when (obj-p method)
-          (let ((res (jscall* method val)))
+          (let ((res (js-call method val)))
             (unless (obj-p res) (return res)))))
       (js-error :type-error "Can't convert object to ~a." (symbol-name hint)))))
 
@@ -111,7 +111,7 @@
                           (set-difference (find-locals (second parsed)) captured-locals
                                           :key #'string=))))
     (declare (special *scope*))
-    (dolist (local new-locals) (setf (lookup env-obj local) :undefined))
+    (dolist (local new-locals) (setf (js-prop env-obj local) :undefined))
     (or (compile-eval (translate-ast parsed)) :undefined)))
 
 (defun make-js-error (type message &rest args)
@@ -126,61 +126,16 @@
         ((and (vobj-p obj) (typep (vobj-value obj) type)) (vobj-value obj))
         (t (js-error :type-error "Incompatible type."))))
 
-(defun regexp-exec (re str &optional raw no-global)
-  (let ((start 0) (str (to-string str)) (global (and (not no-global) (reobj-global re))))
-    (when global
-      (setf start (cached-lookup re "lastIndex"))
-      (when (> -1 start (length str))
-        (cached-set re "lastIndex" 0)
-        (return-from regexp-exec :null)))
-    (multiple-value-bind (mstart mend gstart gend)
-        (ppcre:scan (reobj-scanner re) (to-string str) :start start)
-      (when global
-        (cached-set re "lastIndex" (if mend mend (1+ start))))
-      (cond ((not mstart) :null)
-            (raw (values mstart mend gstart gend))
-            (t (let ((result (empty-fvector (1+ (length gstart)))))
-                 (setf (aref result 0) (subseq str mstart mend))
-                 (loop :for st :across gstart :for end :across gend :for i :from 1 :do
-                    (when st (setf (aref result i) (subseq str st end))))
-                 (build-array result)))))))
-(defun new-regexp (pattern flags)
-  (init-reobj (make-reobj (find-cls :regexp) nil nil nil) pattern flags))
-(defun init-reobj (obj pattern flags)
-  (let* ((flags (if (eq flags :undefined) "" (to-string flags)))
-         (pattern (to-string pattern))
-         (multiline (and (position #\m flags) t))
-         (ignore-case (and (position #\i flags) t))
-         (global (and (position #\g flags) t))
-         (scanner (handler-case (ppcre:create-scanner pattern :case-insensitive-mode ignore-case
-                                                      :multi-line-mode multiline)
-                    (ppcre:ppcre-syntax-error (e)
-                      (js-error :syntax-error (princ-to-string e))))))
-    (unless (every (lambda (ch) (position ch "igm")) flags)
-      (js-error :syntax-error "Invalid regular expression flags: ~a" flags))
-    (setf (reobj-proc obj) (js-lambda (str) (regexp-exec obj str))
-          (reobj-scanner obj) scanner
-          (reobj-global obj) global)
-    (cached-set obj "global" global)
-    (cached-set obj "ignoreCase" ignore-case)
-    (cached-set obj "multiline" multiline)
-    (cached-set obj "source" pattern)
-    (cached-set obj "lastIndex" 0)
-    obj))
-
 (declare-primitive-prototype string :string)
 (declare-primitive-prototype number :number)
 (declare-primitive-prototype (eql t) :boolean)
 (declare-primitive-prototype (eql nil) :boolean)
 
-(deflib *stdlib*
+(add-to-lib *stdlib*
   (.value "this" *env*)
   (.value "undefined" :undefined)
   (.value "Infinity" (infinity))
   (.value "NaN" (nan))
-
-  (.func "print" (val) ;; TODO extra lib
-    (format t "~a~%" (to-string val)))
 
   (.func "parseInt" (val (radix 10))
     (or (parse-integer (to-string val) :junk-allowed t :radix (to-integer radix))
@@ -205,8 +160,9 @@
     (.func "decodeURI" (str)
       (with-uri-err (url-encode:url-decode (to-string str) "/?:@&=+$,#")))
     (.func "decodeURIComponent" (str)
-      (with-uri-err (url-encode:url-decode (to-string str) ""))))
+      (with-uri-err (url-encode:url-decode (to-string str) "")))))
 
+(add-to-lib *stdlib*
   (.constructor "Object" (&rest args)
     (if args
         (make-vobj (find-cls :object) (car args))
@@ -216,7 +172,7 @@
   (.prototype :object
     (:parent nil)
     (.func "toString" () (if (obj-p this) "[object Object]" (to-string this)))
-    (.func "toLocaleString" () (jsmethod this "toString"))
+    (.func "toLocaleString" () (js-method this "toString"))
     (.func "valueOf" () this)
 
     (.func "hasOwnProperty" (prop) (and (obj-p this) (find-slot this (to-string prop)) t))
@@ -241,9 +197,9 @@
 
     (.prototype :function
       (.active "prototype"
-        (:read () (let ((proto (simple-obj)))
-                    (setf (lookup proto "constructor") this
-                          (lookup this "prototype") (simple-obj))))
+        (:read () (let ((proto (js-obj)))
+                    (setf (js-prop proto "constructor") this
+                          (js-prop this "prototype") (js-obj))))
         (:write (val) (ensure-slot this "prototype" val +slot-noenum+)))
 
       (.func "apply" (self args)
@@ -252,8 +208,9 @@
           (argobj (apply (proc this) self (argobj-list args)))
           (t (js-error :type-error "Second argument to Function.prototype.apply must be an array."))))
       (.func "call" (self &rest args)
-        (apply (proc this) self args))))
+        (apply (proc this) self args)))))
 
+(add-to-lib *stdlib*
   (.constructor "Array" (&rest args)
     (let* ((len (length args))
            (arr (if (and (= len 1) (integerp (car args)))
@@ -271,7 +228,7 @@
     (.prototype :array
       (.active-r "length" (if (aobj-p this) (length (aobj-arr this)) 0))
       
-      (.func "toString" () (jsmethod this "join"))
+      (.func "toString" () (js-method this "join"))
 
       (.func "concat" (&rest others)
         (let* ((elements (loop :for elt :in (cons this others) :collect
@@ -349,7 +306,7 @@
                (ito (if (eq to :undefined) len (to-integer to)))
                (to (clip-index (if (< ito 0) (+ len ito) ito) len)))
           (loop :for i :from from :below to :do
-             (if-not-found (elt (lookup this i))
+             (if-not-found (elt (js-prop this i))
                nil
                (vector-push-extend elt newarr)))
           (build-array newarr)))
@@ -423,8 +380,9 @@
     (:make-new #'make-vobj)
     (:properties
      (.func "fromCharCode" (code)
-       (string (code-char (to-integer code))))))
+       (string (code-char (to-integer code)))))))
 
+(add-to-lib *stdlib*
   (labels
       ((careful-substr (str from to)
          (let* ((len (length str))
@@ -567,8 +525,9 @@
         (string-replace this pattern replacement))
       (.func "search" (pattern)
         (unless (reobj-p pattern) (setf pattern (new-regexp (to-string pattern) :undefined)))
-        (values (regexp-exec pattern (to-string this) t t)))))
+        (values (regexp-exec pattern (to-string this) t t))))))
 
+(add-to-lib *stdlib*
   (.constructor "Number" (value)
     (if (eq this *env*)
         (to-number value)
@@ -598,8 +557,51 @@
 
   (.prototype :boolean
     (.func "toString" () (if (typed-value-of this 'boolean) "true" "false"))
-    (.func "valueOf" () (typed-value-of this 'boolean)))
+    (.func "valueOf" () (typed-value-of this 'boolean))))
 
+(defun regexp-exec (re str &optional raw no-global)
+  (let ((start 0) (str (to-string str)) (global (and (not no-global) (reobj-global re))))
+    (when global
+      (setf start (cached-lookup re "lastIndex"))
+      (when (> -1 start (length str))
+        (cached-set re "lastIndex" 0)
+        (return-from regexp-exec :null)))
+    (multiple-value-bind (mstart mend gstart gend)
+        (ppcre:scan (reobj-scanner re) (to-string str) :start start)
+      (when global
+        (cached-set re "lastIndex" (if mend mend (1+ start))))
+      (cond ((not mstart) :null)
+            (raw (values mstart mend gstart gend))
+            (t (let ((result (empty-fvector (1+ (length gstart)))))
+                 (setf (aref result 0) (subseq str mstart mend))
+                 (loop :for st :across gstart :for end :across gend :for i :from 1 :do
+                    (when st (setf (aref result i) (subseq str st end))))
+                 (build-array result)))))))
+(defun new-regexp (pattern flags)
+  (init-reobj (make-reobj (find-cls :regexp) nil nil nil) pattern flags))
+(defun init-reobj (obj pattern flags)
+  (let* ((flags (if (eq flags :undefined) "" (to-string flags)))
+         (pattern (to-string pattern))
+         (multiline (and (position #\m flags) t))
+         (ignore-case (and (position #\i flags) t))
+         (global (and (position #\g flags) t))
+         (scanner (handler-case (ppcre:create-scanner pattern :case-insensitive-mode ignore-case
+                                                      :multi-line-mode multiline)
+                    (ppcre:ppcre-syntax-error (e)
+                      (js-error :syntax-error (princ-to-string e))))))
+    (unless (every (lambda (ch) (position ch "igm")) flags)
+      (js-error :syntax-error "Invalid regular expression flags: ~a" flags))
+    (setf (reobj-proc obj) (js-lambda (str) (regexp-exec obj str))
+          (reobj-scanner obj) scanner
+          (reobj-global obj) global)
+    (cached-set obj "global" global)
+    (cached-set obj "ignoreCase" ignore-case)
+    (cached-set obj "multiline" multiline)
+    (cached-set obj "source" pattern)
+    (cached-set obj "lastIndex" 0)
+    obj))
+
+(add-to-lib *stdlib*
   (flet ((regexp-args (re)
            (values (cached-lookup re "source")
                    (format nil "~:[~;i~]~:[~;g~]~:[~;m~]" (cached-lookup re "ignoreCase")
@@ -634,9 +636,10 @@
       (.func "test" (str)
         (if (reobj-p this)
             (not (eq (regexp-exec this (to-string str) t) :null))
-            nil))))
+            nil)))))
 
-  #+js-dates
+#+js-dates
+(add-to-lib *stdlib*
   (macrolet ((if-date ((val tvar &optional zonevar) &body then/else)
                (let ((v (gensym)))
                  `(let ((,v ,val))
@@ -804,8 +807,9 @@
         (.func "setSeconds" (sec) (date-setter this :sec sec))
         (.func "setUTCSeconds" (sec) (date-setter this :sec sec :utc t))
         (.func "setMilliseconds" (ms) (date-setter this :nsec ms :apply (* 1000000)))
-        (.func "setUTCMilliseconds" (ms) (date-setter this :nsec ms :apply (* 1000000) :utc t)))))
+        (.func "setUTCMilliseconds" (ms) (date-setter this :nsec ms :apply (* 1000000) :utc t))))))
 
+(add-to-lib *stdlib*
   (.constructor "Error" (message)
     (let ((this (if (eq this *env*) (js-obj :error) this)))
       (unless (eq message :undefined)
@@ -836,8 +840,9 @@
     (deferror "TypeError" :type-error)
     (deferror "URIError" :uri-error)
     (deferror "EvalError" :eval-error)
-    (deferror "RangeError" :range-error))
+    (deferror "RangeError" :range-error)))
 
+(add-to-lib *stdlib*
   (macrolet ((with-overflow (&body body)
                             `(handler-case (progn ,@body)
                                (floating-point-overflow () (infinity)) ;; TODO -infinity?
@@ -860,6 +865,8 @@
                         (t (,cmp ls rs))))))
 
     (.object "Math"
+      (:slot-default :noenum)
+
       (.func "toString" () "[object Math]")
 
       (.value "E" (exp 1))
@@ -932,14 +939,8 @@
       (.func "random" ()
         (random 1.0)))))
 
-(defun reset ()
-  (setf *env* (create-env *stdlib*)))
-;(reset)
+(defparameter *printlib* (empty-lib))
 
-(defmacro with-js-env (&body body)
-  `(let ((*env* (create-env *stdlib*))) ,@body))
-
-(defun tests ()
-  (with-js-env
-    (js-load-file (asdf:system-relative-pathname :cl-js "test.js"))))
-
+(add-to-lib *printlib*
+  (.func "print" (val)
+    (format t "~a~%" (to-string val))))
