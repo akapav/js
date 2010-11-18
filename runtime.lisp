@@ -168,7 +168,11 @@
         (make-vobj (find-cls :object) (car args))
         this)
     (:prototype :object)
-    (:slot-default :noenum))
+    (:slot-default :noenum)
+    (:properties
+     (.func "getPrototypeOf" (object)
+       (unless (obj-p object) (js-error :type-error "~a is not an object." (to-string object)))
+       (or (cls-prototype (obj-cls object)) :null))))
 
   (.prototype :object
     (:parent nil)
