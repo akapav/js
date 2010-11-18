@@ -452,7 +452,21 @@
                  (progn (when (< pos (length me))
                           (push (subseq me pos) parts))
                         (apply #'concatenate 'string (nreverse parts)))
-                 me)))))
+                 me))))
+
+       (trim-string (str left right)
+         (let* ((str (to-string str))
+                (start 0) (end (length str))
+                (modified nil))
+           (when left
+             (loop :while (and (< start end) (is-whitespace (char str start))) :do
+                (incf start) (setf modified t)))
+           (when right
+             (loop :while (and (< start end) (is-whitespace (char str (1- end)))) :do
+                (decf end) (setf modified t)))
+           (if modified
+               (subseq str start end)
+               str))))
 
     (.prototype :string
       (:slot-default :nodel)
@@ -486,6 +500,10 @@
           (when (< from 0) (setf from (+ (length str) from)))
           (when (< to 0) (setf to (+ (length str) to)))
           (careful-substr str from to)))
+
+      (.func "trim" () (trim-string this t t))
+      (.func "trimLeft" () (trim-string this t nil))
+      (.func "trimRight" () (trim-string this nil t))
 
       (.func "toUpperCase" ()
         (string-upcase (to-string this)))

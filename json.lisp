@@ -3,7 +3,8 @@
 (defvar *reading-slot-name* nil)
 
 (defun is-whitespace (char)
-  (member char '(#\space #\newline #\return #\tab)))
+  (position char #.(concatenate 'string (list #\space #\tab #.(code-char 11) #\page #\return #\newline
+                                              (code-char #xa0) (code-char #x2028) (code-char #x2029)))))
 
 (defun ends-atom (char)
   (or (is-whitespace char) (member char '(#\) #\] #\} #\, #\:))))
