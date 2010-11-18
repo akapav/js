@@ -759,12 +759,15 @@
            (date-milliseconds (local-time:encode-timestamp
                                (* 1000000 (maybe-int ms)) (maybe-int seconds) (maybe-int minutes) (maybe-int hours)
                                (maybe-int date 1) (1+ (maybe-int month 0)) (maybe-int year 1970)
-                               :timezone local-time:+utc-zone+)))))
+                               :timezone local-time:+utc-zone+)))
+         (.func "now" ()
+           (date-milliseconds (local-time:now)))))
 
       (.prototype :date
         (:slot-default :nodel)
         (.func "toString" () (date-to-string this :full))
         (.func "toUTCString" () (date-to-string this :full t))
+        (.func "toISOString" () (date-to-string this :full))
         (.func "toDateString" () (date-to-string this :date))
         (.func "toTimeString" () (date-to-string this :time))
         (.func "toLocaleString" () (date-to-string this :full))
