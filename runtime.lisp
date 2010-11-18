@@ -167,10 +167,12 @@
     (if args
         (make-vobj (find-cls :object) (car args))
         this)
-    (:prototype :object))
+    (:prototype :object)
+    (:slot-default :noenum))
 
   (.prototype :object
     (:parent nil)
+    (:slot-default :nodel)
     (.func "toString" () (if (obj-p this) "[object Object]" (to-string this)))
     (.func "toLocaleString" () (js-method this "toString"))
     (.func "valueOf" () this)
@@ -196,6 +198,7 @@
              (vapply 7))))
 
     (.prototype :function
+      (:slot-default :nodel)
       (.active "prototype"
         (:read () (let ((proto (js-obj)))
                     (ensure-slot proto "constructor" this +slot-noenum+)
@@ -227,6 +230,7 @@
                `(if (aobj-p this) (progn ,@body) ,default)))
 
     (.prototype :array
+      (:slot-default :nodel)
       (.active-r "length" (if (aobj-p this) (length (aobj-arr this)) 0))
       
       (.func "toString" () (js-method this "join"))
@@ -370,6 +374,7 @@
             (build-array newvec))))))
 
   (.prototype :arguments
+    (:slot-default :nodel)
     (.active-r "length" (argobj-length this))
     (.active-r "callee" (argobj-callee this)))
 
@@ -379,6 +384,7 @@
         (progn (setf (vobj-value this) (to-string value)) this))
     (:prototype :string)
     (:make-new #'make-vobj)
+    (:slot-default :noenum)
     (:properties
      (.func "fromCharCode" (code)
        (string (code-char (to-integer code)))))))
@@ -445,6 +451,7 @@
                  me)))))
 
     (.prototype :string
+      (:slot-default :nodel)
       (.active-r "length" (let ((str (really-string this))) (if str (length str) 0)))
 
       (.func "toString" () (or (really-string this) (js-error :type-error "Incompatible type.")))
@@ -535,6 +542,7 @@
         (progn (setf (vobj-value this) (to-number value)) this))
     (:prototype :number)
     (:make-new #'make-vobj)
+    (:slot-default :noenum)
     (:properties
      (.value "MAX_VALUE" most-positive-double-float)
      (.value "MIN_VALUE" least-positive-double-float)
@@ -542,6 +550,7 @@
      (.value "NEGATIVE_INFINITY" (-infinity))))
 
   (.prototype :number
+    (:slot-default :nodel)
     (.func "toString" ((radix 10))
       (let ((num (typed-value-of this 'js-number)))
         (if (= radix 10)
@@ -557,6 +566,7 @@
     (:make-new #'make-vobj))
 
   (.prototype :boolean
+    (:slot-default :nodel)
     (.func "toString" () (if (typed-value-of this 'boolean) "true" "false"))
     (.func "valueOf" () (typed-value-of this 'boolean))))
 
@@ -619,10 +629,12 @@
               (init-reobj this pattern flags)))
       (:prototype :regexp)
       (:make-new #'make-reobj)
+      (:slot-default :noenum)
       (:properties
        (.value "length" 2))) ;; Because the standard says so
 
     (.prototype :regexp
+      (:slot-default :nodel)
       (.func "toString" ()
         (if (reobj-p this)
             (multiple-value-bind (source flags) (regexp-args this)
@@ -714,6 +726,7 @@
               this))
         (:prototype :date)
         (:make-new #'make-dobj)
+        (:slot-default :noenum)
         (:properties
          (.value "length" 7)
          (.func "parse" (value)
@@ -727,6 +740,7 @@
                                :timezone local-time:+utc-zone+)))))
 
       (.prototype :date
+        (:slot-default :nodel)
         (.func "toString" () (date-to-string this :full))
         (.func "toUTCString" () (date-to-string this :full t))
         (.func "toDateString" () (date-to-string this :date))
@@ -819,6 +833,7 @@
     (:prototype :error))
 
   (.prototype :error
+    (:slot-default :nodel)
     (.value "name" "Error")
     (.value "message" "Error")
     (.func "toString" ()
@@ -833,6 +848,7 @@
                          (:prototype ,id))
                        (.prototype ,id
                          (:parent :error)
+                         (:slot-default :nodel)
                          (.func "toString" ()
                            (concatenate 'string ,(format nil "~a: " name)
                                         (to-string (cached-lookup this "message"))))))))
@@ -942,6 +958,7 @@
 
 (add-to-lib *stdlib*
   (.object "JSON"
+    (:slot-default :noenum)
     (.func "parse" (string)
       (parse-json (to-string string)))
     (.func "stringify" (string replacer)
