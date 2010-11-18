@@ -939,6 +939,13 @@
       (.func "random" ()
         (random 1.0)))))
 
+(add-to-lib *stdlib*
+  (.object "JSON"
+    (.func "parse" (string)
+      (parse-json (to-string string)))
+    (.func "stringify" (string replacer)
+      (stringify-json string replacer))))
+
 (defparameter *printlib* (empty-lib))
 
 (add-to-lib *printlib*
