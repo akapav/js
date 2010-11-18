@@ -187,7 +187,8 @@
            (let ((built (if (funcspec-make-new spec)
                             (make-cfobj cls (funcspec-call spec) new-proto (funcspec-make-new spec) vals)
                             (make-fobj cls (funcspec-call spec) new-proto vals))))
-             (when new-proto (setf (js-prop new-proto "constructor") built))
+             (when new-proto
+               (ensure-slot new-proto "constructor" built +slot-noenum+))
              built))
           (t (make-obj cls vals)))))
 

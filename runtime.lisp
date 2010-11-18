@@ -198,8 +198,9 @@
     (.prototype :function
       (.active "prototype"
         (:read () (let ((proto (js-obj)))
-                    (setf (js-prop proto "constructor") this
-                          (js-prop this "prototype") (js-obj))))
+                    (ensure-slot proto "constructor" this +slot-noenum+)
+                    (ensure-slot this "prototype" proto +slot-noenum+)
+                    proto))
         (:write (val) (ensure-slot this "prototype" val +slot-noenum+)))
 
       (.func "apply" (self args)
