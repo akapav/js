@@ -89,7 +89,8 @@
 (defmacro .prototype (tag &body spec)
   (check-spec spec :parent :slot-default t)
   `(let ((*objspec* (make-objspec :prototype ,(spec-val spec :parent :object)))
-         (*default-slot-flags* (slot-flags ,@(spec-list spec :slot-default '(:noenum)))))
+         (*default-slot-flags* (slot-flags ,@(let ((list (spec-list spec :slot-default)))
+                                               (if (member :enum list) list (cons :noenum list))))))
      ,@(spec-body spec)
      (add-prototype ,tag *objspec*)))
 
@@ -101,7 +102,8 @@
                     (progn
                       (check-spec proto :slot-default t)
                       `(let ((*objspec* (make-objspec))
-                             (*default-slot-flags* (slot-flags ,@(spec-list proto :slot-default '(:noenum)))))
+                             (*default-slot-flags* (slot-flags ,@(let ((list (spec-list proto :slot-default)))
+                                                                   (if (member :enum list) list (cons :noenum list))))))
                          ,@(spec-body proto)
                          *objspec*)))))
     `(add-prop
