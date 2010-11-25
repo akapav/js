@@ -13,7 +13,7 @@
            #:this
            #:js-error #:js-condition #:js-condition-value
 
-           #:void #:js-null #:js-number
+           #:void #:js-null #:js-number #:js-special-number
            #:js-func #:js-call #:js-method
            #:js-array #:js-array-length #:js-aref #:js-array-vec
            #:js-obj #:js-prop #:js-for-in

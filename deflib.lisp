@@ -94,6 +94,9 @@
      ,@(spec-body spec)
      (add-prototype ,tag *objspec*)))
 
+(defun arg-count (list)
+  (or (position '&rest list) (length list)))
+
 (defmacro .constructor (name (&rest args) &body spec)
   (check-spec spec :prototype :slot-default t :properties :slot :make-new :type)
   (let* ((proto (spec-list spec :prototype))
@@ -116,6 +119,7 @@
                                                        `',(default-constructor-name type)
                                                        (spec-val spec :make-new)))))
             (*default-slot-flags* (slot-flags ,@(spec-list spec :slot-default '(:enum)))))
+        (.value "length" (:slot :ro :noenum) ,(arg-count args))
         ,@(spec-list spec :properties)
         *objspec*)
       (slot-flags ,@(spec-list spec :slot)))))
@@ -132,7 +136,7 @@
 
 (defmacro .value (name &body spec)
   (check-spec spec :slot t)
-  `(add-prop ,name (lambda () ,@(spec-body spec)) (slot-flags ,(spec-list spec :slot))))
+  `(add-prop ,name (lambda () ,@(spec-body spec)) (slot-flags ,@(spec-list spec :slot))))
 
 (defmacro .func (name (&rest args) &body spec)
   (check-spec spec :slot :slot-default :properties t)
@@ -142,6 +146,7 @@
                                     :prototype :function))
           (*default-slot-flags* (slot-flags ,@(spec-list spec :slot-default '(:enum)))))
       ,@(spec-list spec :properties)
+      (.value "length" (:slot :ro :noenum) ,(arg-count args))
       *objspec*)
     (slot-flags ,@(spec-list spec :slot))))
 

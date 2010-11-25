@@ -81,3 +81,6 @@
 
 (defmacro js-func ((&rest args) &body body)
   `(build-func (js-lambda ,args ,@body)))
+
+(defun js-special-number (x)
+  (or (is-nan x) (eq x (infinity)) (eq x (-infinity))))
