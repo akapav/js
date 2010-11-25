@@ -496,6 +496,20 @@ function test_35() {
   $eq('12321312312312' ^ '1512312423423423', 1807226439);
 }
 
+function test_36() {
+  var base = {a: 10, b: 20}, clone = Object.create(base);
+  $eq(clone.a, 10);
+  $arrEq(Object.keys(base), Object.keys(clone));
+  $eq(Object.keys(base).length, 2);
+  $eq(clone.c, undefined);
+  base.c = 30;
+  $eq(clone.c, 30);
+  var clone2 = Object.create(base, {d: 6});
+  $eq(clone2.d, 6);
+  base.d = 5;
+  $eq(clone2.d, 6);
+}
+
 function runTests() {
   var failures = [];
   var run = 0;

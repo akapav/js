@@ -87,6 +87,14 @@
     (obj t)
     (t (js-to-boolean val))))
 
+(defun to-object (val)
+  (typecase val
+    (obj val)
+    (boolean (make-vobj (find-cls :boolean) val))
+    (string (make-vobj (find-cls :string) val))
+    (js-number (make-vobj (find-cls :number) val))
+    (t (js-error :type-error "Can not convert ~a to object." (to-string val)))))
+
 (defun fvector (&rest elements)
   (let ((len (length elements)))
     (make-array len :fill-pointer len :initial-contents elements :adjustable t)))
@@ -163,16 +171,32 @@
       (with-uri-err (url-encode:url-decode (to-string str) "")))))
 
 (add-to-lib *stdlib*
-  (.constructor "Object" (&rest args)
-    (if args
-        (make-vobj (find-cls :object) (car args))
-        this)
-    (:prototype :object)
-    (:slot-default :noenum)
-    (:properties
-     (.func "getPrototypeOf" (object)
-       (unless (obj-p object) (js-error :type-error "~a is not an object." (to-string object)))
-       (or (cls-prototype (obj-cls object)) :null))))
+  (flet ((defprops (obj props)
+           (let ((props (to-object props)))
+             (flet ((addprop (name) (setf (js-prop obj name) (js-prop props name))))
+               (js-for-in props #'addprop t))))
+         (check-object (x)
+           (unless (obj-p x) (js-error :type-error "~a is not an object." (to-string x)))
+           x))
+    (.constructor "Object" (&rest args)
+      (if args
+          (make-vobj (find-cls :object) (car args))
+          this)
+      (:prototype :object)
+      (:slot-default :noenum)
+      (:properties
+       (.func "getPrototypeOf" (object)
+         (or (cls-prototype (obj-cls (check-object object))) :null))
+       (.func "create" (object props)
+         (let ((created (make-obj (make-scls () (check-object object)))))
+           (unless (eq props :undefined) (defprops created props))
+           created))
+       (.func "defineProperties" (object props)
+         (defprops (check-object object) props))
+       (.func "keys" (object)
+         (let ((keys (empty-fvector 20 0)))
+           (js-for-in (check-object object) (lambda (key) (vector-push-extend key keys)) t)
+           (build-array keys))))))
 
   (.prototype :object
     (:parent nil)

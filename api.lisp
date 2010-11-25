@@ -3,8 +3,11 @@
 (defmacro void (&body body)
   `(progn ,@body :undefined))
 
+(defun reset ()
+  (setf *env* (create-env *printlib*)))
+
 (defun run-js (str &key (compile t) (wrap-parse-errors nil) (optimize nil))
-  (unless (boundp '*env*) (setf *env* (create-env *printlib*)))
+  (unless (boundp '*env*) (reset))
   (let* ((ast (handler-bind ((js-parse-error
                               (lambda (e) (when wrap-parse-errors
                                             (js-error :syntax-error (princ-to-string e))))))
@@ -20,7 +23,7 @@
     (run-js in :compile compile :wrap-parse-errors wrap-parse-errors :optimize optimize)))
 
 (defun js-repl (&key (handle-errors t))
-  (unless (boundp '*env*) (setf *env* (create-env *printlib*)))
+  (unless (boundp '*env*) (reset))
   (format t "~%JS repl (#q to quit)~%> ")
   (let ((accum "") continue)
     (flet ((handle-js-condition (e)
