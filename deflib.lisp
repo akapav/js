@@ -1,8 +1,13 @@
 (in-package :cl-js)
 
 (defstruct lib
+  name
   prototypes
   toplevel)
+
+(defmethod print-object ((obj lib) stream)
+  (print-unreadable-object (obj stream :type t)
+    (princ (or (lib-name obj) "unnamed") stream)))
 
 (defstruct objspec
   (prototype :object)
@@ -67,14 +72,14 @@
           (protos (setf (cdr (last protos)) (list (cons tag spec))))
           (t (setf (lib-prototypes *lib*) (list (cons tag spec)))))))
 
-(defun empty-lib ()
-  (make-lib :toplevel (make-objspec :prototype :object)))
+(defun empty-lib (&optional name)
+  (make-lib :name name :toplevel (make-objspec :prototype :object)))
 
 (defmacro add-to-lib (lib &body body)
   `(let* ((*lib* ,lib)
           (*objspec* (lib-toplevel *lib*)))
      ,@body
-     (values)))
+     *lib*))
 
 (defun default-constructor-name (structname)
   (intern (format nil "%make-new-~a-~a" (symbol-name structname) (package-name (symbol-package structname))) :cl-js))
@@ -84,7 +89,7 @@
       (if (consp name) (values (car name) (cdr name)) (values name ()))
     `(defstruct (,name (:include obj) (:constructor ,(default-constructor-name name) (cls)) ,@opts) ,@slots)))
 
-(defparameter *stdlib* (empty-lib))
+(defparameter *stdlib* (empty-lib "standard-library"))
 
 (defmacro .prototype (tag &body spec)
   (check-spec spec :parent :slot-default t)

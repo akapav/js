@@ -54,7 +54,7 @@
 (defstruct (cfobj (:constructor make-cfobj (cls proc new-cls make-new &optional vals)) (:include fobj))
   make-new)
 (defstruct (gobj (:constructor make-gobj (cls vals proto-vec class-vec)) (:include obj))
-  proto-vec class-vec proto-list)
+  proto-vec class-vec proto-list required)
 (defstruct (aobj (:constructor make-aobj (cls arr)) (:include obj))
   arr)
 (defstruct (reobj (:constructor make-reobj (cls proc scanner global)) (:include fobj))

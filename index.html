@@ -51,7 +51,8 @@
       <li><a href="#exceptions">Exceptions</a></li>
       <li><a href="#environment">The Environment</a></li>
       <li><a href="#utilities">Utilities</a></li>
-      <li><a href="#libraries">Libraries</a></li>
+      <li><a href="#deflib">Library Definition</a></li>
+      <li><a href="#provided">Provided Libraries</a></li>
     </ul>
     </li>
   </ul>
@@ -319,22 +320,17 @@ cl-user> (with-js-env (*mylib*)
   <p class="desc">Invokes the standard JavaScript type conversion
   algorithm on the given value.</p>
 
-  <h3 id="libraries">Libraries</h3>
+  <h3 id="deflib">Library Definition</h3>
 
   <p>CL-JavaScript works with first-class libraries. These are
   specifications of a set of variables, prototypes, and constructors
   that can be instantiated into an environment to make their
   definitions available there.</p>
 
-  <p class="def" id="printlib"><span>variable</span> *printlib*</p>
+  <p class="def" id="empty-lib"><span>function</span> empty-lib (&amp;optional name)</p>
 
-  <p class="desc">A tiny library value containing only a
-  <code>print</code> function.</p>
-
-  <p class="def" id="empty-lib"><span>function</span> empty-lib ()</p>
-
-  <p class="desc">Returns a fresh, empty library specification
-  object.</p>
+  <p class="desc">Returns a fresh, empty library specification object.
+  The name is only used for the printed representation of the object.</p>
 
   <p class="def" id="add-to-lib"><span>macro</span> add-to-lib (lib &amp;body body)</p>
 
@@ -490,6 +486,41 @@ cl-user> (with-js-env (*mylib*)
 /* ... and in your library ... */
 (.func "complex" (real imag)
   (complex (to-number real) (to-number imag)))</pre>
+
+  <h3 id="provided">Provided Libraries</h3>
+
+  <p class="def" id="printlib"><span>variable</span> *printlib*</p>
+
+  <p class="desc">A tiny library value containing only a
+  <code>print</code> function, which will write its argument to
+  <code>*standard-output*</code>.</p>
+
+  <p class="def" id="requirelib"><span>function</span> requirelib (hook)</p>
+
+  <p class="desc">When called, returns a library object that
+  implements the CommonJS-style <code>require</code> operator.
+  <code>hook</code> should be a funcallable object which, given a
+  string, verifies that string as a module specifier, and returns a
+  pathname under which the module text can be found. Or, if you need
+  modules that aren't simply files, it can return two values—a
+  canonical module identifier (must be comparable with
+  <code>equal</code>) and a function that, given this identifier,
+  returns either a stream or a string containing the module's
+  text.</p>
+
+  <p class="desc">A trivial hook (without error-checking or safety)
+  could simply do <code>(merge-pathnames spec
+  "/my/script/dir/x.js")</code>. If you do want to do error-checking,
+  use <a href="#js-error"><code>js-error</code></a> to complain when a
+  specifier is not acceptable.</p>
+
+  <p class="desc">Note that CL-JavaScript's implementation of CommonJS
+  modules does not sandbox the modules in any serious way—it simply
+  wraps them in a function. This means that direct,
+  <code>var</code>-less assignments <em>will</em> create top-level
+  variables, and the module can mangle existing values (say,
+  <code>Object.prototype</code>) all it wants. For well-behaved
+  modules, this shouldn't be an issue.</p>
 
 </div>
 </body></html>

@@ -1041,8 +1041,27 @@
     (.func "stringify" (string replacer)
       (stringify-json string replacer))))
 
-(defparameter *printlib* (empty-lib))
+(defparameter *printlib* (empty-lib "print"))
 
 (add-to-lib *printlib*
   (.func "print" (val)
     (format t "~a~%" (to-string val))))
+
+(defun requirelib (hook)
+  (add-to-lib (empty-lib "require")
+    (.func "require" (spec)
+      (multiple-value-bind (canonical fetch) (funcall hook (to-string spec))
+        (or (cdr (assoc canonical (gobj-required *env*) :test #'equal))
+            (let ((module (js-obj))
+                  (moduleinit (let ((input (if fetch
+                                               (funcall fetch canonical)
+                                               (open canonical :external-format :utf-8))))
+                                (unwind-protect (run-js input :wrap-as-module t)
+                                  (when (streamp input) (close input)))))
+                  (success nil))
+              (push (cons canonical module) (gobj-required *env*))
+              (unwind-protect (progn (js-call moduleinit *env* module)
+                                     (setf success t))
+                (unless success
+                  (setf (gobj-required *env*) (remove canonical (gobj-required *env*) :key #'car :test #'equal))))
+              module))))))

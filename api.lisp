@@ -6,21 +6,24 @@
 (defun reset ()
   (setf *env* (create-env *printlib*)))
 
-(defun run-js (str &key (compile t) (wrap-parse-errors nil) (optimize nil))
+(defun run-js (str &key (compile t) (wrap-parse-errors nil) (optimize nil) (wrap-as-module nil))
   (unless (boundp '*env*) (reset))
   (let* ((ast (handler-bind ((js-parse-error
                               (lambda (e) (when wrap-parse-errors
                                             (js-error :syntax-error (princ-to-string e))))))
                 (if (streamp str) (parse-js str) (parse-js-string str))))
+         (ast (if wrap-as-module
+                  `(:function nil ("exports") (,@(second ast) (:return (:name "exports"))))
+                  ast))
          (form `(wrap-js ,(translate-ast ast)))
          (form (if optimize `(locally (declare (optimize speed (safety 0))) ,form) form)))
     (if compile
         (compile-eval form)
         (eval form))))
 
-(defun run-js-file (file &key (compile t) (wrap-parse-errors nil) (optimize nil))
+(defun run-js-file (file &key (compile t) (wrap-parse-errors nil) (optimize nil) (wrap-as-module nil))
   (with-open-file (in file)
-    (run-js in :compile compile :wrap-parse-errors wrap-parse-errors :optimize optimize)))
+    (run-js in :compile compile :wrap-parse-errors wrap-parse-errors :optimize optimize :wrap-as-module wrap-as-module)))
 
 (defun js-repl (&key (handle-errors t))
   (unless (boundp '*env*) (reset))

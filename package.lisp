@@ -3,7 +3,7 @@
   (:export #:run-js-file #:run-js #:js-repl
            #:*env* #:with-js-env #:create-env #:add-to-env
 
-           #:*printlib*
+           #:*printlib* #:requirelib
 
            #:empty-lib #:add-to-lib #:.prototype #:.constructor
            #:.object #:.value #:.func #:.active #:.active-r
