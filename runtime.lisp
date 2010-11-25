@@ -103,8 +103,10 @@
 (defun build-array (vector)
   (make-aobj (find-cls :array) vector))
 
-(defun build-func (lambda)
-  (make-fobj (find-cls :function) lambda nil))
+(defun build-func (lambda &optional n-args)
+  (let ((func (make-fobj (find-cls :function) lambda nil)))
+    (when n-args (cached-set func "length" n-args))
+    func))
 
 (defun clip-index (index len)
   (max 0 (min index len)))

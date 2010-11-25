@@ -392,8 +392,7 @@
         (when uses-eval
           (push (make-with-scope :var eval-scope) *scope*))
         (let ((funcval
-               `(make-fobj
-                 (find-cls :function)
+               `(build-func
                  ,(let ((body1 `((let* (,@(loop :for var :in internal :collect `(,var :undefined))
                                         ;; TODO sane object init
                                         ,@(and uses-eval `((,eval-scope (make-obj (find-cls :object)))
@@ -404,7 +403,7 @@
                        (if uses-args
                            (wrap-function/arguments args body1 (as-sym fname))
                            (wrap-function args body1)))
-                 nil)))
+                 ,(length args))))
           (if (or name fname)
               (let ((n (as-sym (or name fname))))
                 `(let (,n)

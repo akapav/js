@@ -80,7 +80,7 @@
 (deftype js-null () '(or (eql :null) (eql :undefined)))
 
 (defmacro js-func ((&rest args) &body body)
-  `(build-func (js-lambda ,args ,@body)))
+  `(build-func (js-lambda ,args ,@body) ,(arg-count args)))
 
 (defun js-special-number (x)
   (or (is-nan x) (eq x (infinity)) (eq x (-infinity))))
