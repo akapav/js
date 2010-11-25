@@ -255,7 +255,10 @@
           (make-aobj (find-cls :array) arr)
           (progn (setf (aobj-arr this) arr) this)))
     (:prototype :array)
-    (:make-new #'make-aobj))
+    (:make-new #'make-aobj)
+    (:slot-default :noenum)
+    (:properties
+     (.func "isArray" (val) (aobj-p val)))))
 
   (macrolet ((unless-array (default &body body)
                `(if (aobj-p this) (progn ,@body) ,default)))
