@@ -258,7 +258,7 @@
     (:make-new #'make-aobj)
     (:slot-default :noenum)
     (:properties
-     (.func "isArray" (val) (aobj-p val)))))
+     (.func "isArray" (val) (aobj-p val))))
 
   (macrolet ((unless-array (default &body body)
                `(if (aobj-p this) (progn ,@body) ,default)))
