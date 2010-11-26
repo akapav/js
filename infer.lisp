@@ -181,7 +181,7 @@
   (labels ((resolve (val)
              (typecase val
                (cons (map-into val #'resolve val))
-               (tc (make-typing :val (or (resolve-tc val) (error "Unresolved type"))))
+               (tc (make-typing :val (or (resolve-tc val) t)))
                (t val))))
     (resolve ast)))
 
@@ -279,11 +279,6 @@
                           (t (list nil nil name (tc ()))))))
              (env (cons sc env)))
         (dolist (stat body) (setf env (infer stat env)))
-        ;; A function that neither returns nor falls of (one that
-        ;; always throws) will have an unresolved return type. Just
-        ;; fill in T.
-        (unless (or (tc-tp ret-tc) (tc-rels ret-tc))
-          (setf (tc-tp ret-tc) t))
         (values (pop-scope env) ft)))))
 
 ;; Note that definfer automatically adds an env parameter to each of

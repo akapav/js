@@ -526,6 +526,13 @@ function test_37() {
   catch(e){$eq(e instanceof TypeError, true);}
 }
 
+// This used to confuse the type inferrer
+function test_38() {
+  function a(){return b();}
+  function b(){if (false) return a(); throw 1;}
+  try{return a();}catch(e){}
+}
+
 function runTests() {
   var failures = [];
   var run = 0;
