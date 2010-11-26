@@ -1078,8 +1078,9 @@
 (defparameter *printlib* (empty-lib "print"))
 
 (add-to-lib *printlib*
-  (.func "print" (val)
-    (format t "~a~%" (to-string val))))
+  (.func "print" (&rest vals)
+    (format t "~{~a~^ ~}~%" (mapcar 'to-string vals))
+    :undefined))
 
 (defun requirelib (hook)
   (add-to-lib (empty-lib "require")
