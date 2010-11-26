@@ -21,9 +21,11 @@
         (compile-eval form)
         (eval form))))
 
-(defun run-js-file (file &key (compile t) (wrap-parse-errors nil) (optimize nil) (wrap-as-module nil))
-  (with-open-file (in file)
-    (run-js in :compile compile :wrap-parse-errors wrap-parse-errors :optimize optimize :wrap-as-module wrap-as-module)))
+(defun run-js-file (file &key (compile t) (wrap-parse-errors nil) (optimize nil) (wrap-as-module nil)
+                    (external-format :default))
+  (with-open-file (in file :external-format external-format)
+    (run-js in :compile compile :wrap-parse-errors wrap-parse-errors :optimize optimize
+            :wrap-as-module wrap-as-module)))
 
 (defun js-repl (&key (handle-errors t))
   (unless (boundp '*env*) (reset))

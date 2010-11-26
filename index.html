@@ -164,11 +164,13 @@ cl-user> (with-js-env (*mylib*)
   <a href="#js-condition"><code>js-condition</code></a> objects, and
   can be caught by JavaScript <code>catch</code> forms.</p>
 
-  <p class="def" id="run-js-file"><span>function</span> run-js-file (file &amp;key (compile t) wrap-parse-errors optimize)</p>
+  <p class="def" id="run-js-file"><span>function</span> run-js-file (file &amp;key (compile t) wrap-parse-errors optimize external-format)</p>
 
   <p class="desc">Runs the code from the given file. The keyword
   arguments are passed through to <a
-  href="#run-js"><code>run-js</code></a>.</p>
+  href="#run-js"><code>run-js</code></a>, except for
+  <code>external-format</code>, which is passed to
+  <code>open</code>.</p>
 
   <p class="def" id="js-repl"><span>function</span> js-repl (&amp;key (handle-errors t))</p>
 
