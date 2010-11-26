@@ -510,6 +510,22 @@ function test_36() {
   $eq(clone2.d, 6);
 }
 
+function test_37() {
+  var data = [1, 2, 3, 4];
+  function add(a, b) {return a + b;}
+  function conc(a, b) {return a + "" + b;}
+  $eq(data.reduce(add), 10);
+  $eq(data.reduceRight(add), 10);
+  $eq(data.reduce(conc, 0), "01234");
+  $eq(data.reduceRight(conc, 5), "54321");
+  $eq([].reduce(add, 1), 1);
+  $eq([].reduceRight(add, 1), 1);
+  try {[].reduce(add); $eq(1, 2);}
+  catch(e){$eq(e instanceof TypeError, true);}
+  try {[].reduceRight(add); $eq(1, 2);}
+  catch(e){$eq(e instanceof TypeError, true);}
+}
+
 function runTests() {
   var failures = [];
   var run = 0;

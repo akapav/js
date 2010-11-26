@@ -260,6 +260,7 @@
     (:properties
      (.func "isArray" (val) (aobj-p val))))
 
+  ;; TODO properly handle array-ish objects
   (macrolet ((unless-array (default &body body)
                `(if (aobj-p this) (progn ,@body) ,default)))
 
@@ -379,35 +380,68 @@
 
       (.func "every" (f (this* *env*))
         (unless-array t
-          (loop :for elt :across (aobj-arr this) :for i :from 0 :do
-             (unless (funcall (proc f) this* elt i this) (return nil))
-             :finally (return t))))
+          (let ((proc (proc f)))
+            (loop :for elt :across (aobj-arr this) :for i :from 0 :do
+               (unless (funcall proc this* elt i this) (return nil))
+               :finally (return t)))))
       (.func "some" (f (this* *env*))
         (unless-array nil
-          (loop :for elt :across (aobj-arr this) :for i :from 0 :do
-             (when (funcall (proc f) this* elt i this) (return t))
-             :finally (return nil))))
+          (let ((proc (proc f)))
+            (loop :for elt :across (aobj-arr this) :for i :from 0 :do
+               (when (funcall proc this* elt i this) (return t))
+               :finally (return nil)))))
 
       (.func "filter" (f (this* *env*))
         (unless-array (build-array (empty-fvector 0))
           (let* ((vec (aobj-arr this))
-                 (newvec (empty-fvector (length vec) 0)))
+                 (newvec (empty-fvector (length vec) 0))
+                 (proc (proc f)))
             (loop :for elt :across vec :for i :from 0 :do
-               (when (funcall (proc f) this* elt i this) (vector-push-extend elt newvec)))
+               (when (funcall proc this* elt i this) (vector-push-extend elt newvec)))
             (build-array newvec))))
 
       (.func "forEach" (f (this* *env*))
         (unless-array :undefined
-          (loop :for elt :across (aobj-arr this) :for i :from 0 :do
-             (funcall (proc f) this* elt i this))
-          :undefined))
+          (let ((proc (proc f)))
+            (loop :for elt :across (aobj-arr this) :for i :from 0 :do
+               (funcall proc this* elt i this))
+            :undefined)))
       (.func "map" (f (this* *env*))
         (unless-array (build-array (empty-fvector 0))
           (let* ((vec (aobj-arr this))
-                 (newvec (empty-fvector (length vec))))
+                 (newvec (empty-fvector (length vec)))
+                 (proc (proc f)))
             (loop :for elt :across vec :for i :from 0 :do
-               (setf (aref newvec i) (funcall (proc f) this* elt i this)))
-            (build-array newvec))))))
+               (setf (aref newvec i) (funcall proc this* elt i this)))
+            (build-array newvec))))
+
+      (.func "reduce" (f (initval :none))
+        (unless-array (if (eq initval :none) :undefined initval)
+          (let ((vec (aobj-arr this))
+                (proc (proc f)))
+            (multiple-value-bind (initval start)
+                (if (eq initval :none)
+                    (progn (when (zerop (length vec)) (js-error :type-error "Reducing an empty array."))
+                           (values (aref vec 0) 1))
+                    (values initval 0))
+              (loop :for i :from start :below (length vec) :do
+                 (setf initval (funcall proc *env* initval (aref vec i) i this)))
+              initval)))
+        (:properties (.value "length" (:slot :ro :noenum) 1)))
+      (.func "reduceRight" (f (initval :none))
+        (unless-array (if (eq initval :none) :undefined initval)
+          (let* ((vec (aobj-arr this))
+                 (len (length vec))
+                 (proc (proc f)))
+            (multiple-value-bind (initval start)
+                (if (eq initval :none)
+                    (progn (when (zerop len) (js-error :type-error "Reducing an empty array."))
+                           (values (aref vec (1- len)) (- len 2)))
+                    (values initval (1- len)))
+              (loop :for i :from start :downto 0 :do
+                 (setf initval (funcall proc *env* initval (aref vec i) i this)))
+              initval)))
+        (:properties (.value "length" (:slot :ro :noenum) 1)))))
 
   (.prototype :arguments
     (:slot-default :nodel)
