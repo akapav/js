@@ -3,16 +3,16 @@
 <head>
   <title>CL-JavaScript</title>
   <style type="text/css">
-    body {margin: 0; padding: 0; max-width: 55em;}
-    #wrap {margin: 2em; padding: 1em 4em; -moz-border-radius: 30px; -webkit-border-radius: 30px; border-radius: 30px;
-           background-color: #fcfcfc; border: 1px solid #ddd;}
+    body {margin: 0; padding: 0; max-width: 55em; background-color: #f5f5f5;}
+    #wrap {margin: 0 3em; padding: 3em 5em; border-left: 1px solid #400; border-right: 1px solid #400;
+           background-color: white;}
     h1, h2, h3 {font-family: tahoma, sans-serif;}
     p.news {padding-left: 2em; text-indent: -2em;}
     p.news span {font-weight: bold;}
     p.def {font-family: monospace; font-weight: bold;}
     p.def span {color: #555; font-weight: normal}
     .desc {padding-left: 1em;}
-    a {text-decoration: none;}
+    a {text-decoration: none; color: #600;}
     ul {padding: 0; margin: 0; margin-left: 1.5em;}
   </style>
   <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
@@ -25,9 +25,8 @@
   CL-JavaScript allows you to add user scripting to your Common Lisp
   application without requiring your poor users to learn Common Lisp.
   It is a JavaScript to Common Lisp translator, runtime, and standard
-  library. We aim to be <a
-  href="http://bclary.com/2004/11/07/">ECMAScript 3</a>
-  compatible.</p>
+  library. We are <a href="http://bclary.com/2004/11/07/">ECMAScript
+  3</a> compatible, with some of the ECMAScript 5 extensions.</p>
 
   <p>By using the Lisp compiler to compile JavaScript (and by using
   some clever tricks for the things that Lisp normally isn't good at),
