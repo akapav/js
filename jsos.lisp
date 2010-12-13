@@ -38,7 +38,8 @@
 ;; code paths, some of which can assume previously-checked conditions,
 ;; to optimize.)
 
-(declaim (optimize speed (safety 0)))
+(eval-when (:compile-toplevel)
+  (declaim (optimize speed (safety 0))))
 
 (defstruct cls prototype)
 (defstruct (scls (:constructor make-scls (props prototype)) (:include cls))
