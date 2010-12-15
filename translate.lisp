@@ -161,10 +161,12 @@
   `(js-prop ,(translate obj) ,(translate attr)))
 
 (deftranslate (:var bindings)
-  `(progn ,@(loop :for (name . val) :in bindings
-                  :when val :collect (set-in-scope name (translate val))
-                  :else :if (not *scope*) :collect `(if-not-found (nil (js-prop *env* ,name))
-                                                      (setf (js-prop *env* ,name) :undefined)))))
+  `(progn ,@(loop :for (name . val) :in bindings :collect
+               (cond (val (set-in-scope name (translate val)))
+                     ((not *scope*) `(if-not-found (nil (js-prop *env* ,name))
+                                       (setf (js-prop *env* ,name) :undefined)
+                                       :undefined))
+                     (t :undefined)))))
 
 (deftranslate (:object properties)
   (expand-static-obj '(find-proto :object) (loop :for (name . val) :in properties :collect
@@ -197,21 +199,24 @@
   (with-label label
     (let ((continued nil)
           (break-block (gensym))
+          (retval (gensym))
           translated-body)
-      (extend-label *break* (label `(return-from ,break-block :undefined))
+      (extend-label *break* (label `(return-from ,break-block))
         (extend-label *continue* (label `(go ,(setf continued (or continued (gensym)))))
           (setf translated-body (translate body))))
-      `(block ,break-block
-         (tagbody
-            (progn ,@(translate@ init))
-          loop-start
-            (unless ,(if cond (to-boolean-typed (translate cond) (ast-type cond)) t)
-              (go loop-end))
-            (progn ,@(and translated-body (list translated-body)))
-          ,@(and continued (list continued))
-            (progn ,@(translate@ step))
-            (go loop-start)
-          loop-end)))))
+      `(let ((,retval :undefined))
+         (block ,break-block
+           (tagbody
+              (progn ,@(translate@ init))
+            loop-start
+              (unless ,(if cond (to-boolean-typed (translate cond) (ast-type cond)) t)
+                (go loop-end))
+              ,@(and translated-body `((setf ,retval ,translated-body)))
+            ,@(and continued (list continued))
+              (progn ,@(translate@ step))
+              (go loop-start)
+            loop-end))
+         ,retval))))
 
 (deftranslate (:for init cond step body)
   (translate-for init cond step body))
@@ -223,17 +228,20 @@
   (with-label label
     (let ((continued nil)
           (break-block (gensym))
+          (retval (gensym))
           translated-body)
-      (extend-label *break* (label `(return-from ,break-block :undefined))
+      (extend-label *break* (label `(return-from ,break-block))
         (extend-label *continue* (label `(go ,(setf continued (or continued (gensym)))))
           (setf translated-body (translate body))))
-      `(block ,break-block
-         (tagbody
-          loop-start
-            (progn ,@(and translated-body (list translated-body)))
-          ,@(and continued (list continued))
-            (when ,(to-boolean-typed (translate cond) (ast-type cond))
-              (go loop-start)))))))
+      `(let ((,retval :undefined))
+         (block ,break-block
+           (tagbody
+            loop-start
+              ,@(and translated-body `((setf ,retval ,translated-body)))
+            ,@(and continued (list continued))
+              (when ,(to-boolean-typed (translate cond) (ast-type cond))
+                (go loop-start))))
+         ,retval))))
 
 (deftranslate (:break label)
   (loop :for (lbl . thunk) :in *break* :do
@@ -253,40 +261,48 @@
   (with-label label
     (let ((continued nil)
           (break-block (gensym))
+          (retval (gensym))
           translated-body
           (prop (gensym)))
-      (extend-label *break* (label `(return-from ,break-block :undefined))
+      (extend-label *break* (label `(return-from ,break-block))
         (extend-label *continue* (label `(go ,(setf continued (or continued (gensym)))))
           (setf translated-body (translate body))))
-      `(block ,break-block
-         (js-for-in ,(translate obj)
-                    (lambda (,prop)
-                      ,(set-in-scope name prop)
-                      ,(if continued
-                           `(tagbody (progn ,translated-body) ,continued)
-                           translated-body)))))))
+      `(let ((,retval :undefined))
+         (block ,break-block
+           (js-for-in ,(translate obj)
+                      (lambda (,prop)
+                        ,(set-in-scope name prop)
+                        ,(if continued
+                             `(tagbody (setf ,retval ,translated-body) ,continued)
+                             `(setf ,retval ,translated-body)))))
+         ,retval))))
 
 (deftranslate (:switch val cases)
   (with-label label
     (let ((break-block (gensym))
           (val-sym (gensym))
+          (retval (gensym))
           (default-case nil)
           blocks)
-      (extend-label *break* (label `(return-from ,break-block :undefined))
+      (extend-label *break* (label `(return-from ,break-block))
         (setf blocks
               (loop :for ((val . body) . rest) :on cases
                     :for data := (list val (gensym) (mapcar 'translate body)) :collect data
                     :do (unless val (setf default-case data))
                     :when (and (not rest) (not default-case))
                     :collect (setf default-case (list nil (gensym) nil)))))
-      `(let ((,val-sym ,(translate val)))
+      `(let ((,val-sym ,(translate val))
+             (,retval :undefined))
          (block ,break-block
            (tagbody
               (cond ,@(loop :for (case label) :in blocks :when case :collect
                          `((js=== ,val-sym ,(translate case)) (go ,label)))
                     (t (go ,(second default-case))))
-              ,@(loop :for (nil label statements) :in blocks :append
-                   (cons label statements))))))))
+              ,@(loop :for (nil label statements) :in blocks
+                      :collect label
+                      :append (loop :for stat :in statements :collect
+                                 `(setf ,retval ,stat)))))
+         ,retval))))
           
 (deftranslate (:case)
   (js-error :syntax-error "Misplaced case label."))
