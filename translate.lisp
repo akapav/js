@@ -561,4 +561,4 @@
                                          ((eq op :--) '1-) ((eq op :++) '1+)) ,ret))
        ,ret)))
 
-(defun see (js) (translate-ast (parse-js-string js)))
+(defun see (js) (translate-ast (parse js)))

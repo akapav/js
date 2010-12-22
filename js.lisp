@@ -71,9 +71,6 @@
 (defun compile-eval (code)
   (funcall (compile nil `(lambda () (with-ignored-style-warnings ,code)))))
 
-(defun translate-js-string (str)
-  (translate-ast (parse-js-string str)))
-
 ;; Conditions
 
 (define-condition js-condition (error)
@@ -81,7 +78,10 @@
   (:report (lambda (e stream)
              (format stream "[js] ~a" (to-string (js-condition-value e))))))
 
+(defun parse (input)
+  (parse-js input :ecma-version 5))
+
 (defun parse/err (string)
-  (handler-case (parse-js-string string)
+  (handler-case (parse string)
     (js-parse-error (e)
       (js-error :syntax-error (princ-to-string e)))))
