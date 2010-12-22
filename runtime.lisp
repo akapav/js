@@ -243,7 +243,15 @@
           (argobj (apply (proc this) self (argobj-list args)))
           (t (js-error :type-error "Second argument to Function.prototype.apply must be an array."))))
       (.func "call" (self &rest args)
-        (apply (proc this) self args)))))
+        (apply (proc this) self args))
+
+      (.func "bind" (self &rest args)
+        (let ((proc (proc this))
+              (arity (cached-lookup this "length")))
+          (build-func (lambda (this &rest args-inner)
+                        (declare (ignore this))
+                        (apply proc self (append args args-inner)))
+                      (max 0 (- arity (length args)))))))))
 
 (add-to-lib *stdlib*
   (.constructor "Array" (&rest args)
