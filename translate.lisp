@@ -169,8 +169,22 @@
                      (t :undefined)))))
 
 (deftranslate (:object properties)
-  (expand-static-obj '(find-proto :object) (loop :for (name . val) :in properties :collect
-                                              (cons (to-string name) (translate val)))))
+  (let ((props ()))
+    (loop :for (name . val) :in properties :do
+       (let* ((name (to-string name))
+              (found (assoc name props :test #'string=)))
+         (if (member (car val) '(:get :set))
+             (let ((func (translate-internal-function (fourth val) (fifth val))))
+               (if (and found (consp (cdr found)) (eq (second found) :active))
+                   (case (car val) (:get (setf (third found) func)) (:set (setf (fourth found) func)))
+                   (let ((val (case (car val)
+                                (:get (list :active func nil))
+                                (:set (list :active '(lambda (this) (declare (ignore this)) :undefined) func)))))
+                     (if found (setf (cdr found) val) (push (cons name val) props)))))
+             (if found
+                 (setf (cdr found) (translate val))
+                 (push (cons name (translate val)) props)))))
+    (expand-static-obj '(find-proto :object) props)))
 
 (deftranslate (:regexp expr flags)
   `(load-time-value (new-regexp ,expr ,flags)))
@@ -392,7 +406,7 @@
 (defun lift-defuns (forms)
   (multiple-value-call #'append (split-out-defuns forms)))
 
-(defun translate-function (name args body)
+(defun translate-raw-function (name args body)
   (let* ((uses-eval (uses-lexical-eval body))
          (uses-args (or uses-eval (references-arguments body)))
          (eval-scope (gensym "eval-scope"))
@@ -407,25 +421,37 @@
                       (make-simple-scope :vars locals))
         (when uses-eval
           (push (make-with-scope :var eval-scope) *scope*))
-        (let ((funcval
-               `(build-func
-                 ,(let ((body1 `((let* (,@(loop :for var :in internal :collect `(,var :undefined))
-                                        ;; TODO sane object init
-                                        ,@(and uses-eval `((,eval-scope (make-obj (find-cls :object)))
-                                                           (eval-env ,(capture-scope)))))
-                                   (declare (ignorable ,@internal ,@(and uses-eval (list eval-scope))))
-                                   ,@(mapcar 'translate (lift-defuns body))
-                                   :undefined))))
-                       (if uses-args
-                           (wrap-function/arguments args body1 (as-sym fname))
-                           (wrap-function args body1)))
-                 ,(length args))))
-          (if (or name fname)
-              (let ((n (as-sym (or name fname))))
-                `(let (,n)
-                   (declare (ignorable ,n))
-                   (setf ,n ,funcval)))
-              funcval))))))
+        (let ((body1 `((let* (,@(loop :for var :in internal :collect `(,var :undefined))
+                              ;; TODO sane object init
+                              ,@(and uses-eval `((,eval-scope (make-obj (find-cls :object)))
+                                                 (eval-env ,(capture-scope)))))
+                         (declare (ignorable ,@internal ,@(and uses-eval (list eval-scope))))
+                         ,@(mapcar 'translate (lift-defuns body))
+                         :undefined))))
+          (values (if uses-args
+                      (wrap-function/arguments args body1 (as-sym fname))
+                      (wrap-function args body1))
+                  fname))))))
+
+(defun translate-function (name args body)
+  (multiple-value-bind (lmb fname) (translate-raw-function name args body)
+    (let ((funcval `(build-func ,lmb ,(length args))))
+      (if (or name fname)
+          (let ((n (as-sym (or name fname))))
+            `(let (,n)
+               (declare (ignorable ,n))
+               (setf ,n ,funcval)))
+          funcval))))
+
+(defun translate-internal-function (args body)
+  (multiple-value-bind (lmb fname) (translate-raw-function nil args body)
+    (if fname
+        (let ((n (as-sym fname)) (val (gensym)))
+          `(let* (,n (,val ,lmb))
+             (declare (ignorable ,n))
+             (setf ,n (build-func ,val ,(length args)))
+             ,val))
+        lmb)))
 
 (defun wrap-function (args body)
   `(lambda (,(as-sym "this")

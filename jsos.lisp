@@ -542,10 +542,15 @@
 
 (defun expand-static-obj (proto props)
   (let ((cls (gensym)))
-    `(let ((,cls (load-time-value (make-scls ',(loop :for off :from 0 :for (name) :in props :collect
-                                                  (cons (intern-prop name) (cons off +slot-dflt+)))
+    `(let ((,cls (load-time-value (make-scls ',(loop :for off :from 0 :for (name . val) :in props :collect
+                                                  (list* (intern-prop name) off
+                                                         (if (and (consp val) (eq (car val) :active))
+                                                             +slot-active+ +slot-dflt+)))
                                              ,proto))))
-       (make-obj ,cls (vector ,@(mapcar #'cdr props))))))
+       (make-obj ,cls (vector ,@(loop :for (nil . val) :in props :collect
+                                   (if (and (consp val) (eq (car val) :active))
+                                       `(cons ,(second val) ,(third val))
+                                       val)))))))
 
 (defun js-new (func &rest args)
   (unless (fobj-p func)

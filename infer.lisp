@@ -300,7 +300,8 @@
                 (:null (tc :null))
                 (t (tc t)))))
 (definfer (:object props)
-  (loop :for (nil . val) :in props :do (setf env (infer val env)))
+  (loop :for (nil . val) :in props :do
+     (setf env (infer (if (member (car val) '(:get :set)) (cdr val) val) env)))
   (values env (tc :object)))
 (definfer (:regexp)
   (values env (tc :object)))
