@@ -296,7 +296,8 @@
             (with-output-to-string (out)
               (loop :for val :across (aobj-arr this) :for first := t :then nil :do
                  (unless first (write-string sep out))
-                 (write-string (to-string val) out))))))
+                 (unless (js-null val)
+                   (write-string (to-string val) out)))))))
 
       (.func "splice" (index howmany &rest elems)
         (unless-array (build-array (fvector))
