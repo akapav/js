@@ -538,7 +538,7 @@
   (let ((arr (gensym)))
     `(let ((,arr (make-array ,(length elems) :fill-pointer ,(length elems) :adjustable t)))
        ,@(loop :for elt :in elems :for pos :from 0 :collect
-            `(setf (aref ,arr ,pos) ,(translate elt)))
+            `(setf (aref ,arr ,pos) ,(if elt (translate elt) :undefined)))
        (build-array ,arr))))
 
 (deftranslate (:stat form)

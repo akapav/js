@@ -467,7 +467,7 @@
       (setf env (assign (second place) (tc nil `(:maybe-int ,argt)) env)))
     (values env argt)))
 (definfer (:array elems)
-  (dolist (elem elems) (setf env (infer elem env)))
+  (dolist (elem elems) (when elem (setf env (infer elem env))))
   (values env (tc :object)))
 (definfer (:block forms)
   (dolist (stat forms) (setf env (infer stat env)))
