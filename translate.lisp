@@ -270,8 +270,7 @@
        (return (funcall thunk)))
      :finally (error "Continue without matching context.")))
 
-(deftranslate (:for-in var name obj body)
-  (declare (ignore var))
+(deftranslate (:for-in init lhs obj body)
   (with-label label
     (let ((continued nil)
           (break-block (gensym))
@@ -283,9 +282,10 @@
           (setf translated-body (translate body))))
       `(let ((,retval :undefined))
          (block ,break-block
+           ,@(translate@ init)
            (js-for-in ,(translate obj)
                       (lambda (,prop)
-                        ,(set-in-scope name prop)
+                        ,(translate-assign lhs prop)
                         ,(if continued
                              `(tagbody (setf ,retval ,translated-body) ,continued)
                              `(setf ,retval ,translated-body)))))
@@ -364,8 +364,7 @@
                (case (car ast)
                  (:block (mapc #'scan (second ast)))
                  ((:do :while :switch :with :label) (scan (third ast)))
-                 (:for-in (when (second ast) (add (third ast)))
-                          (scan (fifth ast)))
+                 (:for-in (scan (second ast)) (scan (fifth ast)))
                  (:for (scan (second ast)) (scan (fifth ast)))
                  (:defun (add (second ast)))
                  (:var (dolist (def (second ast)) (add (car def))))
