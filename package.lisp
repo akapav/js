@@ -16,6 +16,6 @@
            #:void #:js-null #:js-number #:js-special-number
            #:js-func #:js-call #:js-method
            #:js-array #:js-array-length #:js-aref #:js-array-vec
-           #:js-obj #:js-prop #:js-for-in
+           #:js-obj #:js-prop #:js-for-in #:delete-prop
 
            #:nan #:infinity #:-infinity #:is-nan))
