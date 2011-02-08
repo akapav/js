@@ -59,8 +59,11 @@
   (with-js-env (*printlib*)
     (run-js-file (asdf:system-relative-pathname :cl-js "test.js"))))
 
-(defun js-obj (&optional proto-id struct-type)
-  (let ((cls (if proto-id (find-cls proto-id) (find-cls :object))))
+(defun js-obj (&optional proto struct-type)
+  (let ((cls (etypecase proto
+               (keyword (find-cls proto))
+               (js-obj (make-scls nil proto))
+               (null (find-cls :object)))))
     (if struct-type
         (funcall (default-constructor-name struct-type) cls)
         (make-obj cls))))
