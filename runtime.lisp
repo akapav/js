@@ -691,9 +691,9 @@
         (cached-set re "lastIndex" 0)
         (return-from regexp-exec :null)))
     (multiple-value-bind (mstart mend gstart gend)
-        (ppcre:scan (reobj-scanner re) (to-string str) :start start)
+        (and (< start (length str)) (ppcre:scan (reobj-scanner re) str :start start))
       (when global
-        (cached-set re "lastIndex" (if mend mend (1+ start))))
+        (cached-set re "lastIndex" (if mend mend 0)))
       (cond ((not mstart) :null)
             (raw (values mstart mend gstart gend))
             (t (let ((result (empty-fvector (1+ (length gstart)))))
