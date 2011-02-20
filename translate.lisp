@@ -262,13 +262,13 @@
      (when (or (not label) (equal label lbl))
        (return (funcall thunk)))
      ;; These should be caught by parser. This is just a sanity check.
-     :finally (error "Break without matching context.")))
+     :finally (js-error :syntax-error "Break without matching context.")))
 
 (deftranslate (:continue label)
   (loop :for (lbl . thunk) :in *continue* :do
      (when (or (not label) (equal label lbl))
        (return (funcall thunk)))
-     :finally (error "Continue without matching context.")))
+     :finally (js-error :syntax-error "Continue without matching context.")))
 
 (deftranslate (:for-in init lhs obj body)
   (with-label label
@@ -524,6 +524,8 @@
 
 ;; TODO cache path-to-place
 (deftranslate (:assign op place val)
+  (unless (case (car place) ((:dot :sub) t) (:name (not (equal (second place) "this"))))
+    (js-error :syntax-error "Bad assign."))
   (translate-assign place (translate (if (eq op t) val (list :binary op place val)))))
 
 (deftranslate (:num num)
