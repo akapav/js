@@ -48,7 +48,7 @@
 
 (defstruct (obj (:constructor make-obj (cls &optional vals)))
   cls (vals (make-array 4)))
-(defstruct (vobj (:constructor make-vobj (cls value)) (:include obj))
+(defstruct (vobj (:constructor make-vobj (cls &optional value)) (:include obj))
   value)
 (defstruct (fobj (:constructor make-fobj (cls proc new-cls &optional vals)) (:include obj))
   proc new-cls)
