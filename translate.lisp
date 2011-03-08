@@ -454,8 +454,9 @@
 
 (defun wrap-function (args body)
   `(lambda (,(as-sym "this")
-            &optional ,@(loop :for arg :in args :collect
-                           `(,(as-sym arg) :undefined))
+            ,@(when args '(&optional))
+            ,@(loop :for arg :in args :collect
+                 `(,(as-sym arg) :undefined))
             &rest extra-args)
      (declare (ignore extra-args)
               (ignorable ,(as-sym "this") ,@(mapcar 'as-sym args)))
