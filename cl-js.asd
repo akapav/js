@@ -1,6 +1,7 @@
 (when (asdf:find-system :local-time nil) (pushnew :js-dates *features*))
 
 (asdf:defsystem :cl-js
+  :description "JavaScript-to-CL compiler and runtime"
   :depends-on (:parse-js :cl-ppcre #+js-dates :local-time)
   :serial t
   :components
