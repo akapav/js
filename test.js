@@ -533,6 +533,14 @@ function test_38() {
   try{return a();}catch(e){}
 }
 
+function test_39() {
+    var x = 10;
+    $eq((x === 10) &&
+        (function () { var x = 10; return x === 10; })() &&
+        (function () { return 10 === 10; })(),
+        true);
+}
+
 function runTests() {
   var failures = [];
   var run = 0;
