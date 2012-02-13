@@ -68,9 +68,9 @@
   (let ((finished nil))
     (loop
      (skip-whitespace stream)
-     (let ((next (peek-char nil stream nil #\nul)))
+     (let ((next (peek-char nil stream nil #\null)))
        (declare (type character next))
-       (when (eql next #\nul)
+       (when (eql next #\null)
          (json-error "Encountered end of input inside ~A." obj-name))
        (when (eql next end-char)
          (read-char stream)
