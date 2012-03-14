@@ -155,7 +155,7 @@
 
 ;; Used for non-cached lookups
 (defun simple-lookup (this start prop)
-  (loop :for obj := start :then (cls-prototype cls) :while obj
+  (loop :for obj := start :then (or (cls-prototype cls) (return *not-found*))
         :for cls := (obj-cls obj) :for vals := (obj-vals obj) :do
      (macrolet ((maybe-active (slot value)
                   `(if (logtest (cdr ,slot) +slot-active+)
@@ -167,8 +167,7 @@
                (return (maybe-active slot (car slot)))))
            (let ((slot (lookup-slot cls prop)))
              (when slot
-               (return (maybe-active slot (svref vals (car slot))))))))
-     :finally (return *not-found*)))
+               (return (maybe-active slot (svref vals (car slot))))))))))
 
 (defun cache-miss (val obj cache)
   (multiple-value-bind (fn a1 a2 result) (meta-lookup val obj (cache-prop cache))
