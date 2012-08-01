@@ -189,6 +189,7 @@
                       (let ((proto-obj (init-obj (funcspec-proto-spec spec))))
                         (push (list* "prototype" proto-obj +slot-noenum+) props)
                         proto-obj)))
+         (new-cls (make-scls () new-proto))
          (vals (make-array (max 2 (length props))))
          (cls (make-scls (loop :for off :from 0 :for (name value . flags) :in props
                                :do (setf (svref vals off) (init-val value))
@@ -197,8 +198,8 @@
     (cond (fill (setf (obj-vals fill) vals (obj-cls fill) cls))
           ((funcspec-p spec)
            (let ((built (if (funcspec-make-new spec)
-                            (make-cfobj cls (funcspec-call spec) new-proto (funcspec-make-new spec) vals)
-                            (make-fobj cls (funcspec-call spec) new-proto vals))))
+                            (make-cfobj cls (funcspec-call spec) new-cls (funcspec-make-new spec) vals)
+                            (make-fobj cls (funcspec-call spec) new-cls vals))))
              (when new-proto
                (ensure-slot new-proto "constructor" built +slot-noenum+))
              built))
