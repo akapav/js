@@ -311,9 +311,10 @@
     (if exists
         (setf (car exists) val)
         ;; Check prototypes for read-only or active slots
-        (if (loop :for cur := (cls-prototype (obj-cls obj)) :then (cls-prototype curc) :while cur
-                  :for curc := (obj-cls cur) :for curv := (obj-vals cur) :for hash := (hash-table-p curv) :do
-               (let ((slot (if hash (gethash prop curv) (lookup-slot curc prop))))
+        (if (let (curc curv hash slot)
+              (loop :for cur := (cls-prototype (obj-cls obj)) :then (cls-prototype curc) :while cur :do
+                 (setf curc (obj-cls cur) curv (obj-vals cur) hash (hash-table-p curv))
+                 (setf slot (if hash (gethash prop curv) (lookup-slot curc prop)))
                  (when slot
                    (when (logtest (cdr slot) +slot-ro+) (return t))
                    (when (logtest (cdr slot) +slot-active+)
@@ -352,18 +353,19 @@
           (setf (svref vals (car slot)) val)
           (ret #'%simple-set (car slot))))
       ;; Look for a read-only or active slot in prototypes
-      (loop :for cur := (cls-prototype cls) :then (cls-prototype curc) :while cur
-            :for curc := (obj-cls cur) :for curv := (obj-vals cur) :for hash := (hash-table-p curv) :do
-         (let ((slot (if hash (gethash prop curv) (lookup-slot curc prop))))
-           (when slot
-             (when (logtest (cdr slot) +slot-ro+) (ret #'%ignored-set))
-             (when (logtest (cdr slot) +slot-active+)
-               (let ((func (cdr (if hash (car slot) (svref curv (car slot))))))
-                 (when func
-                   (dcall func obj val)
-                   (ret #'%active-set func))
-                 (ret #'%ignored-set)))
-             (return))))
+      (let (curc curv hash)
+        (loop :for cur := (cls-prototype cls) :then (cls-prototype curc) :while cur :do
+           (setf curc (obj-cls cur) curv (obj-vals cur) hash (hash-table-p curv))
+           (let ((slot (if hash (gethash prop curv) (lookup-slot curc prop))))
+             (when slot
+               (when (logtest (cdr slot) +slot-ro+) (ret #'%ignored-set))
+               (when (logtest (cdr slot) +slot-active+)
+                 (let ((func (cdr (if hash (car slot) (svref curv (car slot))))))
+                   (when func
+                     (dcall func obj val)
+                     (ret #'%active-set func))
+                   (ret #'%ignored-set)))
+               (return)))))
       ;; No direct slot found yet, but can write. Add slot.
       (scls-add-slot obj cls prop val +slot-dflt+))))
   
@@ -496,16 +498,17 @@
                          (dolist (parent stack)
                            (when (find-slot* parent name) (return t))))
                (funcall func name))))
-      (loop :for cur := obj :then (and shallow (cls-prototype cls)) :while cur
-            :for cls := (obj-cls cur) :for vals := (obj-vals cur) :do
-         (if (hash-table-p vals)
-             (with-hash-table-iterator (next vals)
-               (loop (multiple-value-bind (more name val) (next)
-                       (unless more (return))
-                       (maybe-yield (cdr val) name))))
-             (loop :for (name nil . flags) :in (scls-props cls) :do
-                (maybe-yield flags name)))
-         (push cur stack)))))
+      (let (cls vals)
+        (loop :for cur := obj :then (and shallow (cls-prototype cls)) :while cur :do
+           (setf cls (obj-cls cur) vals (obj-vals cur))
+           (if (hash-table-p vals)
+               (with-hash-table-iterator (next vals)
+                 (loop (multiple-value-bind (more name val) (next)
+                         (unless more (return))
+                         (maybe-yield (cdr val) name))))
+               (loop :for (name nil . flags) :in (scls-props cls) :do
+                  (maybe-yield flags name)))
+           (push cur stack))))))
 
 (defmethod js-for-in ((obj aobj) func &optional shallow)
   (declare (ignore shallow))

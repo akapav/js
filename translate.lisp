@@ -372,7 +372,7 @@
                  (:try (scan (second ast)) (scan (cdr (third ast))) (scan (fourth ast))))))
       (mapc #'add others)
       (mapc #'scan body)
-      (loop :for name :being :the :hash-key :of found
+      (loop :for name :being :the :hash-keys :of found
             :collect name :into all
             :unless (member name others :test #'string=) :collect name :into internal
             :finally (return (values all internal))))))
