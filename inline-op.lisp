@@ -70,7 +70,7 @@
 (defexpand :== (:integer :integer) `(= ,lhs ,rhs))
 (defnumop :!= `(/= ,lhs ,rhs))
 (defnumop :=== `(= ,lhs ,rhs))
-(defnumop :!== `(< ,lhs ,rhs))
+(defnumop :!== `(/= ,lhs ,rhs))
 
 (defexpand :& (:integer :integer) `(logand (trunc32 ,lhs) (trunc32 ,rhs)))
 (defexpand :|\|| (:integer :integer) `(logior (trunc32 ,lhs) (trunc32 ,rhs)))
