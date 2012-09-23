@@ -410,7 +410,8 @@
          (uses-args (or uses-eval (references-arguments body)))
          (eval-scope (gensym "eval-scope"))
          (base-locals (cons "this" args))
-         (fname (and uses-args (or name (symbol-name (gensym))))))
+         (fname (and (or uses-args *enable-Function.caller*)
+                     (or name (symbol-name (gensym))))))
     (when name (push name base-locals))
     (when uses-args (push "arguments" base-locals))
     (multiple-value-bind (locals internal) (find-locals body base-locals)
@@ -420,7 +421,11 @@
                       (make-simple-scope :vars locals))
         (when uses-eval
           (push (make-with-scope :var eval-scope) *scope*))
-        (let ((body1 `((let* (,@(loop :for var :in internal :collect `(,var :undefined))
+        (let ((body1 `((let* (,@(when *enable-Function.caller*
+                                  `((*Function.caller-stack*
+                                     (cons ,(as-sym fname)
+                                           *Function.caller-stack*))))
+                              ,@(loop :for var :in internal :collect `(,var :undefined))
                               ;; TODO sane object init
                               ,@(and uses-eval `((,eval-scope (make-obj (find-cls :object)))
                                                  (eval-env ,(capture-scope)))))

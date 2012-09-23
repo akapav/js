@@ -6,6 +6,9 @@
 (defun reset ()
   (setf *env* (create-env *printlib*)))
 
+(defvar *enable-Function.caller* nil
+  "If T, enables support for arguments.callee.caller/Function.caller property in newly compiled JavaScript code")
+
 (defun run-js (str &key (compile t) (wrap-parse-errors nil) (optimize nil) (wrap-as-module nil))
   (unless (boundp '*env*) (reset))
   (let* ((ast (handler-bind ((js-parse-error
@@ -56,8 +59,9 @@
          (format t (if continue "  " "> "))))))
 
 (defun tests ()
-  (with-js-env (*printlib*)
-    (run-js-file (asdf:system-relative-pathname :cl-js "test.js"))))
+  (let ((*enable-function.caller* t))
+    (with-js-env (*printlib*)
+      (run-js-file (asdf:system-relative-pathname :cl-js "test.js")))))
 
 (defun js-obj (&optional proto struct-type)
   (let ((cls (etypecase proto
