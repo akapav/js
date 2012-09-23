@@ -66,6 +66,23 @@
 (defstruct (argobj (:constructor make-argobj (cls list length callee)) (:include obj))
   list length callee)
 
+(defmethod print-object ((obj obj) stream)
+  (let ((*print-circle* t))
+    (format stream "#<js obj {")
+    (let ((first t))
+      (js-for-in obj
+                 (lambda (key)
+                   (if first (setf first nil) (format stream ", "))
+                   (format stream "~S: ~S" key (js-prop obj key)))
+                 t))
+    (format stream "}>")))
+
+(defmethod print-object ((aobj aobj) stream)
+  (format stream "#<js array [~{~S~^, ~}]>" (map 'list #'identity (aobj-arr aobj))))
+
+(defmethod print-object ((func fobj) stream)
+  (format stream "#<js function ~A>" (fobj-proc func)))
+
 ;; Slots are (offset . flags) conses for scls objects, (value . flags) conses for hcls
 (defconstant +slot-ro+ 1)
 (defconstant +slot-active+ 2)
