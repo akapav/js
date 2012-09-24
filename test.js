@@ -541,6 +541,14 @@ function test_39() {
         true);
 }
 
+function test_40() {
+    var foo = function foo() { return arguments.callee.caller; };
+    var bar = function bar() { return foo(); };
+    if (typeof bar() != "function") {
+        throw "arguments.callee.caller doesn't work";
+    }
+}
+
 function runTests() {
   var failures = [];
   var run = 0;

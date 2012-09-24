@@ -2,6 +2,7 @@
   (:use :cl :parse-js)
   (:export #:run-js-file #:run-js #:js-repl
            #:*env* #:with-js-env #:create-env #:add-to-env
+           #:*enable-Function.caller*
 
            #:*printlib* #:requirelib
 
