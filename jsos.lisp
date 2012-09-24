@@ -66,19 +66,35 @@
 (defstruct (argobj (:constructor make-argobj (cls list length callee)) (:include obj))
   list length callee)
 
+(defun make-sequence-printer (stream)
+  (let ((count 0))
+    (lambda (x)
+      (cond
+        ((not count))
+        ((and *print-length* (<= *print-length* count))
+         (format stream " ...")
+         (setf count nil))
+        (t
+         (unless (= count 0)
+           (format stream ", "))
+         (princ x stream)
+         (incf count))))))
+
 (defmethod print-object ((obj obj) stream)
   (let ((*print-circle* t))
     (format stream "#<js obj {")
-    (let ((first t))
+    (let ((output (make-sequence-printer stream)))
       (js-for-in obj
                  (lambda (key)
-                   (if first (setf first nil) (format stream ", "))
-                   (format stream "~S: ~S" key (js-prop obj key)))
+                   (funcall output (format nil "~S: ~S" key (js-prop obj key))))
                  t))
     (format stream "}>")))
 
 (defmethod print-object ((aobj aobj) stream)
-  (format stream "#<js array [~{~S~^, ~}]>" (map 'list #'identity (aobj-arr aobj))))
+  (format stream "#<js array [")
+  (let ((output (make-sequence-printer stream)))
+    (map nil output (aobj-arr aobj)))
+  (format stream "]>"))
 
 (defmethod print-object ((func fobj) stream)
   (format stream "#<js function ~A>" (fobj-proc func)))
