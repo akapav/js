@@ -422,9 +422,8 @@
         (when uses-eval
           (push (make-with-scope :var eval-scope) *scope*))
         (let ((body1 `((let* (,@(when *enable-Function.caller*
-                                  `((*Function.caller-stack*
-                                     (cons ,(as-sym fname)
-                                           *Function.caller-stack*))))
+                                 `((*current-caller* *current-callee*)
+                                   (*current-callee* ,(as-sym fname))))
                               ,@(loop :for var :in internal :collect `(,var :undefined))
                               ;; TODO sane object init
                               ,@(and uses-eval `((,eval-scope (make-obj (find-cls :object)))
