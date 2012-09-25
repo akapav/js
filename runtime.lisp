@@ -172,7 +172,8 @@
     (.func "decodeURIComponent" (str)
       (with-uri-err (url-encode:url-decode (to-string str) "")))))
 
-(defvar *Function.caller-stack* '(:null :null))
+(defvar *current-caller* :null)
+(defvar *current-callee* :null)
 
 (add-to-lib *stdlib*
   (flet ((defprops (obj props)
@@ -254,7 +255,7 @@
                         (declare (ignore this))
                         (apply proc self (append args args-inner)))
                       (max 0 (- arity (length args))))))
-      (.active-r "caller" (second *Function.caller-stack*)))))
+      (.active-r "caller" *current-caller*))))
 
 (add-to-lib *stdlib*
   (.constructor "Array" (&rest args)
