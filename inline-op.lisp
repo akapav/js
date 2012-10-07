@@ -61,7 +61,7 @@
        (if (zerop ,val) (- 0d0) (js- 0 ,val)))))
 
 (defnumop :* `(* ,lhs ,rhs))
-(defnumop :% `(mod ,lhs ,rhs))
+(defnumop :% `(rem ,lhs ,rhs))
 
 (defnumop :< `(< ,lhs ,rhs))
 (defnumop :> `(> ,lhs ,rhs))

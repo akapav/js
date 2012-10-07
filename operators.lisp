@@ -74,7 +74,7 @@
     (if (zerop rs)
         (nan)
         (complicated-numeric-op
-         ls rs mod (nan)
+         ls rs rem (nan)
          (nan) (nan) (nan) (nan) ls ls (nan) (nan)))))
 
 (defun js^ (ls rs)
