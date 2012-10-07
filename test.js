@@ -549,6 +549,10 @@ function test_40() {
     }
 }
 
+function test_41() {
+    $eq(-12 % 7, -5);
+}
+
 function runTests() {
   var failures = [];
   var run = 0;
