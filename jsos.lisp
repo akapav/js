@@ -379,7 +379,7 @@
             (let ((func (cdr (svref vals (car slot)))))
               (when func
                 (dcall func obj val)
-                (ret #'%active-set func))
+                (ret #'%active-set (car slot) func))
               (ret #'%ignored-set)))
           (setf (svref vals (car slot)) val)
           (ret #'%simple-set (car slot))))
@@ -394,7 +394,7 @@
                  (let ((func (cdr (if hash (car slot) (svref curv (car slot))))))
                    (when func
                      (dcall func obj val)
-                     (ret #'%active-set func))
+                     (ret #'%active-set (car slot) func))
                    (ret #'%ignored-set)))
                (return)))))
       ;; No direct slot found yet, but can write. Add slot.
