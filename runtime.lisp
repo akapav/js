@@ -185,7 +185,7 @@
            x))
     (.constructor "Object" (&rest args)
       (if args
-          (make-vobj (find-cls :object) (car args))
+          (to-object (car args))
           this)
       (:prototype :object)
       (:slot-default :noenum)
