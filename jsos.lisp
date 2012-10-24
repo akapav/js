@@ -61,7 +61,7 @@
 (defstruct (reobj (:constructor make-reobj (cls &optional proc scanner global)) (:include fobj))
   scanner global)
 #+js-dates
-(defstruct (dobj (:constructor make-dobj (cls time zone)) (:include obj))
+(defstruct (dobj (:constructor make-dobj (cls &optional time zone)) (:include obj))
   time zone)
 (defstruct (argobj (:constructor make-argobj (cls list length callee)) (:include obj))
   list length callee)
