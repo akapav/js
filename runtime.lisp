@@ -206,7 +206,7 @@
   (.prototype :object
     (:parent nil)
     (:slot-default :nodel)
-    (.func "toString" () (if (obj-p this) "[object Object]" (to-string this)))
+    (.func "toString" () (if (obj-p this) (format nil "[object ~a]" (obj-class-name this)) (to-string this)))
     (.func "toLocaleString" () (js-method this "toString"))
     (.func "valueOf" () this)
 
