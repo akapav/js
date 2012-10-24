@@ -58,7 +58,7 @@
   proto-vec class-vec proto-list required)
 (defstruct (aobj (:constructor make-aobj (cls &optional arr)) (:include obj))
   (arr (empty-fvector 0)))
-(defstruct (reobj (:constructor make-reobj (cls proc scanner global)) (:include fobj))
+(defstruct (reobj (:constructor make-reobj (cls &optional proc scanner global)) (:include fobj))
   scanner global)
 #+js-dates
 (defstruct (dobj (:constructor make-dobj (cls time zone)) (:include obj))
