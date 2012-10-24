@@ -79,7 +79,7 @@
 
 (defun js^ (ls rs)
   (logxor (to-int32 ls) (to-int32 rs)))
-(defun |js\|| (ls rs)
+(defun js\| (ls rs)
   (logior (to-int32 ls) (to-int32 rs)))
 (defun js& (ls rs)
   (logand (to-int32 ls) (to-int32 rs)))
