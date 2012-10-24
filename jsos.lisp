@@ -99,6 +99,18 @@
 (defmethod print-object ((func fobj) stream)
   (format stream "#<js function ~A>" (fobj-proc func)))
 
+(defmethod obj-class-name ((obj obj)) "Object")
+(defmethod obj-class-name ((obj fobj)) "Function")
+(defmethod obj-class-name ((obj cfobj)) "Object")
+(defmethod obj-class-name ((obj dobj)) "Date")
+(defmethod obj-class-name ((obj argobj)) "Arguments")
+(defmethod obj-class-name ((obj aobj)) "Array")
+(defmethod obj-class-name ((obj reobj)) "RegExp")
+(defmethod obj-class-name ((obj (eql :undefined))) "Undefined")
+(defmethod obj-class-name ((obj (eql :null))) "Undefined")
+(defmethod obj-class-name ((obj (eql t))) "Boolean")
+(defmethod obj-class-name ((obj (eql nil))) "Boolean")
+
 ;; Slots are (offset . flags) conses for scls objects, (value . flags) conses for hcls
 (defconstant +slot-ro+ 1)
 (defconstant +slot-active+ 2)
