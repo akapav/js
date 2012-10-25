@@ -110,6 +110,9 @@
 (defmethod obj-class-name ((obj (eql :null))) "Undefined")
 (defmethod obj-class-name ((obj (eql t))) "Boolean")
 (defmethod obj-class-name ((obj (eql nil))) "Boolean")
+(defmethod obj-class-name ((obj number)) "Number")
+(defmethod obj-class-name ((obj string)) "String")
+(defmethod obj-class-name ((obj t)) "Object")
 
 ;; Slots are (offset . flags) conses for scls objects, (value . flags) conses for hcls
 (defconstant +slot-ro+ 1)
