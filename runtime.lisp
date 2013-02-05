@@ -1014,7 +1014,7 @@
       (.value "LOG2E" (log (exp 1) 2))
       (.value "LOG10E" (log (exp 1) 10))
       (.value "SQRT1_2" (sqrt .5))
-      (.value "SQRT1_2" (sqrt 2))
+      (.value "SQRT2" (sqrt 2))
       (.value "PI" pi)
 
       (.func "abs" (arg)
