@@ -113,6 +113,8 @@
         ((eq ls rs) t)
         ((eq ls :null) (eq rs :undefined))
         ((eq ls :undefined) (eq rs :null))
+        ((eq rs :null) (eq ls :undefined))
+        ((eq rs :undefined) (eq ls :null))
         ((numberp ls) (let ((rsn (to-number rs)))
                         (and (not (is-nan rsn)) (= ls rsn))))
         ((stringp ls) (string= ls (to-string rs)))
