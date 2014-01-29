@@ -12,4 +12,4 @@ library][parse]) and Iva Jurišić.
 CL-JavaScript is licensed under MIT public license.
 
 [home]: http://marijnhaverbeke.nl/cl-javascript
-[parse]: http://marijn.haverbeke.nl/parse-js/
+[parse]: http://marijnhaverbeke.nl/parse-js/
