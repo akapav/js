@@ -375,7 +375,7 @@
           (let ((func (if (eq compare :undefined)
                           (lambda (a b) (string< (to-string a) (to-string b)))
                           (let ((proc (proc compare)))
-                            (lambda (a b) (funcall proc *env* a b))))))
+                            (lambda (a b) (minusp (funcall proc *env* a b)))))))
             (sort (aobj-arr this) func)
             this)))
 
