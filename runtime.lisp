@@ -244,6 +244,7 @@
         (typecase args
           (aobj (vec-apply (proc this) self (aobj-arr args)))
           (argobj (apply (proc this) self (argobj-list args)))
+          (js-null (apply (proc this) self ()))
           (t (js-error :type-error "Second argument to Function.prototype.apply must be an array."))))
       (.func "call" (self &rest args)
         (apply (proc this) self args))
