@@ -346,12 +346,17 @@
                   (setf (fill-pointer vec) (1- len))
                   result)
                 :undefined))))
-      (.func "unshift" (val)
+      (.func "unshift" (&rest vals)
         (unless-array 0
-          (let ((vec (aobj-arr this)))
-            (setf (fill-pointer vec) (1+ (length vec)))
-            (replace vec vec :start1 1)
-            (setf (aref vec 0) val)
+          (let* ((vec (aobj-arr this))
+                 (vals-len (length vals))
+                 (new-len (+ (length vec) vals-len)))
+            (if (< new-len (array-dimension vec 0)) 
+                (setf (fill-pointer vec) new-len)
+                (adjust-array vec new-len :fill-pointer new-len))
+            (replace vec vec :start1 vals-len)
+            (loop :for val :in vals :for i :from 0 :do
+               (setf (aref vec i) val))
             (length vec))))
 
       (.func "slice" (from to)

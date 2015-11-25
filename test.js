@@ -553,6 +553,27 @@ function test_41() {
     $eq(-12 % 7, -5);
 }
 
+function test_42() {
+  var a = [3];
+  $eq(a.unshift(2), 2);
+  $arrEq(a, [2, 3]);
+  $eq(a.unshift(0, 1), 4);
+  $arrEq(a, [0, 1, 2, 3]);
+
+  a = [3, 4];
+  $eq(a.shift(), 3);
+  $arrEq(a, [4]);
+  $eq(a.shift(), 4);
+  $arrEq(a, []);
+  $eq(a.shift(), undefined);
+  $arrEq(a, []);
+
+  $eq(a.unshift(0), 1);
+  $arrEq(a, [0]);
+  $eq(a.unshift(), 1);
+  $arrEq(a, [0]);
+}
+
 function runTests() {
   var failures = [];
   var run = 0;
