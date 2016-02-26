@@ -119,7 +119,7 @@
          (captured-locals (captured-scope-local-vars scope))
          (new-locals (and (not (eq captured-locals :null))
                           (set-difference (find-locals (second parsed)) captured-locals
-                                          :key #'string=))))
+                                          :test #'string=))))
     (declare (special *scope*))
     (dolist (local new-locals) (setf (js-prop env-obj local) :undefined))
     (or (compile-eval (translate-ast parsed)) :undefined)))
