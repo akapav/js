@@ -821,7 +821,7 @@
 
              (+ (* #.(* 1000 3600 24) (- (local-time:day-of timestamp) start-day))
                 (* 1000 (local-time:sec-of timestamp))
-                (mod (local-time:nsec-of timestamp) 1000000))))
+                (truncate (local-time:nsec-of timestamp) 1000000))))
          (date-from-milliseconds (ms)
            (let ((start-day #.(local-time:day-of (local-time:encode-timestamp 0 0 0 0 1 1 1970
                                                                               :timezone local-time:+utc-zone+))))
