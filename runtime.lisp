@@ -497,7 +497,7 @@
                      (lambda (start end gstart gend)
                        (push (to-string (apply (fobj-proc replacement) *env* (subseq me start end)
                                                (loop :for gs :across gstart :for ge :across gend :for i :from 1
-                                                  :collect (if start (subseq me gs ge) :undefined)
+                                                  :collect (if (and start gs) (subseq me gs ge) :undefined)
                                                   :when (eql i (length gstart)) :append (list start me))))
                              parts))
                      (let ((repl-str (to-string replacement)))
