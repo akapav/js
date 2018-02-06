@@ -1,0 +1,52 @@
+#!/bin/sh
+#|-*- mode:lisp -*-|#
+#|
+exec ros -Q -- $0 "$@"
+|#
+(progn ;;init forms
+  (ros:ensure-asdf)
+  #+quicklisp (ql:quickload '(:cl-js) :silent t)
+  )
+
+(defpackage :ros.script.cl-js.3726863147
+  (:use :cl :cl-js))
+(in-package :ros.script.cl-js.3726863147)
+
+(defparameter *printlib* (empty-lib))
+
+(add-to-lib *printlib*
+            (.func "print" (x) (format t "~a~%" (to-string x))))
+
+(defun read-file (path)
+  (uiop:read-file-string path))
+
+(defun help ()
+  (format t "~&
+cl-javascript runner. Version: ~a
+
+Usage:
+cl-js [options] script.js
+
+Options
+    --help
+        Print this help message
+
+    -p 'script'
+        Evaluate script and print the result
+
+    -i
+        Interactive mode
+" (asdf::component-version (asdf::find-system :cl-js))))
+
+(defun main-entry (&optional (flag "--help") (arg ()))
+  (with-js-env (*printlib*)
+    (cond
+      ((equal flag "-i") (cl-js:js-repl))
+      ((equal flag "-p")
+      (format t "~a~%" (cl-js:run-js arg)))
+      (t (if (probe-file flag)
+          (cl-js:run-js (read-file flag))
+          (help))))))
+
+(defun main (&rest args)
+  (apply #'main-entry args))
