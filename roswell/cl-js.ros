@@ -1,0 +1,41 @@
+#!/bin/sh
+#|-*- mode:lisp -*-|#
+#|
+exec ros -Q -- $0 "$@"
+|#
+(progn ;;init forms
+  (ros:ensure-asdf)
+  #+quicklisp (ql:quickload '(:cl-js) :silent t)
+  )
+
+(defpackage :ros.script.cl-js.3726863147
+  (:use :cl))
+(in-package :ros.script.cl-js.3726863147)
+
+(defun help ()
+  (format t "~&
+cl-javascript runner. Version: ~a
+
+Usage:
+cl-js [option]
+
+Options
+    --help
+        Print this help message
+
+    -p 'script'
+        Evaluate script and print the result
+
+    -i
+        Interactive mode
+" (asdf::component-version (asdf::find-system :cl-js))))
+
+(defun main-entry (&optional (flag "--help") (arg ()))
+  (cond
+    ((equal flag "-i") (cl-js:js-repl))
+    ((equal flag "-p")
+     (format t "~a~%" (cl-js:run-js arg)))
+    (t (help))))
+
+(defun main (&rest args)
+  (apply #'main-entry args))

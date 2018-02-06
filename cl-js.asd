@@ -3,6 +3,7 @@
 (asdf:defsystem :cl-js
   :description "JavaScript-to-CL compiler and runtime"
   :author "Marijn Haverbeke <marijnh@gmail.com>"
+  :version "0.12.01"
   :license "MIT"
   :depends-on (:parse-js :cl-ppcre #+js-dates :local-time)
   :serial t
