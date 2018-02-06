@@ -31,7 +31,14 @@ Once that done you can use shell script runner to test your
 cl-javascript against tests.
 
 ~~~shell
-$ ./run-test262.sh
+$ ./run-test262.sh test262/test/language/comments/S7.4_A1_T1.js
+~~~
+
+To test full suite it's better to build ros script first and then run the script:
+
+~~~shell
+$ ros build roswell/cl-js.ros
+$ ./run-test262.sh test262/test/**/*.js
 ~~~
 
 Have fun!
