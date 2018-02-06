@@ -1,3 +1,3 @@
 #!/bin/sh
 
-test262-harness --hostType ch --hostPath ./roswell/cl-js.ros $@
+test262-harness --hostType nashorn --hostPath ./run-node.sh $@
