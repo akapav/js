@@ -9,15 +9,23 @@ exec ros -Q -- $0 "$@"
   )
 
 (defpackage :ros.script.cl-js.3726863147
-  (:use :cl))
+  (:use :cl :cl-js))
 (in-package :ros.script.cl-js.3726863147)
+
+(defparameter *printlib* (empty-lib))
+
+(add-to-lib *printlib*
+            (.func "print" (x) (format t "~a~%" (to-string x))))
+
+(defun read-file (path)
+  (uiop:read-file-string path))
 
 (defun help ()
   (format t "~&
 cl-javascript runner. Version: ~a
 
 Usage:
-cl-js [option]
+cl-js [options] script.js
 
 Options
     --help
@@ -31,11 +39,14 @@ Options
 " (asdf::component-version (asdf::find-system :cl-js))))
 
 (defun main-entry (&optional (flag "--help") (arg ()))
-  (cond
-    ((equal flag "-i") (cl-js:js-repl))
-    ((equal flag "-p")
-     (format t "~a~%" (cl-js:run-js arg)))
-    (t (help))))
+  (with-js-env (*printlib*)
+    (cond
+      ((equal flag "-i") (cl-js:js-repl))
+      ((equal flag "-p")
+      (format t "~a~%" (cl-js:run-js arg)))
+      (t (if (probe-file flag)
+          (cl-js:run-js (read-file flag))
+          (help))))))
 
 (defun main (&rest args)
   (apply #'main-entry args))
