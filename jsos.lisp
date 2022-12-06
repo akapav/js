@@ -102,6 +102,7 @@
 (defmethod obj-class-name ((obj obj)) "Object")
 (defmethod obj-class-name ((obj fobj)) "Function")
 (defmethod obj-class-name ((obj cfobj)) "Object")
+#+js-dates
 (defmethod obj-class-name ((obj dobj)) "Date")
 (defmethod obj-class-name ((obj argobj)) "Arguments")
 (defmethod obj-class-name ((obj aobj)) "Array")
