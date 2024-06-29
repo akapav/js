@@ -924,7 +924,7 @@
 
         (.func "setTime" (ms)
           (assert-date this)
-          (let ((time (setf (dobj-time this) (date-from-milliseconds ms))))
+          (let ((time (setf (dobj-time this) (date-from-milliseconds (to-integer ms)))))
             (if time (date-milliseconds time) (nan))))
 
         (.func "setFullYear" (year (month :none) (date :none))
