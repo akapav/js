@@ -918,11 +918,13 @@
         
         (.func "getTimezoneOffset" ()
           (if-date (this time zone)
-            (mod (local-time::%guess-offset (local-time:day-of time) (local-time::sec-of time) zone) 60)))
+		   (/ (local-time::subzone-offset
+			 (local-time::%subzone-as-of zone (local-time::sec-of time) (local-time:day-of time) t))
+			-60)))
 
-        (.func "setTime" (date)
+        (.func "setTime" (ms)
           (assert-date this)
-          (let ((time (setf (dobj-time this) (if-date (date time) time nil))))
+          (let ((time (setf (dobj-time this) (date-from-milliseconds ms))))
             (if time (date-milliseconds time) (nan))))
 
         (.func "setFullYear" (year (month :none) (date :none))
